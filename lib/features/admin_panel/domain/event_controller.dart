@@ -57,6 +57,32 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
     });
   }
 
+  Future<void> createNewEvent(String title, String eventType) async {
+    try {
+      final repo = ref.read(eventRepositoryProvider);
+
+      // Dùng timestamp làm ID tạm thời để đơn giản hóa
+      final newId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      await repo.addEvent(
+        DisasterEventsCompanion.insert(
+          id: newId,
+          title: title,
+          eventType: eventType,
+          status: 'active', // Mặc định sự kiện mới là Đang hoạt động
+          createdAt: DateTime.now(),
+          createdBy: 'admin',
+        ),
+      );
+
+      // Load lại danh sách sau khi thêm thành công
+      await loadEvents();
+    } catch (e) {
+      // Trong thực tế sẽ show Snackbar báo lỗi, tạm thời print ra console
+      print("Lỗi khi tạo sự kiện: $e");
+    }
+  }
+
   // Hàm tạo dữ liệu giả để test (chỉ chạy 1 lần khi DB trống)
   Future<void> _seedDummyData(EventRepository repo) async {
     final now = DateTime.now();
@@ -96,5 +122,5 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
 // Cung cấp Controller ra UI
 final eventControllerProvider =
     AsyncNotifierProvider<EventController, List<DisasterEvent>>(
-  EventController.new,
-);
+      EventController.new,
+    );

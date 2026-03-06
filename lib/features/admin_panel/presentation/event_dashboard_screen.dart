@@ -337,9 +337,9 @@ class _NavItem extends StatelessWidget {
 // =============================================================================
 // TOP BAR
 // =============================================================================
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       height: 60,
       decoration: const BoxDecoration(
@@ -414,7 +414,7 @@ class _TopBar extends StatelessWidget {
 
           // New Event Button
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => _showCreateEventDialog(context, ref),
             icon: const Icon(Icons.add, size: 16, color: Colors.white),
             label: const Text(
               'Sự kiện mới',
@@ -957,4 +957,125 @@ class _ActionButtonState extends State<_ActionButton> {
       ),
     );
   }
+}
+
+// =============================================================================
+// DIALOG: TẠO SỰ KIỆN MỚI
+// =============================================================================
+void _showCreateEventDialog(BuildContext context, WidgetRef ref) {
+  final titleController = TextEditingController();
+  String selectedType = 'typhoon'; // Giá trị mặc định
+
+  final types = [
+    {'value': 'typhoon', 'label': '🌀 Bão'},
+    {'value': 'flood', 'label': '🌊 Lũ lụt'},
+    {'value': 'storm', 'label': '⛈️ Dông bão'},
+    {'value': 'wildfire', 'label': '🔥 Cháy rừng'},
+    {'value': 'landslide', 'label': '⛰️ Sạt lở'},
+  ];
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: AppColors.scaffoldBg,
+            title: const Text(
+              'Tạo sự kiện thiên tai mới',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Tên sự kiện',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: titleController,
+                    decoration: InputDecoration(
+                      hintText: 'VD: Bão số 3 Yagi...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Loại hình',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedType,
+                        isExpanded: true,
+                        items: types.map((type) {
+                          return DropdownMenuItem<String>(
+                            value: type['value']!,
+                            child: Text(type['label']!),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => selectedType = value);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Hủy',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (titleController.text.trim().isNotEmpty) {
+                    // Gọi hàm lưu vào Database thông qua Riverpod
+                    ref
+                        .read(eventControllerProvider.notifier)
+                        .createNewEvent(
+                          titleController.text.trim(),
+                          selectedType,
+                        );
+                    Navigator.pop(context); // Đóng Dialog
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brandRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Tạo mới'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
