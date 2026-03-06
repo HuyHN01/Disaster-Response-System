@@ -1,7 +1,9 @@
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
+import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
@@ -10,6 +12,8 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
   // TODO: Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
@@ -31,7 +35,7 @@ class OmniDisasterApp extends StatelessWidget {
         colorSchemeSeed: Colors.redAccent, // Vibe khẩn cấp, cảnh báo
         textTheme: GoogleFonts.interTextTheme(), // Font chữ dễ đọc
       ),
-      home: MobileHomeScreen(),
+      home: AiChatScreen(),
     );
   }
 }

@@ -3,7 +3,6 @@
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
