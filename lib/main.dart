@@ -1,3 +1,5 @@
+import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +22,16 @@ void main() async {
   runApp(const ProviderScope(child: OmniDisasterApp()));
 }
 
-class OmniDisasterApp extends StatelessWidget {
+class OmniDisasterApp extends ConsumerWidget {
   const OmniDisasterApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    
+    ref.read(firebaseSyncServiceProvider).listenToAdminEvents(
+      onNewEvent: (event) => ref.invalidate(eventControllerProvider),
+    );
+
     return MaterialApp(
       title: 'Hệ thống Ứng phó Thiên tai',
       debugShowCheckedModeBanner: false,

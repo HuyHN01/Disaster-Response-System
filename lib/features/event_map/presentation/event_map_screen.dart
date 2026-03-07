@@ -1,8 +1,12 @@
 // lib/features/event_map/presentation/event_map_screen.dart
-
+import 'package:drift/drift.dart' as drift;
+import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/database/db_provider.dart';
+import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:ui' as ui;
 // =============================================================================
@@ -81,7 +85,7 @@ class _EventMapScreenState extends State<EventMapScreen>
   void _onSosTapped() {
     showDialog(
       context: context,
-      builder: (_) => _SosConfirmDialog(),
+      builder: (_) => _SosConfirmDialog(parentContext: context),
     );
   }
 
@@ -759,9 +763,16 @@ class _LegendItem extends StatelessWidget {
 // =============================================================================
 // SOS CONFIRM DIALOG
 // =============================================================================
-class _SosConfirmDialog extends StatelessWidget {
+class _SosConfirmDialog extends ConsumerWidget {
+
+  final BuildContext parentContext;
+
+  const _SosConfirmDialog({
+    required this.parentContext,
+  });
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: const EdgeInsets.all(24),
@@ -824,29 +835,8 @@ class _SosConfirmDialog extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    // TODO: trigger SOS logic
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Row(
-                          children: [
-                            Icon(Icons.check_circle_rounded,
-                                color: Colors.white, size: 18),
-                            SizedBox(width: 10),
-                            Text(
-                              'Đã gửi tín hiệu SOS!',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        backgroundColor: _MapColors.sosRed,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        behavior: SnackBarBehavior.floating,
-                        margin: const EdgeInsets.all(16),
-                      ),
-                    );
+                  onPressed: () async {
+                    await submitSOSOfflineFirst(parentContext, ref);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _MapColors.sosRed,
@@ -867,6 +857,83 @@ class _SosConfirmDialog extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> submitSOSOfflineFirst(
+    BuildContext parentContext,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(parentContext);
+
+    Navigator.of(parentContext).pop(); // Đóng Dialog
+
+    // 1. Lấy DB instance để ghi xuống Local trước (Offline-First)
+    final db = ref.read(dbProvider);
+    final postId = DateTime.now().millisecondsSinceEpoch.toString();
+    final locId = 'loc_$postId';
+
+    // 2. Lưu Post (SOS) vào Drift
+    await db
+        .into(db.posts)
+        .insert(
+          PostsCompanion.insert(
+            id: postId,
+            eventId: 'current_event_id',
+            userId: 'citizen_01',
+            postType: 'sos',
+            content: 'Tôi đang cần cứu hộ khẩn cấp!',
+            createdAt: DateTime.now(),
+            syncStatus: const drift.Value('pending'),
+          ),
+        );
+
+    // 3. Lưu Tọa độ vào Drift
+    await db
+        .into(db.locations)
+        .insert(
+          LocationsCompanion.insert(
+            id: locId,
+            postId: postId,
+            latitude: 21.0285,
+            longitude: 105.8542,
+          ),
+        );
+
+    // 4. Kích hoạt Sync Service đẩy lên Firebase
+    final syncService = ref.read(firebaseSyncServiceProvider);
+    final result = await syncService.syncPendingSOS();
+
+    //Debug line
+    print(ScaffoldMessenger.maybeOf(parentContext));
+
+    // 5. Hiển thị thông báo (SnackBar)
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              result.isSuccess
+                  ? Icons.check_circle_rounded
+                  : Icons.cloud_off_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              result.isSuccess
+                  ? 'Đã gửi tín hiệu SOS thành công!'
+                  : 'Đã lưu offline. Sẽ gửi khi có mạng!',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        backgroundColor: result.isSuccess
+            ? Colors.green.shade600
+            : Colors.orange.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
