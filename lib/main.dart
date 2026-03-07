@@ -1,5 +1,6 @@
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -40,7 +41,7 @@ class OmniDisasterApp extends ConsumerWidget {
         colorSchemeSeed: Colors.redAccent, // Vibe khẩn cấp, cảnh báo
         textTheme: GoogleFonts.interTextTheme(), // Font chữ dễ đọc
       ),
-      home: MobileHomeScreen(),
+      home: EventDashboardScreen(),
     );
   }
 }

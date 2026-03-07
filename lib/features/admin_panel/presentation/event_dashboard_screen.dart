@@ -1,6 +1,7 @@
 // lib/features/admin_panel/presentation/event_dashboard_screen.dart
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/admin_sos_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -448,6 +449,9 @@ class _DashboardContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncEvents = ref.watch(eventControllerProvider);
+    // Watch derived provider — only rebuilds this widget when the *count*
+    // changes, not on every SOS document field update.
+    final sosCountAsync = ref.watch(unverifiedSosCountProvider);
 
     return asyncEvents.when(
       loading: () => const Center(
@@ -460,19 +464,20 @@ class _DashboardContent extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Text(
-            'Lỗi: $err',
+            'Lỗi tải sự kiện: $err',
             style: const TextStyle(color: AppColors.brandRed),
           ),
         ),
       ),
       data: (events) {
         final activeCount = events.where((e) => e.status == 'active').length;
+
         return SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Page title
+              // ── Page title ───────────────────────────────────────────────
               const Text(
                 'Bảng điều khiển',
                 style: TextStyle(
@@ -489,56 +494,83 @@ class _DashboardContent extends ConsumerWidget {
               ),
               const SizedBox(height: 28),
 
-              // Stat Cards Row
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: StatCard(
-                          label: 'Sự kiện đang hoạt động',
-                          value: activeCount.toString(),
-                          icon: Icons.warning_amber_rounded,
-                          iconBgColor: AppColors.statIconRedBg,
-                          iconColor: AppColors.brandRed,
-                          valueColor: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: StatCard(
-                          label: 'SOS chưa xử lý',
-                          value: '14',
-                          icon: Icons.crisis_alert_rounded,
-                          iconBgColor: AppColors.statIconRedBg,
-                          iconColor: AppColors.brandRed,
-                          valueColor: AppColors.brandRed,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: StatCard(
-                          label: 'Tổng số nơi trú ẩn',
-                          value: '45',
-                          icon: Icons.home_rounded,
-                          iconBgColor: AppColors.statIconGreenBg,
-                          iconColor: AppColors.resolvedGreen,
-                          valueColor: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              // ── Stat Cards Row ───────────────────────────────────────────
+              Row(
+                children: [
+                  // 1. Active events (from Drift via eventControllerProvider)
+                  Expanded(
+                    child: StatCard(
+                      label: 'Sự kiện đang hoạt động',
+                      value: activeCount.toString(),
+                      icon: Icons.warning_amber_rounded,
+                      iconBgColor: AppColors.statIconRedBg,
+                      iconColor: AppColors.brandRed,
+                      valueColor: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // 2. Unverified SOS count (live from Firestore)
+                  Expanded(
+                    child: _SosStatCard(sosCountAsync: sosCountAsync),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // 3. Shelters (static for now)
+                  Expanded(
+                    child: StatCard(
+                      label: 'Tổng số nơi trú ẩn',
+                      value: '45',
+                      icon: Icons.home_rounded,
+                      iconBgColor: AppColors.statIconGreenBg,
+                      iconColor: AppColors.resolvedGreen,
+                      valueColor: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 28),
 
-              // Events Table
+              // ── Events Table ─────────────────────────────────────────────
               EventTable(events: events),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// =============================================================================
+// SOS STAT CARD
+// Handles loading / error states inline so the rest of the dashboard
+// is never blocked by a Firestore hiccup.
+// =============================================================================
+class _SosStatCard extends StatelessWidget {
+  final AsyncValue<int> sosCountAsync;
+
+  const _SosStatCard({required this.sosCountAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    // Resolve display value + optional pulsing indicator
+    final (String displayValue, bool isLoading) = switch (sosCountAsync) {
+      AsyncData(:final value) => (value.toString(), false),
+      AsyncLoading() => ('—', true),
+      AsyncError() => ('!', false),
+      _ => ('—', false),
+    };
+
+    return StatCard(
+      label: 'SOS chưa xử lý',
+      value: displayValue,
+      icon: Icons.crisis_alert_rounded,
+      iconBgColor: AppColors.statIconRedBg,
+      iconColor: AppColors.brandRed,
+      valueColor: AppColors.brandRed,
+      // Pass loading flag so StatCard can show a subtle shimmer if desired.
+      isLoading: isLoading,
     );
   }
 }
@@ -553,6 +585,8 @@ class StatCard extends StatelessWidget {
   final Color iconBgColor;
   final Color iconColor;
   final Color valueColor;
+  /// When true, shows a small loading indicator instead of [value].
+  final bool isLoading;
 
   const StatCard({
     super.key,
@@ -562,6 +596,7 @@ class StatCard extends StatelessWidget {
     required this.iconBgColor,
     required this.iconColor,
     required this.valueColor,
+    this.isLoading = false,
   });
 
   @override
@@ -596,15 +631,24 @@ class StatCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: valueColor,
-                    fontSize: 36,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -1,
-                  ),
-                ),
+                isLoading
+                    ? SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: valueColor,
+                        ),
+                      )
+                    : Text(
+                        value,
+                        style: TextStyle(
+                          color: valueColor,
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -1,
+                        ),
+                      ),
               ],
             ),
           ),
