@@ -2,6 +2,7 @@
 
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -95,7 +96,12 @@ class MobileHomeScreen extends ConsumerWidget {
                     label: 'Bản đồ\nTình huống',
                     iconColor: _MobileColors.menuMap,
                     bgColor: _MobileColors.menuMapBg,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => EventMapScreen(),)
+                      );
+                    },
                   ),
                   _MenuButton(
                     icon: Icons.sos_rounded,

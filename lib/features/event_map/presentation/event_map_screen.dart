@@ -1,10 +1,10 @@
 // lib/features/event_map/presentation/event_map_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:ui' as ui;
-
 // =============================================================================
 // THEME TOKENS
 // =============================================================================
@@ -88,44 +88,47 @@ class _EventMapScreenState extends State<EventMapScreen>
   @override
   Widget build(BuildContext context) {
     // Full-screen map with overlaid widgets
+    // topPadding = status bar height → map overlays respect it
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         body: Stack(
           children: [
-            // ── Full-screen Map ──────────────────────────────────────────
-            _MapLayer(
-              mapController: _mapController,
-              pulseAnim: _pulseAnim,
-            ),
-
-            // ── Top-left: Back Button ────────────────────────────────────
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: _FloatingBackButton(),
+            // ── Full-screen Map (covers entire screen incl. status bar) ──
+            Positioned.fill(
+              child: _MapLayer(
+                mapController: _mapController,
+                pulseAnim: _pulseAnim,
               ),
             ),
 
-            // ── Top-right: Zoom controls ─────────────────────────────────
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: _ZoomControls(mapController: _mapController),
-                ),
+            // ── Top overlay row: Back Button (left) + Zoom (right) ───────
+            // Single Positioned so both respect the same topPadding and
+            // can never overlap each other.
+            Positioned(
+              top: topPadding + 10,
+              left: 14,
+              right: 14,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Back button
+                  _FloatingBackButton(),
+                  const Spacer(),
+                  // Zoom controls
+                  _ZoomControls(mapController: _mapController),
+                ],
               ),
             ),
 
-            // ── Center: Locate-me button ─────────────────────────────────
+            // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
               bottom: _legendExpanded ? 272 : 148,
               child: _LocateMeButton(
-                onTap: () {
-                  _mapController.move(_kUserLocation, 14);
-                },
+                onTap: () => _mapController.move(_kUserLocation, 14),
               ),
             ),
 
