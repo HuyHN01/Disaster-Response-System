@@ -6,6 +6,7 @@ import 'package:disaster_response_app/features/user_mobile/presentation/mobile_h
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
@@ -35,6 +36,8 @@ class OmniDisasterApp extends ConsumerWidget {
     );
 
     return MaterialApp(
+      localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
+      supportedLocales: FlutterQuillLocalizations.supportedLocales,
       title: 'Hệ thống Ứng phó Thiên tai',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

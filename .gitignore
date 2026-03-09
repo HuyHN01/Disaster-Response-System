@@ -253,3 +253,5 @@ google-services.json
 
 # Ignore environment files
 .env
+
+/.continue
