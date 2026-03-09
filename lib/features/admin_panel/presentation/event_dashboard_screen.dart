@@ -7,69 +7,6 @@ import 'package:disaster_response_app/features/admin_panel/presentation/admin_ma
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// =============================================================================
-// MOCK DATA MODEL (mirrors Drift's DisasterEvent data class)
-// =============================================================================
-class DisasterEventMock {
-  final String id;
-  final String title;
-  final String eventType;
-  final String status;
-  final DateTime createdAt;
-  final String createdBy;
-
-  const DisasterEventMock({
-    required this.id,
-    required this.title,
-    required this.eventType,
-    required this.status,
-    required this.createdAt,
-    required this.createdBy,
-  });
-}
-
-final List<DisasterEventMock> mockEvents = [
-  DisasterEventMock(
-    id: '1',
-    title: 'Bão số 3 Yagi',
-    eventType: 'typhoon',
-    status: 'active',
-    createdAt: DateTime(2026, 3, 4),
-    createdBy: 'admin',
-  ),
-  DisasterEventMock(
-    id: '2',
-    title: 'Lũ lụt Trung Du',
-    eventType: 'flood',
-    status: 'active',
-    createdAt: DateTime(2026, 3, 2),
-    createdBy: 'admin',
-  ),
-  DisasterEventMock(
-    id: '3',
-    title: 'Bão ven biển miền Trung',
-    eventType: 'storm',
-    status: 'resolved',
-    createdAt: DateTime(2026, 2, 28),
-    createdBy: 'admin',
-  ),
-  DisasterEventMock(
-    id: '4',
-    title: 'Cháy rừng Tây Nguyên',
-    eventType: 'wildfire',
-    status: 'resolved',
-    createdAt: DateTime(2026, 2, 20),
-    createdBy: 'admin',
-  ),
-  DisasterEventMock(
-    id: '5',
-    title: 'Lũ ống lưu vực sông',
-    eventType: 'flood',
-    status: 'resolved',
-    createdAt: DateTime(2026, 2, 15),
-    createdBy: 'admin',
-  ),
-];
 
 // =============================================================================
 // THEME TOKENS — swap these for Dark Mode support later
