@@ -1,8 +1,10 @@
 // lib/features/admin_panel/presentation/admin_post_editor_screen.dart
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/services/supabase/supabase_storage_service.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -79,7 +81,7 @@ class _AdminPostEditorScreenState
 
   // ── Attachment ─────────────────────────────────────────────────────────────
   String? _attachmentName;
-  String? _attachmentPath; // local path (upload TODO)
+  Uint8List? _attachmentBytes;
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   bool _publishing = false;
@@ -135,20 +137,20 @@ class _AdminPostEditorScreenState
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'xlsx', 'png', 'jpg'],
-      withData: false,
+      withData: true,
     );
     if (result == null) return;
     final file = result.files.single;
     setState(() {
       _attachmentName = file.name;
-      _attachmentPath = file.path;
+      _attachmentBytes = file.bytes;
     });
   }
 
   void _removeAttachment() {
     setState(() {
       _attachmentName = null;
-      _attachmentPath = null;
+      _attachmentBytes = null;
     });
   }
 
@@ -172,16 +174,20 @@ class _AdminPostEditorScreenState
     final deltaJson = _quillCtrl.document.toDelta().toJson();
     final contentJson = jsonEncode({'ops': deltaJson});
 
-    // ── TODO: upload _attachmentPath lên Firebase Storage trước khi lưu ──
-    // final uploadedUrl = await StorageService.upload(_attachmentPath);
-    // Hiện tại để placeholder URL nếu đã chọn file
-    final attachmentUrl = _attachmentPath != null
-        ? 'pending_upload://$_attachmentName'
-        : widget.existingPost?.attachmentUrl;
+    // ── XỬ LÝ UPLOAD LÊN SUPABASE TRƯỚC KHI LƯU VÀO FIRESTORE ───────────
+    String? finalAttachmentUrl = widget.existingPost?.attachmentUrl;
 
     try {
-      final notifier =
-          ref.read(adminPostsProvider(widget.event.id).notifier);
+      // Nếu có file mới được chọn (có bytes)
+      if (_attachmentBytes != null && _attachmentName != null) {
+        // Gọi Supabase Storage Service
+        finalAttachmentUrl = await SupabaseStorageService.uploadAttachment(
+          _attachmentName!,
+          _attachmentBytes!,
+        );
+      }
+
+      final notifier = ref.read(adminPostsProvider(widget.event.id).notifier);
 
       if (_isEditing) {
         await notifier.updatePost(
@@ -189,7 +195,7 @@ class _AdminPostEditorScreenState
           title: title,
           postType: _selectedType.value,
           contentJson: contentJson,
-          attachmentUrl: attachmentUrl,
+          attachmentUrl: finalAttachmentUrl, // URL từ Supabase
           attachmentName: _attachmentName ?? widget.existingPost?.attachmentName,
         );
       } else {
@@ -197,7 +203,7 @@ class _AdminPostEditorScreenState
           title: title,
           postType: _selectedType.value,
           contentJson: contentJson,
-          attachmentUrl: attachmentUrl,
+          attachmentUrl: finalAttachmentUrl, // URL từ Supabase
           attachmentName: _attachmentName,
         );
       }

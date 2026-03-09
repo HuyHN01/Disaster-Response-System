@@ -10,6 +10,8 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 // TODO: Import Firebase & Drift setup later
 
 void main() async {
@@ -19,6 +21,15 @@ void main() async {
   await dotenv.load(fileName: ".env");
   // TODO: Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final SUPABASE_URL = dotenv.get('SUPABASE_URL');
+  final SUPABASE_ANON_KEY = dotenv.get('SUPABASE_ANON_KEY');
+
+  // TODO: Initialize Supabase
+  await Supabase.initialize(
+    url: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+  );
 
   // TODO: Initialize Drift Database
 
