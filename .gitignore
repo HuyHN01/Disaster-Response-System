@@ -255,3 +255,4 @@ google-services.json
 .env
 
 /.continue
+.flutter-plugins-dependencies
