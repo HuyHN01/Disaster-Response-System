@@ -813,6 +813,37 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _attachmentUrlMeta = const VerificationMeta(
+    'attachmentUrl',
+  );
+  @override
+  late final GeneratedColumn<String> attachmentUrl = GeneratedColumn<String>(
+    'attachment_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _attachmentNameMeta = const VerificationMeta(
+    'attachmentName',
+  );
+  @override
+  late final GeneratedColumn<String> attachmentName = GeneratedColumn<String>(
+    'attachment_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _contentMeta = const VerificationMeta(
     'content',
   );
@@ -868,6 +899,9 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
     eventId,
     userId,
     postType,
+    title,
+    attachmentUrl,
+    attachmentName,
     content,
     isVerified,
     createdAt,
@@ -913,6 +947,30 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
       );
     } else if (isInserting) {
       context.missing(_postTypeMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('attachment_url')) {
+      context.handle(
+        _attachmentUrlMeta,
+        attachmentUrl.isAcceptableOrUnknown(
+          data['attachment_url']!,
+          _attachmentUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('attachment_name')) {
+      context.handle(
+        _attachmentNameMeta,
+        attachmentName.isAcceptableOrUnknown(
+          data['attachment_name']!,
+          _attachmentNameMeta,
+        ),
+      );
     }
     if (data.containsKey('content')) {
       context.handle(
@@ -967,6 +1025,18 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
         DriftSqlType.string,
         data['${effectivePrefix}post_type'],
       )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      ),
+      attachmentUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attachment_url'],
+      ),
+      attachmentName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}attachment_name'],
+      ),
       content: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}content'],
@@ -997,6 +1067,9 @@ class Post extends DataClass implements Insertable<Post> {
   final String eventId;
   final String userId;
   final String postType;
+  final String? title;
+  final String? attachmentUrl;
+  final String? attachmentName;
   final String content;
   final bool isVerified;
   final DateTime createdAt;
@@ -1006,6 +1079,9 @@ class Post extends DataClass implements Insertable<Post> {
     required this.eventId,
     required this.userId,
     required this.postType,
+    this.title,
+    this.attachmentUrl,
+    this.attachmentName,
     required this.content,
     required this.isVerified,
     required this.createdAt,
@@ -1018,6 +1094,15 @@ class Post extends DataClass implements Insertable<Post> {
     map['event_id'] = Variable<String>(eventId);
     map['user_id'] = Variable<String>(userId);
     map['post_type'] = Variable<String>(postType);
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
+    if (!nullToAbsent || attachmentUrl != null) {
+      map['attachment_url'] = Variable<String>(attachmentUrl);
+    }
+    if (!nullToAbsent || attachmentName != null) {
+      map['attachment_name'] = Variable<String>(attachmentName);
+    }
     map['content'] = Variable<String>(content);
     map['is_verified'] = Variable<bool>(isVerified);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -1031,6 +1116,15 @@ class Post extends DataClass implements Insertable<Post> {
       eventId: Value(eventId),
       userId: Value(userId),
       postType: Value(postType),
+      title: title == null && nullToAbsent
+          ? const Value.absent()
+          : Value(title),
+      attachmentUrl: attachmentUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(attachmentUrl),
+      attachmentName: attachmentName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(attachmentName),
       content: Value(content),
       isVerified: Value(isVerified),
       createdAt: Value(createdAt),
@@ -1048,6 +1142,9 @@ class Post extends DataClass implements Insertable<Post> {
       eventId: serializer.fromJson<String>(json['eventId']),
       userId: serializer.fromJson<String>(json['userId']),
       postType: serializer.fromJson<String>(json['postType']),
+      title: serializer.fromJson<String?>(json['title']),
+      attachmentUrl: serializer.fromJson<String?>(json['attachmentUrl']),
+      attachmentName: serializer.fromJson<String?>(json['attachmentName']),
       content: serializer.fromJson<String>(json['content']),
       isVerified: serializer.fromJson<bool>(json['isVerified']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -1062,6 +1159,9 @@ class Post extends DataClass implements Insertable<Post> {
       'eventId': serializer.toJson<String>(eventId),
       'userId': serializer.toJson<String>(userId),
       'postType': serializer.toJson<String>(postType),
+      'title': serializer.toJson<String?>(title),
+      'attachmentUrl': serializer.toJson<String?>(attachmentUrl),
+      'attachmentName': serializer.toJson<String?>(attachmentName),
       'content': serializer.toJson<String>(content),
       'isVerified': serializer.toJson<bool>(isVerified),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -1074,6 +1174,9 @@ class Post extends DataClass implements Insertable<Post> {
     String? eventId,
     String? userId,
     String? postType,
+    Value<String?> title = const Value.absent(),
+    Value<String?> attachmentUrl = const Value.absent(),
+    Value<String?> attachmentName = const Value.absent(),
     String? content,
     bool? isVerified,
     DateTime? createdAt,
@@ -1083,6 +1186,13 @@ class Post extends DataClass implements Insertable<Post> {
     eventId: eventId ?? this.eventId,
     userId: userId ?? this.userId,
     postType: postType ?? this.postType,
+    title: title.present ? title.value : this.title,
+    attachmentUrl: attachmentUrl.present
+        ? attachmentUrl.value
+        : this.attachmentUrl,
+    attachmentName: attachmentName.present
+        ? attachmentName.value
+        : this.attachmentName,
     content: content ?? this.content,
     isVerified: isVerified ?? this.isVerified,
     createdAt: createdAt ?? this.createdAt,
@@ -1094,6 +1204,13 @@ class Post extends DataClass implements Insertable<Post> {
       eventId: data.eventId.present ? data.eventId.value : this.eventId,
       userId: data.userId.present ? data.userId.value : this.userId,
       postType: data.postType.present ? data.postType.value : this.postType,
+      title: data.title.present ? data.title.value : this.title,
+      attachmentUrl: data.attachmentUrl.present
+          ? data.attachmentUrl.value
+          : this.attachmentUrl,
+      attachmentName: data.attachmentName.present
+          ? data.attachmentName.value
+          : this.attachmentName,
       content: data.content.present ? data.content.value : this.content,
       isVerified: data.isVerified.present
           ? data.isVerified.value
@@ -1112,6 +1229,9 @@ class Post extends DataClass implements Insertable<Post> {
           ..write('eventId: $eventId, ')
           ..write('userId: $userId, ')
           ..write('postType: $postType, ')
+          ..write('title: $title, ')
+          ..write('attachmentUrl: $attachmentUrl, ')
+          ..write('attachmentName: $attachmentName, ')
           ..write('content: $content, ')
           ..write('isVerified: $isVerified, ')
           ..write('createdAt: $createdAt, ')
@@ -1126,6 +1246,9 @@ class Post extends DataClass implements Insertable<Post> {
     eventId,
     userId,
     postType,
+    title,
+    attachmentUrl,
+    attachmentName,
     content,
     isVerified,
     createdAt,
@@ -1139,6 +1262,9 @@ class Post extends DataClass implements Insertable<Post> {
           other.eventId == this.eventId &&
           other.userId == this.userId &&
           other.postType == this.postType &&
+          other.title == this.title &&
+          other.attachmentUrl == this.attachmentUrl &&
+          other.attachmentName == this.attachmentName &&
           other.content == this.content &&
           other.isVerified == this.isVerified &&
           other.createdAt == this.createdAt &&
@@ -1150,6 +1276,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
   final Value<String> eventId;
   final Value<String> userId;
   final Value<String> postType;
+  final Value<String?> title;
+  final Value<String?> attachmentUrl;
+  final Value<String?> attachmentName;
   final Value<String> content;
   final Value<bool> isVerified;
   final Value<DateTime> createdAt;
@@ -1160,6 +1289,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
     this.eventId = const Value.absent(),
     this.userId = const Value.absent(),
     this.postType = const Value.absent(),
+    this.title = const Value.absent(),
+    this.attachmentUrl = const Value.absent(),
+    this.attachmentName = const Value.absent(),
     this.content = const Value.absent(),
     this.isVerified = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -1171,6 +1303,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
     required String eventId,
     required String userId,
     required String postType,
+    this.title = const Value.absent(),
+    this.attachmentUrl = const Value.absent(),
+    this.attachmentName = const Value.absent(),
     required String content,
     this.isVerified = const Value.absent(),
     required DateTime createdAt,
@@ -1187,6 +1322,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
     Expression<String>? eventId,
     Expression<String>? userId,
     Expression<String>? postType,
+    Expression<String>? title,
+    Expression<String>? attachmentUrl,
+    Expression<String>? attachmentName,
     Expression<String>? content,
     Expression<bool>? isVerified,
     Expression<DateTime>? createdAt,
@@ -1198,6 +1336,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
       if (eventId != null) 'event_id': eventId,
       if (userId != null) 'user_id': userId,
       if (postType != null) 'post_type': postType,
+      if (title != null) 'title': title,
+      if (attachmentUrl != null) 'attachment_url': attachmentUrl,
+      if (attachmentName != null) 'attachment_name': attachmentName,
       if (content != null) 'content': content,
       if (isVerified != null) 'is_verified': isVerified,
       if (createdAt != null) 'created_at': createdAt,
@@ -1211,6 +1352,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
     Value<String>? eventId,
     Value<String>? userId,
     Value<String>? postType,
+    Value<String?>? title,
+    Value<String?>? attachmentUrl,
+    Value<String?>? attachmentName,
     Value<String>? content,
     Value<bool>? isVerified,
     Value<DateTime>? createdAt,
@@ -1222,6 +1366,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
       eventId: eventId ?? this.eventId,
       userId: userId ?? this.userId,
       postType: postType ?? this.postType,
+      title: title ?? this.title,
+      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
+      attachmentName: attachmentName ?? this.attachmentName,
       content: content ?? this.content,
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt ?? this.createdAt,
@@ -1244,6 +1391,15 @@ class PostsCompanion extends UpdateCompanion<Post> {
     }
     if (postType.present) {
       map['post_type'] = Variable<String>(postType.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (attachmentUrl.present) {
+      map['attachment_url'] = Variable<String>(attachmentUrl.value);
+    }
+    if (attachmentName.present) {
+      map['attachment_name'] = Variable<String>(attachmentName.value);
     }
     if (content.present) {
       map['content'] = Variable<String>(content.value);
@@ -1270,6 +1426,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
           ..write('eventId: $eventId, ')
           ..write('userId: $userId, ')
           ..write('postType: $postType, ')
+          ..write('title: $title, ')
+          ..write('attachmentUrl: $attachmentUrl, ')
+          ..write('attachmentName: $attachmentName, ')
           ..write('content: $content, ')
           ..write('isVerified: $isVerified, ')
           ..write('createdAt: $createdAt, ')
@@ -2658,6 +2817,9 @@ typedef $$PostsTableCreateCompanionBuilder =
       required String eventId,
       required String userId,
       required String postType,
+      Value<String?> title,
+      Value<String?> attachmentUrl,
+      Value<String?> attachmentName,
       required String content,
       Value<bool> isVerified,
       required DateTime createdAt,
@@ -2670,6 +2832,9 @@ typedef $$PostsTableUpdateCompanionBuilder =
       Value<String> eventId,
       Value<String> userId,
       Value<String> postType,
+      Value<String?> title,
+      Value<String?> attachmentUrl,
+      Value<String?> attachmentName,
       Value<String> content,
       Value<bool> isVerified,
       Value<DateTime> createdAt,
@@ -2769,6 +2934,21 @@ class $$PostsTableFilterComposer extends Composer<_$AppDatabase, $PostsTable> {
 
   ColumnFilters<String> get postType => $composableBuilder(
     column: $table.postType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get attachmentUrl => $composableBuilder(
+    column: $table.attachmentUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get attachmentName => $composableBuilder(
+    column: $table.attachmentName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2908,6 +3088,21 @@ class $$PostsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get attachmentUrl => $composableBuilder(
+    column: $table.attachmentUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get attachmentName => $composableBuilder(
+    column: $table.attachmentName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get content => $composableBuilder(
     column: $table.content,
     builder: (column) => ColumnOrderings(column),
@@ -2989,6 +3184,19 @@ class $$PostsTableAnnotationComposer
 
   GeneratedColumn<String> get postType =>
       $composableBuilder(column: $table.postType, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get attachmentUrl => $composableBuilder(
+    column: $table.attachmentUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get attachmentName => $composableBuilder(
+    column: $table.attachmentName,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get content =>
       $composableBuilder(column: $table.content, builder: (column) => column);
@@ -3140,6 +3348,9 @@ class $$PostsTableTableManager
                 Value<String> eventId = const Value.absent(),
                 Value<String> userId = const Value.absent(),
                 Value<String> postType = const Value.absent(),
+                Value<String?> title = const Value.absent(),
+                Value<String?> attachmentUrl = const Value.absent(),
+                Value<String?> attachmentName = const Value.absent(),
                 Value<String> content = const Value.absent(),
                 Value<bool> isVerified = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3150,6 +3361,9 @@ class $$PostsTableTableManager
                 eventId: eventId,
                 userId: userId,
                 postType: postType,
+                title: title,
+                attachmentUrl: attachmentUrl,
+                attachmentName: attachmentName,
                 content: content,
                 isVerified: isVerified,
                 createdAt: createdAt,
@@ -3162,6 +3376,9 @@ class $$PostsTableTableManager
                 required String eventId,
                 required String userId,
                 required String postType,
+                Value<String?> title = const Value.absent(),
+                Value<String?> attachmentUrl = const Value.absent(),
+                Value<String?> attachmentName = const Value.absent(),
                 required String content,
                 Value<bool> isVerified = const Value.absent(),
                 required DateTime createdAt,
@@ -3172,6 +3389,9 @@ class $$PostsTableTableManager
                 eventId: eventId,
                 userId: userId,
                 postType: postType,
+                title: title,
+                attachmentUrl: attachmentUrl,
+                attachmentName: attachmentName,
                 content: content,
                 isVerified: isVerified,
                 createdAt: createdAt,

@@ -35,6 +35,9 @@ class Posts extends Table {
   TextColumn get eventId => text().references(DisasterEvents, #id)();
   TextColumn get userId => text().references(Users, #id)();
   TextColumn get postType => text()();
+  TextColumn get title => text().nullable()();
+  TextColumn get attachmentUrl => text().nullable()();
+  TextColumn get attachmentName => text().nullable()();
   TextColumn get content => text()();
   BoolColumn get isVerified => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
