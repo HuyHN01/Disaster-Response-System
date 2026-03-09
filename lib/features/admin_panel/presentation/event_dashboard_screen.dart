@@ -3,6 +3,7 @@
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/admin_sos_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -135,11 +136,15 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           Expanded(
             child: Column(
               children: [
-                _TopBar(),
-                Expanded(child: const _DashboardContent()),
+                _TopBar(), // Chỉ gọi 1 lần duy nhất ở đây
+                Expanded(
+                  child: _selectedNavIndex == 1
+                      ? const AdminMapScreen()
+                      : const _DashboardContent(),
+                ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );

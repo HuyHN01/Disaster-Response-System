@@ -1,5 +1,6 @@
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
