@@ -6,7 +6,7 @@ import 'package:disaster_response_app/features/admin_panel/domain/event_controll
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 
 // =============================================================================
 // THEME TOKENS — swap these for Dark Mode support later
@@ -940,7 +940,13 @@ class _TableRowState extends State<_TableRow> {
                   _ActionButton(
                     icon: Icons.visibility_outlined,
                     tooltip: 'Xem chi tiết',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminEventDetailScreen(event: event),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 8),
                   _ActionButton(
