@@ -118,8 +118,17 @@ class EventDashboardScreen extends StatefulWidget {
   State<EventDashboardScreen> createState() => _EventDashboardScreenState();
 }
 
+// ─── Duration dùng chung cho toàn bộ sidebar animation ───────────────
+const _kSidebarDuration = Duration(milliseconds: 220);
+const _kSidebarCurve = Curves.easeInOut;
+const double _kSidebarExpanded = 240;
+const double _kSidebarCollapsed = 72;
+
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   int _selectedNavIndex = 0;
+
+  /// false = sidebar mở rộng (240 px), true = sidebar thu gọn (72 px)
+  bool _isSidebarCollapsed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -127,16 +136,20 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       backgroundColor: AppColors.scaffoldBg,
       body: Row(
         children: [
-          // ── Left Navigation Sidebar ──────────────────────────────────────
+          // ── Left Navigation Sidebar ──────────────────────────────────
           _Sidebar(
             selectedIndex: _selectedNavIndex,
+            isCollapsed: _isSidebarCollapsed,
             onItemSelected: (i) => setState(() => _selectedNavIndex = i),
+            onToggleCollapse: () =>
+                setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
           ),
-          // ── Main Content Area ────────────────────────────────────────────
+
+          // ── Main Content Area ────────────────────────────────────────
           Expanded(
             child: Column(
               children: [
-                _TopBar(), // Chỉ gọi 1 lần duy nhất ở đây
+                _TopBar(),
                 Expanded(
                   child: _selectedNavIndex == 1
                       ? const AdminMapScreen()
@@ -144,7 +157,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -156,189 +169,301 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 // =============================================================================
 class _Sidebar extends StatelessWidget {
   final int selectedIndex;
+  final bool isCollapsed;
   final ValueChanged<int> onItemSelected;
+  final VoidCallback onToggleCollapse;
 
-  const _Sidebar({required this.selectedIndex, required this.onItemSelected});
+  const _Sidebar({
+    required this.selectedIndex,
+    required this.isCollapsed,
+    required this.onItemSelected,
+    required this.onToggleCollapse,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 240,
+    return AnimatedContainer(
+      duration: _kSidebarDuration,
+      curve: _kSidebarCurve,
+      width: isCollapsed ? _kSidebarCollapsed : _kSidebarExpanded,
       decoration: const BoxDecoration(
         color: AppColors.sidebarBg,
         border: Border(right: BorderSide(color: AppColors.border)),
       ),
-      child: Column(
-        children: [
-          // Brand — height must match _TopBar (60px) so the dividers align
-          Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.brandRed,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.warning_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'OmniDisaster',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(color: AppColors.border, height: 1),
-          const SizedBox(height: 12),
-
-          // Nav Items
-          _NavItem(
-            icon: Icons.dashboard_rounded,
-            label: 'Bảng điều khiển',
-            isSelected: selectedIndex == 0,
-            onTap: () => onItemSelected(0),
-          ),
-          _NavItem(
-            icon: Icons.map_rounded,
-            label: 'Bản đồ sự kiện',
-            isSelected: selectedIndex == 1,
-            onTap: () => onItemSelected(1),
-          ),
-          _NavItem(
-            icon: Icons.notifications_active_rounded,
-            label: 'Cảnh báo SOS',
-            isSelected: selectedIndex == 2,
-            onTap: () => onItemSelected(2),
-          ),
-          _NavItem(
-            icon: Icons.people_rounded,
-            label: 'Người dùng',
-            isSelected: selectedIndex == 3,
-            onTap: () => onItemSelected(3),
-          ),
-
-          const Spacer(),
-          const Divider(color: AppColors.border, height: 1),
-
-          // Admin user footer
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.brandRed,
-                  child: const Text(
-                    'AD',
-                    style: TextStyle(
+      child: ClipRect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── 1. Brand Header (Sạch sẽ, tự động căn giữa khi thu gọn) ──
+            SizedBox(
+              height: 60,
+              child: Row(
+                mainAxisAlignment: isCollapsed 
+                    ? MainAxisAlignment.center 
+                    : MainAxisAlignment.start,
+                children: [
+                  SizedBox(width: isCollapsed ? 0 : 20),
+                  // Icon đỏ
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandRed,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.warning_rounded,
                       color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      size: 20,
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Quản trị viên',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        'admin@omnidisaster.org',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  // Tên app
+                  AnimatedSize(
+                    duration: _kSidebarDuration,
+                    curve: _kSidebarCurve,
+                    child: isCollapsed
+                        ? const SizedBox.shrink()
+                        : const Padding(
+                            padding: EdgeInsets.only(left: 10),
+                            child: Text(
+                              'OmniDisaster',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+
+            const Divider(color: AppColors.border, height: 1),
+            const SizedBox(height: 12),
+
+            // ── 2. Nav items ─────────────────────────────────────────────
+            _NavItem(
+              icon: Icons.dashboard_rounded,
+              label: 'Bảng điều khiển',
+              isSelected: selectedIndex == 0,
+              isCollapsed: isCollapsed,
+              onTap: () => onItemSelected(0),
+            ),
+            _NavItem(
+              icon: Icons.map_rounded,
+              label: 'Bản đồ sự kiện',
+              isSelected: selectedIndex == 1,
+              isCollapsed: isCollapsed,
+              onTap: () => onItemSelected(1),
+            ),
+            _NavItem(
+              icon: Icons.notifications_active_rounded,
+              label: 'Cảnh báo SOS',
+              isSelected: selectedIndex == 2,
+              isCollapsed: isCollapsed,
+              onTap: () => onItemSelected(2),
+            ),
+            _NavItem(
+              icon: Icons.people_rounded,
+              label: 'Người dùng',
+              isSelected: selectedIndex == 3,
+              isCollapsed: isCollapsed,
+              onTap: () => onItemSelected(3),
+            ),
+
+            const Spacer(),
+
+            // ── 3. Nút Toggle (Di chuyển xuống dưới cùng chuẩn hiện đại) ──
+            InkWell(
+              onTap: onToggleCollapse,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  mainAxisAlignment: isCollapsed 
+                      ? MainAxisAlignment.center 
+                      : MainAxisAlignment.start,
+                  children: [
+                    SizedBox(width: isCollapsed ? 0 : 20),
+                    Icon(
+                      isCollapsed 
+                          ? Icons.keyboard_double_arrow_right_rounded 
+                          : Icons.keyboard_double_arrow_left_rounded,
+                      color: AppColors.textSecondary,
+                      size: 20,
+                    ),
+                    if (!isCollapsed)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 10),
+                        child: Text(
+                          'Thu gọn',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            const Divider(color: AppColors.border, height: 1),
+
+            // ── 4. User footer ────────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isCollapsed ? 0 : 16,
+                vertical: 14,
+              ),
+              child: Row(
+                mainAxisAlignment: isCollapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  const CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppColors.brandRed,
+                    child: Text(
+                      'AD',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: _kSidebarDuration,
+                    curve: _kSidebarCurve,
+                    child: isCollapsed
+                        ? const SizedBox.shrink()
+                        : const Padding(
+                            padding: EdgeInsets.only(left: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Quản trị viên',
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'admin@omnidisaster.org',
+                                  style: TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+// =============================================================================
+// NAV ITEM
+// =============================================================================
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final bool isCollapsed;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isSelected,
+    required this.isCollapsed,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = isSelected
+        ? AppColors.sidebarSelectedText
+        : AppColors.textSecondary;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.sidebarSelected : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isSelected
-                    ? AppColors.sidebarSelectedText
-                    : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected
-                      ? AppColors.sidebarSelectedText
-                      : AppColors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+      child: Tooltip(
+        // Tooltip chỉ có ý nghĩa khi thu gọn; khi mở thì label đã hiển thị rõ
+        message: isCollapsed ? label : '',
+        preferBelow: false,
+        waitDuration: const Duration(milliseconds: 300),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: AnimatedContainer(
+            duration: _kSidebarDuration,
+            curve: _kSidebarCurve,
+            padding: EdgeInsets.symmetric(
+              // Khi thu gọn: padding đối xứng để icon canh giữa
+              horizontal: isCollapsed ? 10 : 12,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.sidebarSelected
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: isCollapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Icon(icon, size: 20, color: iconColor),
+
+                // Label — slide-in/out bằng AnimatedSize
+                // ClipRect ở Sidebar cha đã đảm bảo không có overflow
+                AnimatedSize(
+                  duration: _kSidebarDuration,
+                  curve: _kSidebarCurve,
+                  child: isCollapsed
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(left: 10),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 14,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                            // Không bao giờ wrap sang dòng mới
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                          ),
+                        ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
 
 // =============================================================================
 // TOP BAR
