@@ -56,7 +56,7 @@ class OmniDisasterApp extends ConsumerWidget {
         colorSchemeSeed: Colors.redAccent, // Vibe khẩn cấp, cảnh báo
         textTheme: GoogleFonts.interTextTheme(), // Font chữ dễ đọc
       ),
-      home: EventDashboardScreen(),
+      home: MobileHomeScreen(),
     );
   }
 }

@@ -1,10 +1,10 @@
 // lib/features/admin_panel/presentation/admin_post_editor_screen.dart
 
 import 'dart:convert';
-import 'dart:js_interop'; // JSPromise.toDart, JSArrayBuffer.toDart, v.v.
 import 'dart:typed_data';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/services/clipboard/clipboard_image_service.dart';
 import 'package:disaster_response_app/core/services/supabase/supabase_storage_service.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 import 'package:file_picker/file_picker.dart';
@@ -14,7 +14,6 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web/web.dart' as web; // Web Clipboard API (dep của flutter_quill_extensions v11)
 
 // =============================================================================
 // THEME (mirrors _DC in admin_event_detail_screen)
@@ -201,45 +200,13 @@ class _AdminPostEditorScreenState
     }
   }
 
-  /// Đọc bytes ảnh đầu tiên tìm thấy trong Clipboard, trả về null nếu
-  /// clipboard không có ảnh hoặc permission bị từ chối.
+  /// Đọc bytes ảnh từ clipboard — delegate sang service có conditional import.
   ///
-  /// Dùng Web Clipboard API (package:web) — chỉ chạy trên Flutter Web.
-  /// Phương pháp thử từng mime type và catch exception thay vì kiểm tra
-  /// `.types` để tránh vấn đề type-checking phức tạp với JSArray.
-  Future<Uint8List?> _readImageBytesFromClipboard() async {
-    try {
-      final items =
-          await web.window.navigator.clipboard.read().toDart;
+  /// Trên Web  → gọi Web Clipboard API qua `clipboard_image_service_web.dart`
+  /// Trên Mobile/Desktop → trả về null ngay (stub), Quill paste text như thường.
+  Future<Uint8List?> _readImageBytesFromClipboard() =>
+      readImageBytesFromClipboard();
 
-      for (var i = 0; i < items.length; i++) {
-        final item = items[i] as web.ClipboardItem;
-
-        // Thử theo thứ tự phổ biến: PNG (Snipping Tool), JPEG, WebP, GIF
-        for (final mimeType in [
-          'image/png',
-          'image/jpeg',
-          'image/webp',
-          'image/gif',
-        ]) {
-          try {
-            final blob = await item.getType(mimeType).toDart;
-            final buffer = await blob.arrayBuffer().toDart;
-            return buffer.toDart.asUint8List();
-          } catch (_) {
-            // Mime type này không có trong clipboard item → thử tiếp
-            continue;
-          }
-        }
-      }
-
-      return null; // Không tìm thấy ảnh nào
-    } catch (_) {
-      // navigator.clipboard.read() bị từ chối (permission hoặc không an toàn)
-      // → trả về null, để Quill tự xử lý paste thông thường
-      return null;
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // IMAGE UPLOAD CALLBACK (dùng bởi Quill image button)

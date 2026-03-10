@@ -2,6 +2,7 @@
 
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
 import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,7 +124,9 @@ class MobileHomeScreen extends ConsumerWidget {
                     label: 'Tin tức\nThiên tai',
                     iconColor: _MobileColors.menuNews,
                     bgColor: _MobileColors.menuNewsBg,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => CitizenNewsScreen()));
+                    },
                   ),
                 ]),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
