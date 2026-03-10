@@ -1,6 +1,7 @@
 // lib/features/admin_panel/presentation/admin_post_editor_screen.dart
 
 import 'dart:convert';
+import 'dart:js_interop'; // JSPromise.toDart, JSArrayBuffer.toDart, v.v.
 import 'dart:typed_data';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
@@ -8,10 +9,12 @@ import 'package:disaster_response_app/core/services/supabase/supabase_storage_se
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web/web.dart' as web; // Web Clipboard API (dep của flutter_quill_extensions v11)
 
 // =============================================================================
 // THEME (mirrors _DC in admin_event_detail_screen)
@@ -87,6 +90,9 @@ class _AdminPostEditorScreenState
   // ── UI ─────────────────────────────────────────────────────────────────────
   bool _publishing = false;
 
+  /// true trong khi đang đọc clipboard + upload ảnh — tránh trigger kép
+  bool _isPastingImage = false;
+
   bool get _isEditing => widget.existingPost != null;
 
   // ---------------------------------------------------------------------------
@@ -128,6 +134,111 @@ class _AdminPostEditorScreenState
     _quillCtrl.dispose();
     _quillFocus.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // CLIPBOARD PASTE (Ctrl+V / nút Paste)
+  // ---------------------------------------------------------------------------
+
+  /// Đọc ảnh từ Web Clipboard API, upload lên Supabase, chèn vào editor.
+  ///
+  /// Được gọi từ 2 nơi:
+  ///   • onKeyEvent (Focus wrapper) khi phát hiện Ctrl+V
+  ///   • Nút "Dán ảnh" trên toolbar
+  ///
+  /// Nếu clipboard không chứa ảnh, hàm thoát âm thầm để Quill
+  /// tự xử lý paste text/HTML thông thường.
+  Future<void> _pasteImageFromClipboard() async {
+    if (_isPastingImage) return;
+
+    // ── Đọc bytes ảnh từ Clipboard API của trình duyệt ──────────────────
+    final bytes = await _readImageBytesFromClipboard();
+    if (bytes == null || !mounted) return; // không có ảnh → bỏ qua
+
+    setState(() => _isPastingImage = true);
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text('Đang tải ảnh lên...'),
+          ]),
+          backgroundColor: _EC.textSecondary,
+          duration: const Duration(seconds: 30),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+
+      final url = await _uploadImageToSupabase(
+        'clipboard_${DateTime.now().millisecondsSinceEpoch}.png',
+        bytes,
+      );
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      if (url != null && mounted) {
+        // Chèn embed ảnh tại vị trí con trỏ hiện tại
+        final index = _quillCtrl.selection.baseOffset;
+        _quillCtrl.document.insert(index, BlockEmbed.image(url));
+        _quillCtrl.updateSelection(
+          TextSelection.collapsed(offset: index + 1),
+          ChangeSource.local,
+        );
+        _showSuccess('Đã chèn ảnh từ clipboard!');
+      }
+    } finally {
+      if (mounted) setState(() => _isPastingImage = false);
+    }
+  }
+
+  /// Đọc bytes ảnh đầu tiên tìm thấy trong Clipboard, trả về null nếu
+  /// clipboard không có ảnh hoặc permission bị từ chối.
+  ///
+  /// Dùng Web Clipboard API (package:web) — chỉ chạy trên Flutter Web.
+  /// Phương pháp thử từng mime type và catch exception thay vì kiểm tra
+  /// `.types` để tránh vấn đề type-checking phức tạp với JSArray.
+  Future<Uint8List?> _readImageBytesFromClipboard() async {
+    try {
+      final items =
+          await web.window.navigator.clipboard.read().toDart;
+
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i] as web.ClipboardItem;
+
+        // Thử theo thứ tự phổ biến: PNG (Snipping Tool), JPEG, WebP, GIF
+        for (final mimeType in [
+          'image/png',
+          'image/jpeg',
+          'image/webp',
+          'image/gif',
+        ]) {
+          try {
+            final blob = await item.getType(mimeType).toDart;
+            final buffer = await blob.arrayBuffer().toDart;
+            return buffer.toDart.asUint8List();
+          } catch (_) {
+            // Mime type này không có trong clipboard item → thử tiếp
+            continue;
+          }
+        }
+      }
+
+      return null; // Không tìm thấy ảnh nào
+    } catch (_) {
+      // navigator.clipboard.read() bị từ chối (permission hoặc không an toàn)
+      // → trả về null, để Quill tự xử lý paste thông thường
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -478,6 +589,27 @@ class _AdminPostEditorScreenState
                 showSuperscript: false,
                 buttonOptions: const QuillSimpleToolbarButtonOptions(),
 
+                // ── Nút tùy chỉnh: Dán ảnh từ Clipboard ─────────────────
+                customButtons: [
+                  QuillToolbarCustomButtonOptions(
+                    icon: _isPastingImage
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _EC.textSecondary,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.content_paste_rounded,
+                            size: 18,
+                          ),
+                    tooltip: 'Dán ảnh từ Clipboard (Ctrl+V)',
+                    onPressed: _isPastingImage ? null : _pasteImageFromClipboard,
+                  ),
+                ],
+
                 // ── Image embed button (flutter_quill_extensions v11) ─────
                 // Tên đúng trong v11:
                 //   QuillToolbarImageButtonOptions.imageButtonConfig
@@ -513,27 +645,46 @@ class _AdminPostEditorScreenState
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-              child: QuillEditor(
-                controller: _quillCtrl,
-                focusNode: _quillFocus,
-                config: QuillEditorConfig(
-                  placeholder: 'Bắt đầu soạn thảo nội dung...',
-                  padding: EdgeInsets.zero,
-                  autoFocus: !_isEditing,
-                  expands: true,
-                  scrollable: true,
+              // Focus wrapper: bắt Ctrl+V để paste ảnh.
+              // skipTraversal: true → không ảnh hưởng tab-order của editor.
+              // KeyEventResult.ignored → event vẫn propagate xuống QuillEditor
+              // để Quill xử lý paste text/HTML thông thường.
+              child: Focus(
+                focusNode: FocusNode(skipTraversal: true),
+                onKeyEvent: (_, event) {
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.keyV &&
+                      HardwareKeyboard.instance.isControlPressed) {
+                    // Fire-and-forget: nếu clipboard có ảnh → upload + insert.
+                    // Nếu không có ảnh → _pasteImageFromClipboard thoát âm thầm,
+                    // Quill tự xử lý paste text như bình thường.
+                    _pasteImageFromClipboard();
+                  }
+                  // Luôn ignored để Quill nhận sự kiện
+                  return KeyEventResult.ignored;
+                },
+                child: QuillEditor(
+                  controller: _quillCtrl,
+                  focusNode: _quillFocus,
+                  config: QuillEditorConfig(
+                    placeholder: 'Bắt đầu soạn thảo nội dung...',
+                    padding: EdgeInsets.zero,
+                    autoFocus: !_isEditing,
+                    expands: true,
+                    scrollable: true,
 
-                  // ── Embed builders: render ảnh inline trong editor ──────
-                  // Dùng editorWebBuilders() thay vì editorBuilders() vì đây
-                  // là Flutter Web admin panel — web builders có network image
-                  // support tốt hơn và không yêu cầu dart:io.
-                  // Class đúng v11: QuillEditorImageEmbedConfig (không phải
-                  // QuillEditorImageEmbedConfigurations — đã đổi tên trong v11)
-                  embedBuilders: FlutterQuillEmbeds.editorWebBuilders(
-                    imageEmbedConfig: const QuillEditorImageEmbedConfig(),
+                    // ── Embed builders: render ảnh inline trong editor ────
+                    // Dùng editorWebBuilders() thay vì editorBuilders() vì đây
+                    // là Flutter Web admin panel — web builders có network image
+                    // support tốt hơn và không yêu cầu dart:io.
+                    // Class đúng v11: QuillEditorImageEmbedConfig (không phải
+                    // QuillEditorImageEmbedConfigurations — đã đổi tên trong v11)
+                    embedBuilders: FlutterQuillEmbeds.editorWebBuilders(
+                      imageEmbedConfig: const QuillEditorImageEmbedConfig(),
+                    ),
                   ),
+                  scrollController: ScrollController(),
                 ),
-                scrollController: ScrollController(),
               ),
             ),
           ),
