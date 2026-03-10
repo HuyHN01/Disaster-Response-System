@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
+import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // =============================================================================
@@ -127,6 +128,40 @@ class _AdminPostEditorScreenState
     _quillCtrl.dispose();
     _quillFocus.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // IMAGE UPLOAD CALLBACK (dùng bởi Quill image button)
+  // ---------------------------------------------------------------------------
+
+  /// Upload ảnh lên Supabase Storage, trả về URL public để Quill chèn embed.
+  /// Nhận trực tiếp [fileName] và [bytes] — hoạt động thống nhất trên
+  /// Web / Desktop / Mobile mà không phụ thuộc vào XFile hay image_picker.
+  ///
+  /// Trả về null nếu upload thất bại — Quill sẽ bỏ qua, không crash.
+  Future<String?> _uploadImageToSupabase(
+      String fileName, Uint8List bytes) async {
+    try {
+      // Đặt tên file duy nhất để tránh ghi đè nhau trên Supabase bucket
+      final ext = fileName.split('.').last.toLowerCase();
+      final uniqueName =
+          'post_img_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      final url = await SupabaseStorageService.uploadAttachment(
+        uniqueName,
+        bytes,
+      );
+
+      if (url == null) {
+        _showError('Upload ảnh thất bại. Vui lòng thử lại.');
+        return null;
+      }
+
+      return url;
+    } catch (e) {
+      _showError('Lỗi upload ảnh: $e');
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -442,6 +477,34 @@ class _AdminPostEditorScreenState
                 showSubscript: false,
                 showSuperscript: false,
                 buttonOptions: const QuillSimpleToolbarButtonOptions(),
+
+                // ── Image embed button (flutter_quill_extensions v11) ─────
+                // Tên đúng trong v11:
+                //   QuillToolbarImageButtonOptions.imageButtonConfig
+                //   QuillToolbarImageConfig   (đổi từ QuillToolbarImageConfigurations)
+                //   onRequestPickImage(context) — v11.4+ chỉ còn 1 tham số;
+                //   trả về String? URL, Quill sẽ dùng đó làm src embed ảnh.
+                embedButtons: FlutterQuillEmbeds.toolbarButtons(
+                  imageButtonOptions: QuillToolbarImageButtonOptions(
+                    imageButtonConfig: QuillToolbarImageConfig(
+                      onRequestPickImage: (context) async {
+                        // file_picker: hoạt động thống nhất Web/Desktop/Mobile
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.image,
+                          withData: true, // bắt buộc trên Flutter Web
+                        );
+                        if (result == null) return null;
+                        final file = result.files.single;
+                        if (file.bytes == null) return null;
+
+                        // Upload lên Supabase → trả về URL public
+                        return _uploadImageToSupabase(file.name, file.bytes!);
+                      },
+                    ),
+                  ),
+                  // Tắt nút video — không cần trong CMS này
+                  videoButtonOptions: null,
+                ),
               ),
             ),
           ),
@@ -459,6 +522,16 @@ class _AdminPostEditorScreenState
                   autoFocus: !_isEditing,
                   expands: true,
                   scrollable: true,
+
+                  // ── Embed builders: render ảnh inline trong editor ──────
+                  // Dùng editorWebBuilders() thay vì editorBuilders() vì đây
+                  // là Flutter Web admin panel — web builders có network image
+                  // support tốt hơn và không yêu cầu dart:io.
+                  // Class đúng v11: QuillEditorImageEmbedConfig (không phải
+                  // QuillEditorImageEmbedConfigurations — đã đổi tên trong v11)
+                  embedBuilders: FlutterQuillEmbeds.editorWebBuilders(
+                    imageEmbedConfig: const QuillEditorImageEmbedConfig(),
+                  ),
                 ),
                 scrollController: ScrollController(),
               ),
