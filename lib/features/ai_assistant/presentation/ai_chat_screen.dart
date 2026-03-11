@@ -1,4 +1,5 @@
-import 'package:disaster_response_app/features/ai_assistant/domain/chat_controller.dart';
+
+import 'package:disaster_response_app/features/ai_assistant/domain/ai_chat_controller.dart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -85,27 +86,31 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     if (text.isEmpty) return;
     _textCtrl.clear();
     setState(() => _hasText = false);
-    ref.read(chatProvider.notifier).sendMessage(text);
+    ref.read(aiChatProvider.notifier).sendMessage(text);
     _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatState = ref.watch(chatProvider);
+    // Dùng derived providers để tránh rebuild toàn bộ widget khi state thay đổi
+    final messages = ref.watch(chatMessagesProvider);
+    final isTyping = ref.watch(aiIsTypingProvider);
 
-    // Auto-scroll when messages update or typing starts/stops
-    ref.listen(chatProvider, (_, __) => _scrollToBottom());
+    // Auto-scroll khi có tin nhắn mới
+    ref.listen(aiChatProvider, (_, __) => _scrollToBottom());
 
     return Scaffold(
       backgroundColor: _ChatColors.scaffold,
-      appBar: _ChatAppBar(),
+      appBar: _ChatAppBar(
+        onClearChat: () => ref.read(aiChatProvider.notifier).clearChat(),
+      ),
       body: Column(
         children: [
           // ── Message List ─────────────────────────────────────────────────
           Expanded(
             child: _MessageList(
-              messages: chatState.messages,
-              isLoading: chatState.isLoading,
+              messages: messages,
+              isTyping: isTyping,
               scrollController: _scrollCtrl,
             ),
           ),
@@ -114,7 +119,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           _InputBar(
             controller: _textCtrl,
             hasText: _hasText,
-            isLoading: chatState.isLoading,
+            isLoading: isTyping,
             onSend: _sendMessage,
           ),
         ],
@@ -127,6 +132,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 // APP BAR
 // =============================================================================
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final VoidCallback onClearChat;
+
+  const _ChatAppBar({required this.onClearChat});
+
   @override
   Size get preferredSize => const Size.fromHeight(64);
 
@@ -141,7 +150,7 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             color: _ChatColors.shadow,
             blurRadius: 8,
             offset: Offset(0, 2),
-          ),
+          )
         ],
       ),
       child: SafeArea(
@@ -152,11 +161,8 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             children: [
               // Back button
               IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 18,
-                  color: Color(0xFF374151),
-                ),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 18, color: Color(0xFF374151)),
                 onPressed: () => Navigator.of(context).maybePop(),
                 splashRadius: 22,
               ),
@@ -227,14 +233,12 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
 
-              // Info button
+              // Clear chat button
               IconButton(
-                icon: const Icon(
-                  Icons.info_outline_rounded,
-                  size: 22,
-                  color: Color(0xFF9CA3AF),
-                ),
-                onPressed: () {},
+                icon: const Icon(Icons.refresh_rounded,
+                    size: 22, color: Color(0xFF9CA3AF)),
+                tooltip: 'Cuộc trò chuyện mới',
+                onPressed: onClearChat,
                 splashRadius: 22,
               ),
             ],
@@ -250,36 +254,44 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 // =============================================================================
 class _MessageList extends StatelessWidget {
   final List<ChatMessage> messages;
-  final bool isLoading;
+
+  /// true khi có ChatMessage.isTyping trong list — dùng để scroll.
+  final bool isTyping;
   final ScrollController scrollController;
 
   const _MessageList({
     required this.messages,
-    required this.isLoading,
+    required this.isTyping,
     required this.scrollController,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Total items = messages + (typing indicator if loading)
-    final itemCount = messages.length + (isLoading ? 1 : 0);
+    // Lọc bỏ system messages khi list trống (chỉ có welcome)
+    // để tránh hiển thị separator thừa.
+    final visible = messages
+        .where((m) => m.role != ChatRole.system)
+        .toList();
 
     return ListView.builder(
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      itemCount: itemCount,
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        // Typing indicator as last item
-        if (index == messages.length && isLoading) {
-          return const _TypingIndicator();
-        }
+        final message = visible[index];
 
-        final message = messages[index];
-        final isFirst =
-            index == 0 || messages[index - 1].isUser != message.isUser;
-        final isLast =
-            index == messages.length - 1 ||
-            messages[index + 1].isUser != message.isUser;
+        // Typing indicator — bubble đặc biệt, không so sánh role
+        if (message.isTyping) return const _TypingIndicator();
+
+        final isUser = message.role == ChatRole.user;
+
+        // Xác định vị trí trong nhóm để bo góc bubble đúng
+        final isFirst = index == 0 ||
+            visible[index - 1].role != message.role ||
+            visible[index - 1].isTyping;
+        final isLast = index == visible.length - 1 ||
+            visible[index + 1].role != message.role ||
+            visible[index + 1].isTyping;
 
         return _MessageBubble(
           message: message,
@@ -307,14 +319,18 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
+    final isUser = message.role == ChatRole.user;
+    // Bubble lỗi có màu đỏ nhạt thay vì trắng
+    final isError = message.isError;
 
     return Padding(
-      padding: EdgeInsets.only(top: isFirst ? 8 : 2, bottom: isLast ? 8 : 2),
+      padding: EdgeInsets.only(
+        top: isFirst ? 8 : 2,
+        bottom: isLast ? 8 : 2,
+      ),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // AI Avatar (only on last AI message in a group)
@@ -332,11 +348,8 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Colors.white,
-                  size: 16,
-                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Colors.white, size: 16),
               )
             else
               const SizedBox(width: 40),
@@ -373,14 +386,20 @@ class _MessageBubble extends StatelessWidget {
                       ],
                     )
                   : BoxDecoration(
-                      color: _ChatColors.aiBubble,
+                      color: isError
+                          ? const Color(0xFFFEF2F2)
+                          : _ChatColors.aiBubble,
                       borderRadius: BorderRadius.only(
                         topLeft: Radius.circular(isFirst ? 18 : 18),
                         topRight: const Radius.circular(18),
                         bottomLeft: Radius.circular(isLast ? 4 : 18),
                         bottomRight: const Radius.circular(18),
                       ),
-                      border: Border.all(color: _ChatColors.aiBubbleBorder),
+                      border: Border.all(
+                        color: isError
+                            ? const Color(0xFFFCA5A5)
+                            : _ChatColors.aiBubbleBorder,
+                      ),
                       boxShadow: const [
                         BoxShadow(
                           color: _ChatColors.shadow,
@@ -393,7 +412,11 @@ class _MessageBubble extends StatelessWidget {
               child: Text(
                 message.text,
                 style: TextStyle(
-                  color: isUser ? _ChatColors.userText : _ChatColors.aiText,
+                  color: isUser
+                      ? _ChatColors.userText
+                      : isError
+                          ? const Color(0xFFB91C1C)
+                          : _ChatColors.aiText,
                   fontSize: 14.5,
                   height: 1.45,
                 ),
@@ -460,10 +483,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 
     _dotAnim = _dotCtrl
         .map(
-          (c) => Tween<double>(
-            begin: 0,
-            end: -6,
-          ).animate(CurvedAnimation(parent: c, curve: Curves.easeInOut)),
+          (c) => Tween<double>(begin: 0, end: -6).animate(
+            CurvedAnimation(parent: c, curve: Curves.easeInOut),
+          ),
         )
         .toList();
 
@@ -503,11 +525,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
               ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.auto_awesome_rounded,
-              color: Colors.white,
-              size: 16,
-            ),
+            child: const Icon(Icons.auto_awesome_rounded,
+                color: Colors.white, size: 16),
           ),
 
           // Bubble with dots
@@ -552,9 +571,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                         height: 6,
                         margin: EdgeInsets.only(left: i == 0 ? 0 : 4),
                         decoration: BoxDecoration(
-                          color: _ChatColors.typingDot.withOpacity(
-                            0.4 + 0.3 * (i / 2),
-                          ),
+                          color: _ChatColors.typingDot
+                              .withOpacity(0.4 + 0.3 * (i / 2)),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -645,10 +663,8 @@ class _InputBar extends StatelessWidget {
                     fontSize: 14.5,
                   ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
