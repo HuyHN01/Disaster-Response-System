@@ -100,28 +100,22 @@ class _CitizenNewsDetailScreenState
     setState(() => _isLaunching = true);
     try {
       final uri = Uri.parse(urlStr);
-      final canLaunch = await canLaunchUrl(uri);
-      if (canLaunch) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Không thể mở tài liệu.'),
-              backgroundColor: _DC.brandRed,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
+      
+      // Bỏ qua bước canLaunchUrl rườm rà. Ép hệ điều hành mở trình duyệt ngoài.
+      // Nếu máy thực sự không có trình duyệt (rất hiếm), nó sẽ quăng Exception.
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        throw Exception('Could not launch url');
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Lỗi khi mở tài liệu.'),
+            content: const Text('Không thể mở tài liệu. Vui lòng thử lại.'),
             backgroundColor: _DC.brandRed,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),

@@ -54,5 +54,19 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="tel" />
         </intent>
+
+        <!--Thêm quyền để mở Browser và tải về File PDF-->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+
     </queries>
 </manifest>
