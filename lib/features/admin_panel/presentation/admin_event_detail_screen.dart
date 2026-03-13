@@ -28,6 +28,12 @@ class _DC {
   static const Color amber = Color(0xFFD97706);
   static const Color amberBg = Color(0xFFFEF3C7);
   static const Color shadow = Color(0x0A000000);
+
+  // Stat card accent colours
+  static const Color sosOrange = Color(0xFFEA580C);
+  static const Color sosOrangeBg = Color(0xFFFFF7ED);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueBg = Color(0xFFEFF6FF);
 }
 
 // =============================================================================
@@ -88,17 +94,62 @@ class AdminPost {
 }
 
 // =============================================================================
-// PROVIDER — stream realtime bài đăng theo eventId
+// MODEL — thống kê SOS theo sự kiện
 // =============================================================================
 
-/// Dùng .family để mỗi eventId có state riêng biệt
+/// Tổng hợp số liệu SOS cho một sự kiện thiên tai.
+class EventSosStats {
+  /// Tổng số tín hiệu SOS nhận được.
+  final int totalSos;
+
+  /// Số tín hiệu SOS chưa được xử lý (isVerified == false).
+  final int unverifiedSos;
+
+  const EventSosStats({required this.totalSos, required this.unverifiedSos});
+
+  const EventSosStats.empty()
+      : totalSos = 0,
+        unverifiedSos = 0;
+}
+
+// =============================================================================
+// PROVIDERS
+// =============================================================================
+
+/// Stream realtime bài đăng (news/directive) theo eventId.
+/// Dùng .family để mỗi eventId có state riêng biệt.
 final adminPostsProvider = StreamNotifierProvider.family<
     AdminPostsController, List<AdminPost>, String>(
   AdminPostsController.new,
 );
 
-class AdminPostsController extends StreamNotifier<List<AdminPost>> {
+/// Stream realtime thống kê SOS theo eventId.
+///
+/// Lắng nghe collection `posts` với:
+///   • `eventId == arg`
+///   • `postType == 'sos'`
+///
+/// Tự động tính lại `totalSos` / `unverifiedSos` mỗi khi Firestore thay đổi.
+final eventSosStatsProvider =
+    StreamProvider.family<EventSosStats, String>((ref, eventId) {
+  return FirebaseFirestore.instance
+      .collection('posts')
+      .where('eventId', isEqualTo: eventId)
+      .where('postType', isEqualTo: 'sos')
+      .snapshots()
+      .map((snap) {
+    final total = snap.docs.length;
+    final unverified = snap.docs
+        .where((d) => (d.data()['isVerified'] as bool?) != true)
+        .length;
+    return EventSosStats(totalSos: total, unverifiedSos: unverified);
+  });
+});
 
+// =============================================================================
+// CONTROLLER — bài đăng news/directive
+// =============================================================================
+class AdminPostsController extends StreamNotifier<List<AdminPost>> {
   AdminPostsController(this.arg);
   final String arg;
 
@@ -126,7 +177,7 @@ class AdminPostsController extends StreamNotifier<List<AdminPost>> {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     await _db.collection('posts').doc(id).set({
       'id': id,
-      'eventId': arg, // arg = eventId từ .family
+      'eventId': arg,
       'userId': 'admin',
       'postType': postType,
       'title': title,
@@ -189,7 +240,6 @@ String quillJsonToPlainText(String jsonStr, {int maxChars = 120}) {
     if (text.length <= maxChars) return text;
     return '${text.substring(0, maxChars)}...';
   } catch (_) {
-    // content không phải JSON hợp lệ — hiển thị thô
     final raw = jsonStr.replaceAll('\n', ' ').trim();
     return raw.length > maxChars ? '${raw.substring(0, maxChars)}...' : raw;
   }
@@ -211,12 +261,17 @@ class AdminEventDetailScreen extends ConsumerWidget {
       backgroundColor: _DC.bg,
       body: Column(
         children: [
+          // ── Header (tên sự kiện, trạng thái, nút đóng) ──────────────────
           _Header(event: event, ref: ref),
+
+          // ── Stats row — realtime SOS + bài đăng ─────────────────────────
+          _EventStatsRow(event: event),
+
+          // ── Danh sách bài đăng ──────────────────────────────────────────
           Expanded(
             child: postsAsync.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(),
-              ),
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorState(message: e.toString()),
               data: (posts) => posts.isEmpty
                   ? const _EmptyState()
@@ -226,6 +281,291 @@ class AdminEventDetailScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: _WriteFab(event: event),
+    );
+  }
+}
+
+// =============================================================================
+// STATS ROW
+// =============================================================================
+
+/// Hàng 3 thẻ thống kê: Tổng SOS — SOS chờ — Bài đăng.
+///
+/// Dùng [ConsumerStatefulWidget] để [AnimationController] sống đúng vòng đời
+/// widget mà không bị huỷ/tạo lại mỗi khi Riverpod rebuild.
+class _EventStatsRow extends ConsumerStatefulWidget {
+  final DisasterEvent event;
+  const _EventStatsRow({required this.event});
+
+  @override
+  ConsumerState<_EventStatsRow> createState() => _EventStatsRowState();
+}
+
+class _EventStatsRowState extends ConsumerState<_EventStatsRow>
+    with SingleTickerProviderStateMixin {
+  // Pulse animation — chỉ chạy khi có SOS chưa xử lý
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sosAsync = ref.watch(eventSosStatsProvider(widget.event.id));
+    final postsAsync = ref.watch(adminPostsProvider(widget.event.id));
+
+    // Dùng valueOrNull để hiển thị "–" khi đang loading, không block UI
+    final stats = sosAsync.value ?? const EventSosStats.empty();
+    final postCount = postsAsync.value?.length ?? 0;
+    final isLoading = sosAsync.isLoading || postsAsync.isLoading;
+    final hasUnverified = stats.unverifiedSos > 0;
+
+    return Container(
+      // Tách bằng đường kẻ nhẹ phía dưới để phân biệt với danh sách bài
+      decoration: const BoxDecoration(
+        color: _DC.cardBg,
+        border: Border(bottom: BorderSide(color: _DC.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+      child: Row(
+        children: [
+          // ── Thẻ 1: Tổng SOS nhận được ───────────────────────────────────
+          Expanded(
+            child: _StatCard(
+              icon: Icons.sos_rounded,
+              iconColor: _DC.sosOrange,
+              iconBg: _DC.sosOrangeBg,
+              label: 'Tổng SOS\nnhận được',
+              value: isLoading ? '–' : '${stats.totalSos}',
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // ── Thẻ 2: SOS đang chờ (nhấp nháy khi > 0) ────────────────────
+          Expanded(
+            child: _PulsingStatCard(
+              pulseAnim: _pulseAnim,
+              isPulsing: hasUnverified,
+              icon: Icons.warning_rounded,
+              iconColor: _DC.brandRed,
+              iconBg: _DC.brandRedBg,
+              label: 'SOS đang\nchờ xử lý',
+              value: isLoading ? '–' : '${stats.unverifiedSos}',
+              valueColor: hasUnverified ? _DC.brandRed : _DC.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // ── Thẻ 3: Bản tin & Công điện ──────────────────────────────────
+          Expanded(
+            child: _StatCard(
+              icon: Icons.article_rounded,
+              iconColor: _DC.blue,
+              iconBg: _DC.blueBg,
+              label: 'Bản tin &\nCông điện',
+              value: isLoading ? '–' : '$postCount',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// STAT CARD — tĩnh
+// =============================================================================
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: _DC.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _DC.border),
+        boxShadow: const [
+          BoxShadow(color: _DC.shadow, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon badge
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(height: 12),
+
+          // Số liệu lớn
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? _DC.textPrimary,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 5),
+
+          // Nhãn mô tả
+          Text(
+            label,
+            style: const TextStyle(
+              color: _DC.textSecondary,
+              fontSize: 11,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// PULSING STAT CARD — nhấp nháy khi isPulsing == true
+// =============================================================================
+
+/// Wrapper quanh cùng layout với [_StatCard], nhưng khi [isPulsing] == true:
+///   • Viền và nền đổi sang tông đỏ nhạt.
+///   • Icon container dao động scale + opacity theo [pulseAnim].
+/// Khi [isPulsing] == false widget render hoàn toàn tĩnh (AnimatedBuilder
+/// trả về child ngay, không tính toán transform thừa).
+class _PulsingStatCard extends StatelessWidget {
+  final Animation<double> pulseAnim;
+  final bool isPulsing;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _PulsingStatCard({
+    required this.pulseAnim,
+    required this.isPulsing,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: isPulsing ? const Color(0xFFFFF5F5) : _DC.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isPulsing ? const Color(0xFFFCA5A5) : _DC.border,
+          width: isPulsing ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isPulsing
+                ? _DC.brandRed.withOpacity(0.08)
+                : _DC.shadow,
+            blurRadius: isPulsing ? 10 : 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon badge — nhấp nháy scale + opacity khi có SOS chờ
+          AnimatedBuilder(
+            animation: pulseAnim,
+            builder: (_, child) {
+              if (!isPulsing) return child!; // tĩnh hoàn toàn khi = 0
+              return Transform.scale(
+                scale: 0.92 + 0.08 * pulseAnim.value,
+                child: Opacity(
+                  opacity: 0.72 + 0.28 * pulseAnim.value,
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Số liệu lớn
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? _DC.textPrimary,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 5),
+
+          // Nhãn mô tả
+          Text(
+            label,
+            style: const TextStyle(
+              color: _DC.textSecondary,
+              fontSize: 11,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -262,9 +602,9 @@ class _Header extends StatelessWidget {
           InkWell(
             onTap: () => Navigator.of(context).maybePop(),
             borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: const Icon(Icons.arrow_back_rounded,
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.arrow_back_rounded,
                   size: 20, color: _DC.textSecondary),
             ),
           ),
@@ -384,7 +724,6 @@ class _Header extends StatelessWidget {
                     .collection('disaster_events')
                     .doc(event.id)
                     .update({'status': 'resolved'});
-                // Also refresh local event list
                 await ref.read(eventControllerProvider.notifier).loadEvents();
                 if (context.mounted) Navigator.of(context).maybePop();
               } catch (e) {
@@ -723,7 +1062,7 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 72,
             height: 72,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: _DC.brandRedBg,
               shape: BoxShape.circle,
             ),
