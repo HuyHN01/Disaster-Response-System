@@ -1230,18 +1230,27 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
       coords = _kFallbackLocation;
     }
 
+    // ── 2. Get active event ID ─────────────────────────────────────────────
+    final db = ref.read(dbProvider);
+    final activeEvent = await (db.select(db.disasterEvents)
+          ..where((e) => e.status.equals('active'))
+          ..orderBy([(e) => drift.OrderingTerm.desc(e.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
+
+    final realEventId = activeEvent?.id ?? 'unknown_event';
+
     // Close dialog before async DB work so UI feels snappy
     Navigator.of(dialogContext).pop();
 
-    final db = ref.read(dbProvider);
     final postId = DateTime.now().millisecondsSinceEpoch.toString();
     final locId = 'loc_$postId';
 
-    // ── 2. Save Post to Drift (offline-first) ──────────────────────────────
+    // ── 3. Save Post to Drift (offline-first) ──────────────────────────────
     await db.into(db.posts).insert(
           PostsCompanion.insert(
             id: postId,
-            eventId: 'current_event_id',
+            eventId: realEventId,
             userId: 'citizen_01',
             postType: 'sos',
             content: 'Tôi đang cần cứu hộ khẩn cấp!',
@@ -1250,7 +1259,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
           ),
         );
 
-    // ── 3. Save real GPS coordinates to Drift ──────────────────────────────
+    // ── 4. Save real GPS coordinates to Drift ──────────────────────────────
     await db.into(db.locations).insert(
           LocationsCompanion.insert(
             id: locId,
@@ -1260,11 +1269,11 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
           ),
         );
 
-    // ── 4. Immediately try to push to Firebase ─────────────────────────────
+    // ── 5. Immediately try to push to Firebase ─────────────────────────────
     final syncService = ref.read(firebaseSyncServiceProvider);
     final result = await syncService.syncPendingSOS();
 
-    // ── 5. Show result snackbar ────────────────────────────────────────────
+    // ── 6. Show result snackbar ────────────────────────────────────────────
     messenger.showSnackBar(
       SnackBar(
         content: Row(
