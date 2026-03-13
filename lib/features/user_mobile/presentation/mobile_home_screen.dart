@@ -1,11 +1,10 @@
 // lib/features/user_mobile/presentation/mobile_home_screen.dart
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
-import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
-import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
-import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -99,10 +98,7 @@ class MobileHomeScreen extends ConsumerWidget {
                     iconColor: _MobileColors.menuMap,
                     bgColor: _MobileColors.menuMapBg,
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => EventMapScreen(),)
-                      );
+                      context.pushNamed(RouteNames.nameEventMap);
                     },
                   ),
                   _MenuButton(
@@ -119,7 +115,7 @@ class MobileHomeScreen extends ConsumerWidget {
                     iconColor: _MobileColors.menuAI,
                     bgColor: _MobileColors.menuAIBg,
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => AiChatScreen()));
+                      context.pushNamed(RouteNames.nameAiChat);
                     },
                   ),
                   _MenuButton(
@@ -128,7 +124,7 @@ class MobileHomeScreen extends ConsumerWidget {
                     iconColor: _MobileColors.menuNews,
                     bgColor: _MobileColors.menuNewsBg,
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => CitizenNewsScreen()));
+                      context.pushNamed(RouteNames.nameNews);
                     },
                   ),
                 ]),
@@ -531,7 +527,9 @@ class _ActiveEventCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: () {
+                      context.pushNamed(RouteNames.nameEventMap);
+                    },
                     icon: const Icon(Icons.map_rounded, size: 17),
                     label: const Text('Xem bản đồ sơ tán'),
                     style: ElevatedButton.styleFrom(
