@@ -1,8 +1,6 @@
+import 'package:disaster_response_app/core/routes/app_router.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
-import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
-import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
-import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -39,24 +37,28 @@ void main() async {
 class OmniDisasterApp extends ConsumerWidget {
   const OmniDisasterApp({super.key});
 
+  // GoRouter instance — created once and reused for the lifetime of the app.
+  static final _router = AppRouter.createRouter();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    
+
     ref.read(firebaseSyncServiceProvider).listenToAdminEvents(
       onNewEvent: (event) => ref.invalidate(eventControllerProvider),
     );
 
-    return MaterialApp(
+    return MaterialApp.router(
+      routerConfig: _router,
       localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
       supportedLocales: FlutterQuillLocalizations.supportedLocales,
       title: 'Hệ thống Ứng phó Thiên tai',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: Colors.redAccent, // Vibe khẩn cấp, cảnh báo
-        textTheme: GoogleFonts.interTextTheme(), // Font chữ dễ đọc
+        colorSchemeSeed: Colors.redAccent,
+        textTheme: GoogleFonts.interTextTheme(),
       ),
-      home: MobileHomeScreen(),
     );
   }
 }
+
