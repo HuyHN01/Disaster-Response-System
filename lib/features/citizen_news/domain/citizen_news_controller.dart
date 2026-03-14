@@ -66,6 +66,21 @@ final citizenNewsProvider =
           .toList());
 });
 
+/// Lấy 1 bài viết theo id để phục vụ deep-link / push-notification.
+Future<CitizenNewsPost?> fetchCitizenNewsPostById(String postId) async {
+  try {
+    final doc = await FirebaseFirestore.instance
+        .collection('posts')
+        .doc(postId)
+        .get();
+
+    if (!doc.exists) return null;
+    return CitizenNewsPost.fromFirestore(doc);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Parse từng document an toàn — document lỗi không làm crash toàn stream.
 CitizenNewsPost? _safeParse(
     DocumentSnapshot<Map<String, dynamic>> doc) {

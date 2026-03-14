@@ -37,9 +37,17 @@ class _DC {
 // DETAIL SCREEN
 // =============================================================================
 class CitizenNewsDetailScreen extends StatefulWidget {
-  final CitizenNewsPost post;
+  final CitizenNewsPost? post;
+  final String? postId;
 
-  const CitizenNewsDetailScreen({super.key, required this.post});
+  const CitizenNewsDetailScreen({
+    super.key,
+    this.post,
+    this.postId,
+  }) : assert(
+          post != null || postId != null,
+          'CitizenNewsDetailScreen requires either post or postId',
+        );
 
   @override
   State<CitizenNewsDetailScreen> createState() =>
@@ -48,19 +56,45 @@ class CitizenNewsDetailScreen extends StatefulWidget {
 
 class _CitizenNewsDetailScreenState
     extends State<CitizenNewsDetailScreen> {
-  late final QuillController _quillCtrl;
+  QuillController? _quillCtrl;
+  CitizenNewsPost? _loadedPost;
+  bool _isLoadingPost = false;
   bool _isLaunching = false;
 
   @override
   void initState() {
     super.initState();
-    _quillCtrl = _buildController(widget.post.contentJson);
+
+    if (widget.post != null) {
+      _loadedPost = widget.post;
+      _quillCtrl = _buildController(widget.post!.contentJson);
+    } else {
+      _loadPostById();
+    }
   }
 
   @override
   void dispose() {
-    _quillCtrl.dispose();
+    _quillCtrl?.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPostById() async {
+    final id = widget.postId;
+    if (id == null) return;
+
+    setState(() => _isLoadingPost = true);
+
+    final post = await fetchCitizenNewsPostById(id);
+    if (!mounted) return;
+
+    _quillCtrl?.dispose();
+
+    setState(() {
+      _loadedPost = post;
+      _quillCtrl = post == null ? null : _buildController(post.contentJson);
+      _isLoadingPost = false;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -80,7 +114,7 @@ class _CitizenNewsDetailScreenState
       );
     } catch (_) {
       // content không phải JSON Quill hợp lệ → hiển thị text thô
-      final fallback = Document()..insert(0, widget.post.contentJson);
+      final fallback = Document()..insert(0, jsonStr);
       return QuillController(
         document: fallback,
         selection: const TextSelection.collapsed(offset: 0),
@@ -94,7 +128,7 @@ class _CitizenNewsDetailScreenState
   // ---------------------------------------------------------------------------
 
   Future<void> _openAttachment() async {
-    final urlStr = widget.post.attachmentUrl;
+    final urlStr = _loadedPost?.attachmentUrl;
     if (urlStr == null) return;
 
     setState(() => _isLaunching = true);
@@ -135,7 +169,58 @@ class _CitizenNewsDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
+    if (_isLoadingPost) {
+      return const Scaffold(
+        backgroundColor: _DC.bg,
+        body: Center(
+          child: CircularProgressIndicator(color: _DC.brandRed),
+        ),
+      );
+    }
+
+    final post = _loadedPost;
+    if (post == null || _quillCtrl == null) {
+      return Scaffold(
+        backgroundColor: _DC.bg,
+        appBar: AppBar(
+          backgroundColor: _DC.brandRed,
+          foregroundColor: Colors.white,
+          title: const Text('Không tìm thấy bài viết'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.article_outlined,
+                  size: 56,
+                  color: _DC.textMuted,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Bài viết không còn tồn tại hoặc đã bị xoá.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _DC.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Quay lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final isDirective = post.isDirective;
     final accentColor = isDirective ? _DC.directive : _DC.news;
 
@@ -161,7 +246,7 @@ class _CitizenNewsDetailScreenState
                   const SizedBox(height: 14),
 
                   // ── Content card (Quill reader) ───────────────────────
-                  _ContentCard(controller: _quillCtrl),
+                  _ContentCard(controller: _quillCtrl!),
 
                   // ── Attachment card ───────────────────────────────────
                   if (post.attachmentUrl != null) ...[

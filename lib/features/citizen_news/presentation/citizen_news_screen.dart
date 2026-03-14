@@ -1,9 +1,10 @@
 // lib/features/citizen_news/presentation/citizen_news_screen.dart
 
 import 'package:disaster_response_app/features/citizen_news/domain/citizen_news_controller.dart';
-import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_detail_screen.dart';
+import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 // =============================================================================
@@ -168,11 +169,10 @@ class _NewsCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       elevation: 0,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                CitizenNewsDetailScreen(post: post),
-          ),
+        onTap: () => context.pushNamed(
+          RouteNames.nameNewsDetail,
+          pathParameters: {RouteNames.paramPostId: post.id},
+          extra: post,
         ),
         borderRadius: BorderRadius.circular(16),
         splashColor: (isDirective ? _NC.directive : _NC.news)

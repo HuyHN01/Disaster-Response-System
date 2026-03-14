@@ -20,10 +20,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'dart:ui';
+import 'dart:convert';
 
+import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 
 // =============================================================================
 // BACKGROUND HANDLER — top-level function (bắt buộc)
@@ -103,6 +106,27 @@ class FCMService {
 
   // Guard tránh gọi initialize() nhiều lần
   bool _initialized = false;
+
+  // Router được inject từ main.dart để service có thể điều hướng ngoài BuildContext.
+  GoRouter? _router;
+
+  // Queue điều hướng khi app mở từ terminated state trước khi router attach xong.
+  String? _pendingNewsPostId;
+
+  // Payload keys
+  static const _kPayloadScreen = 'screen';
+  static const _kPayloadPostId = 'postId';
+  static const _kPayloadNewsId = 'newsId';
+  static const _kPayloadPostIdSnake = 'post_id';
+  static const _kPayloadId = 'id';
+
+  /// Gắn [GoRouter] sau khi app tạo router.
+  ///
+  /// Cần gọi trong main trước runApp để xử lý được initial notification tap.
+  void attachRouter(GoRouter router) {
+    _router = router;
+    _flushPendingNavigation();
+  }
 
   // ==========================================================================
   // PUBLIC — initialize
@@ -255,7 +279,10 @@ class FCMService {
         id: message.hashCode,
         title: notification.title ?? 'Cảnh báo OmniDisaster',
         body: notification.body ?? '',
-        payload: message.data['screen'], // Dữ liệu tuỳ chỉnh để điều hướng
+        payload: jsonEncode({
+          _kPayloadScreen: message.data[_kPayloadScreen],
+          _kPayloadPostId: message.data[_kPayloadPostId],
+        }),
       );
     });
   }
@@ -340,8 +367,26 @@ class FCMService {
   void _onLocalNotifTap(NotificationResponse response) {
     final payload = response.payload;
     debugPrint('[FCMService] Local notification tapped. payload=$payload');
-    // TODO: điều hướng dựa trên payload
-    // Ví dụ: if (payload == 'sos_list') { navigatorKey.currentState?.pushNamed('/sos'); }
+    if (payload == null || payload.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+
+      final screen = decoded[_kPayloadScreen] as String?;
+      final postId = _extractPostId(decoded);
+
+      if (_isNewsScreen(screen) && postId != null && postId.isNotEmpty) {
+        _navigateToNewsDetail(postId);
+      } else {
+        debugPrint(
+          '[FCMService] Thiếu postId hợp lệ trong local payload. '
+          'screen=$screen payload=$decoded',
+        );
+      }
+    } catch (_) {
+      // backward-compat: payload cũ có thể chỉ là screen string.
+    }
   }
 
   /// Điều hướng dựa trên data payload của FCM message.
@@ -354,24 +399,61 @@ class FCMService {
   /// }
   /// ```
   void _handleNavigationFromMessage(RemoteMessage message) {
-    final screen = message.data['screen'] as String?;
-    final eventId = message.data['eventId'] as String?;
+    final screen = message.data[_kPayloadScreen] as String?;
+    final postId = _extractPostId(message.data);
 
-    debugPrint('[FCMService] Navigate to: screen=$screen eventId=$eventId');
+    debugPrint('[FCMService] Navigate to: screen=$screen postId=$postId');
 
-    // TODO: Dùng GoRouter hoặc navigatorKey để điều hướng
-    // Ví dụ với GlobalKey<NavigatorState>:
-    //
-    // switch (screen) {
-    //   case 'event_detail':
-    //     if (eventId != null) {
-    //       navigatorKey.currentState?.pushNamed('/event/$eventId');
-    //     }
-    //   case 'sos_list':
-    //     navigatorKey.currentState?.pushNamed('/sos');
-    //   default:
-    //     navigatorKey.currentState?.pushNamed('/home');
-    // }
+    if (_isNewsScreen(screen) && postId != null && postId.isNotEmpty) {
+      _navigateToNewsDetail(postId);
+      return;
+    }
+
+    debugPrint('[FCMService] Không có route phù hợp cho payload hiện tại');
+  }
+
+  String? _extractPostId(Map<String, dynamic> data) {
+    final candidates = <String?>[
+      data[_kPayloadPostId] as String?,
+      data[_kPayloadNewsId] as String?,
+      data[_kPayloadPostIdSnake] as String?,
+      data[_kPayloadId] as String?,
+    ];
+
+    for (final value in candidates) {
+      final v = value?.trim();
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  bool _isNewsScreen(String? screen) {
+    if (screen == null) return false;
+    return screen == 'news_detail' ||
+        screen == 'citizen_news_detail' ||
+        screen == RouteNames.nameNewsDetail;
+  }
+
+  void _navigateToNewsDetail(String postId) {
+    final router = _router;
+    if (router == null) {
+      _pendingNewsPostId = postId;
+      debugPrint('[FCMService] Router chưa sẵn sàng, queue postId=$postId');
+      return;
+    }
+
+    router.pushNamed(
+      RouteNames.nameNewsDetail,
+      pathParameters: {RouteNames.paramPostId: postId},
+    );
+  }
+
+  void _flushPendingNavigation() {
+    final pending = _pendingNewsPostId;
+    if (pending == null) return;
+
+    _pendingNewsPostId = null;
+    _navigateToNewsDetail(pending);
   }
 
   // ==========================================================================
