@@ -3,10 +3,14 @@
 import 'dart:convert';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/rescue_stations/presentation/widgets/location_autocomplete_field.dart';
+import 'package:disaster_response_app/features/rescue_stations/presentation/widgets/location_picker_map_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 
 class AdminRescueStationsScreen extends ConsumerWidget {
   const AdminRescueStationsScreen({super.key});
@@ -422,6 +426,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _latCtrl;
   late final TextEditingController _lngCtrl;
+  late final TextEditingController _searchCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _capacityCtrl;
@@ -444,6 +449,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
       text: station == null ? '' : station.longitude.toString(),
     );
     _addressCtrl = TextEditingController(text: station?.address ?? '');
+    _searchCtrl = TextEditingController();
     _phoneCtrl = TextEditingController(text: station?.contactPhone ?? '');
     _capacityCtrl = TextEditingController(
       text: station?.capacity?.toString() ?? '',
@@ -458,6 +464,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
     _latCtrl.dispose();
     _lngCtrl.dispose();
     _addressCtrl.dispose();
+    _searchCtrl.dispose();
     _phoneCtrl.dispose();
     _capacityCtrl.dispose();
     _resourcesCtrl.dispose();
@@ -479,6 +486,52 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
               _buildTextField(_nameCtrl, 'Tên trạm'),
               const SizedBox(height: 10),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Vị trí',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        LocationAutocompleteField(
+                          controller: _searchCtrl,
+                          onSelected: (result) {
+                            setState(() {
+                              _latCtrl.text = result.latitude.toString();
+                              _lngCtrl.text = result.longitude.toString();
+                              _addressCtrl.text = result.address;
+                              _searchCtrl.text = result
+                                  .name; // Keep the name or address in the search box to indicate selection
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 1,
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: _openMapPicker,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Icon(Icons.map_rounded),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
                 children: [
                   Expanded(
                     child: _buildTextField(
@@ -487,6 +540,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      readOnly: true,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -497,12 +551,17 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      readOnly: true,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              _buildTextField(_addressCtrl, 'Địa chỉ'),
+              _buildTextField(
+                _addressCtrl,
+                'Địa chỉ chi tiết (được chọn từ hệ thống)',
+                readOnly: true,
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -561,15 +620,45 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
     TextEditingController controller,
     String label, {
     TextInputType? keyboardType,
+    bool readOnly = false,
+    String? hintText,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hintText,
+        filled: readOnly,
+        fillColor: readOnly ? Colors.grey.shade100 : null,
         border: const OutlineInputBorder(),
       ),
     );
+  }
+
+  Future<void> _openMapPicker() async {
+    final currentLat = double.tryParse(_latCtrl.text);
+    final currentLng = double.tryParse(_lngCtrl.text);
+    LatLng? initLoc;
+
+    if (currentLat != null && currentLng != null) {
+      initLoc = LatLng(currentLat, currentLng);
+    }
+
+    final LocationResult? result = await showDialog(
+      context: context,
+      builder: (_) => LocationPickerMapDialog(initialLocation: initLoc),
+    );
+
+    if (result != null) {
+      setState(() {
+        _latCtrl.text = result.latitude.toString();
+        _lngCtrl.text = result.longitude.toString();
+        _addressCtrl.text = result.address;
+        _searchCtrl.text = result.address;
+      });
+    }
   }
 
   void _submit() {

@@ -34,7 +34,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 // =============================================================================
-// EXCEPTIONS
+// EXCEPTIONS & MODELS
 // =============================================================================
 
 /// Lỗi trả về từ OpenRouteService (bao gồm lỗi mạng lẫn lỗi API).
@@ -46,6 +46,32 @@ class RoutingException implements Exception {
 
   @override
   String toString() => 'RoutingException[$statusCode]: $message';
+}
+
+/// Chứa kết quả từ Geocoding API.
+class LocationResult {
+  final String name;
+  final String address;
+  final double latitude;
+  final double longitude;
+
+  const LocationResult({
+    required this.name,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  @override
+  String toString() {
+    if (name.isNotEmpty && address.isNotEmpty && name != address) {
+      if (address.startsWith(name)) {
+         return address;
+      }
+      return '$name, $address';
+    }
+    return name.isNotEmpty ? name : address;
+  }
 }
 
 // =============================================================================
@@ -69,6 +95,11 @@ class OpenRouteService {
 
   static const String _baseUrl =
       'https://api.openrouteservice.org/v2/directions/driving-car';
+
+  static const String _geocodeSearchUrl = 
+      'https://api.openrouteservice.org/geocode/search';
+  static const String _geocodeReverseUrl = 
+      'https://api.openrouteservice.org/geocode/reverse';
 
   // Timeout tổng cho mỗi request (bao gồm cả thời gian kết nối + đọc data)
   static const Duration _timeout = Duration(seconds: 10);
@@ -132,6 +163,45 @@ class OpenRouteService {
     }
 
     return _parseGeoJsonResponse(response.body);
+  }
+
+  /// Tìm kiếm địa điểm dựa trên từ khóa (Forward Geocoding).
+  Future<List<LocationResult>> searchAddress(String query) async {
+    if (query.trim().isEmpty) return [];
+
+    // Focus tìm kiếm ở Việt Nam bằng cách dùng boundary (nếu cần thiết) 
+    // Tuy nhiên, thêm tham số focus hay text cũng được
+    final uri = Uri.parse(
+        '$_geocodeSearchUrl?api_key=$_apiKey&text=${Uri.encodeComponent(query.trim())}');
+
+    try {
+      final response = await _client.get(uri).timeout(_timeout);
+      if (response.statusCode == 200) {
+        return _parseGeocodeResponse(response.body);
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ORS] Lỗi searchAddress: $e');
+      return [];
+    }
+  }
+
+  /// Phân giải địa chỉ từ tọa độ (Reverse Geocoding).
+  Future<LocationResult?> reverseGeocode(LatLng point) async {
+    final uri = Uri.parse(
+        '$_geocodeReverseUrl?api_key=$_apiKey&point.lon=${point.longitude}&point.lat=${point.latitude}');
+
+    try {
+      final response = await _client.get(uri).timeout(_timeout);
+      if (response.statusCode == 200) {
+        final results = _parseGeocodeResponse(response.body);
+        if (results.isNotEmpty) return results.first;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ORS] Lỗi reverseGeocode: $e');
+      return null;
+    }
   }
 
   // ==========================================================================
@@ -200,6 +270,38 @@ class OpenRouteService {
       final lat = (coord[1] as num).toDouble();
       return LatLng(lat, lng); // latlong2: LatLng(lat, lng)
     }).toList();
+  }
+
+  /// Parse dữ liệu Geocoding từ JSON của OpenRouteService
+  List<LocationResult> _parseGeocodeResponse(String body) {
+    try {
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final features = json['features'] as List?;
+      if (features == null || features.isEmpty) return [];
+
+      return features.map((f) {
+        if (f is! Map<String, dynamic>) return null;
+        
+        final props = f['properties'] as Map<String, dynamic>? ?? {};
+        final geom = f['geometry'] as Map<String, dynamic>? ?? {};
+        final coords = geom['coordinates'] as List?;
+
+        if (coords == null || coords.length < 2) return null;
+
+        final name = props['name']?.toString() ?? '';
+        final label = props['label']?.toString() ?? '';
+
+        return LocationResult(
+          name: name,
+          address: label.replaceAll(RegExp('^$name, '), ''),
+          longitude: (coords[0] as num).toDouble(),
+          latitude: (coords[1] as num).toDouble(),
+        );
+      }).whereType<LocationResult>().toList();
+    } catch (e) {
+      debugPrint('[ORS] Lỗi parse _parseGeocodeResponse: $e');
+      return [];
+    }
   }
 }
 
