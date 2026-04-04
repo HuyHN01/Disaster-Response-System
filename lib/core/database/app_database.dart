@@ -71,8 +71,39 @@ class Attachments extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// ============ BẢNG RESCUE STATIONS ============
+class RescueStations extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  RealColumn get latitude => real()();
+  RealColumn get longitude => real()();
+  TextColumn get address => text().nullable()();
+  TextColumn get contactPhone => text().nullable()();
+  IntColumn get capacity => integer().nullable()();
+  TextColumn get resourcesJson => text().withDefault(const Constant('{}'))();
+  TextColumn get status =>
+      text().withDefault(const Constant('active'))(); // active/inactive/full
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  TextColumn get syncStatus =>
+      text().withDefault(const Constant('synced'))(); // synced/pending
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ============ APP DATABASE ============
-@DriftDatabase(tables: [Users, DisasterEvents, Posts, Locations, Attachments])
+@DriftDatabase(
+  tables: [
+    Users,
+    DisasterEvents,
+    Posts,
+    Locations,
+    Attachments,
+    RescueStations,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -80,5 +111,15 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(rescueStations);
+      }
+    },
+  );
 }

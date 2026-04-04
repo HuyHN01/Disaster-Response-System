@@ -2,6 +2,7 @@ import 'package:disaster_response_app/core/routes/app_router.dart';
 import 'package:disaster_response_app/core/services/firebase/fcm_service.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -23,17 +24,13 @@ void main() async {
   // Khởi tạo FCM — PHẢI sau Firebase.initializeApp()
   await FCMService.instance.initialize();
 
-
   // Load environment variables
   await dotenv.load(fileName: ".env");
   final SUPABASE_URL = dotenv.get('SUPABASE_URL');
   final SUPABASE_ANON_KEY = dotenv.get('SUPABASE_ANON_KEY');
 
   // TODO: Initialize Supabase
-  await Supabase.initialize(
-    url: SUPABASE_URL,
-    anonKey: SUPABASE_ANON_KEY,
-  );
+  await Supabase.initialize(url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY);
 
   // TODO: Initialize Drift Database
 
@@ -50,9 +47,13 @@ class OmniDisasterApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final syncService = ref.read(firebaseSyncServiceProvider);
 
-    ref.read(firebaseSyncServiceProvider).listenToAdminEvents(
+    syncService.listenToAdminEvents(
       onNewEvent: (event) => ref.invalidate(eventControllerProvider),
+    );
+    syncService.listenToRescueStations(
+      onUpsert: (_) => ref.invalidate(rescueStationControllerProvider),
     );
 
     return MaterialApp.router(
@@ -69,4 +70,3 @@ class OmniDisasterApp extends ConsumerWidget {
     );
   }
 }
-

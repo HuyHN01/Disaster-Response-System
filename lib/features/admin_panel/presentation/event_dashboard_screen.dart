@@ -4,10 +4,10 @@ import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/admin_sos_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 
 // =============================================================================
 // THEME TOKENS — swap these for Dark Mode support later
@@ -73,6 +73,7 @@ class _DashboardContent extends ConsumerWidget {
     // Watch derived provider — only rebuilds this widget when the *count*
     // changes, not on every SOS document field update.
     final sosCountAsync = ref.watch(unverifiedSosCountProvider);
+    final rescueStationCountAsync = ref.watch(activeRescueStationCountProvider);
 
     return asyncEvents.when(
       loading: () => const Center(
@@ -132,20 +133,14 @@ class _DashboardContent extends ConsumerWidget {
                   const SizedBox(width: 16),
 
                   // 2. Unverified SOS count (live from Firestore)
-                  Expanded(
-                    child: _SosStatCard(sosCountAsync: sosCountAsync),
-                  ),
+                  Expanded(child: _SosStatCard(sosCountAsync: sosCountAsync)),
                   const SizedBox(width: 16),
 
-                  // 3. Shelters (static for now)
+                  // 3. Shelters (live from Drift)
                   Expanded(
-                    child: StatCard(
-                      label: 'Tổng số nơi trú ẩn',
-                      value: '45',
-                      icon: Icons.home_rounded,
-                      iconBgColor: AppColors.statIconGreenBg,
-                      iconColor: AppColors.resolvedGreen,
-                      valueColor: AppColors.textPrimary,
+                    child: _RescueStationStatCard(
+                      countAsync: rescueStationCountAsync,
+                      onTap: () => context.go(RouteNames.adminRescueStations),
                     ),
                   ),
                 ],
@@ -180,7 +175,6 @@ class _SosStatCard extends StatelessWidget {
       AsyncData(:final value) => (value.toString(), false),
       AsyncLoading() => ('—', true),
       AsyncError() => ('!', false),
-      _ => ('—', false),
     };
 
     return StatCard(
@@ -196,6 +190,39 @@ class _SosStatCard extends StatelessWidget {
   }
 }
 
+class _RescueStationStatCard extends StatelessWidget {
+  final AsyncValue<int> countAsync;
+  final VoidCallback onTap;
+
+  const _RescueStationStatCard({required this.countAsync, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final (String displayValue, bool isLoading) = switch (countAsync) {
+      AsyncData(:final value) => (value.toString(), false),
+      AsyncLoading() => ('—', true),
+      AsyncError() => ('!', false),
+    };
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: StatCard(
+          label: 'Tổng số nơi trú ẩn',
+          value: displayValue,
+          icon: Icons.home_rounded,
+          iconBgColor: AppColors.statIconGreenBg,
+          iconColor: AppColors.resolvedGreen,
+          valueColor: AppColors.textPrimary,
+          isLoading: isLoading,
+        ),
+      ),
+    );
+  }
+}
+
 // =============================================================================
 // STAT CARD WIDGET
 // =============================================================================
@@ -206,6 +233,7 @@ class StatCard extends StatelessWidget {
   final Color iconBgColor;
   final Color iconColor;
   final Color valueColor;
+
   /// When true, shows a small loading indicator instead of [value].
   final bool isLoading;
 
