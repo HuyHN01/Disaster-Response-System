@@ -236,8 +236,16 @@ abstract final class AppRouter {
               path: RouteNames.segNewsDetail,
               name: RouteNames.nameNewsDetail,
               builder: (context, state) {
-                final post = state.extra! as CitizenNewsPost;
-                return CitizenNewsDetailScreen(post: post);
+                final post = state.extra is CitizenNewsPost
+                    ? state.extra as CitizenNewsPost
+                    : null;
+                final postId =
+                    state.pathParameters[RouteNames.paramPostId];
+
+                return CitizenNewsDetailScreen(
+                  post: post,
+                  postId: postId,
+                );
               },
             ),
           ],
