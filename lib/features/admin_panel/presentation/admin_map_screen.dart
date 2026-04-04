@@ -1,9 +1,12 @@
 // lib/features/admin_panel/presentation/admin_map_screen.dart
 
 import 'dart:ui' as ui;
+import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
 
 import 'package:disaster_response_app/features/admin_panel/domain/admin_map_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:disaster_response_app/features/rescue_stations/presentation/admin_rescue_stations_screen.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -25,7 +28,9 @@ class _C {
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textMuted = Color(0xFF9CA3AF);
   static const Color resolvedGreen = Color(0xFF16A34A);
-  static const Color userDot = Color(0xFF2563EB); // Màu nút Locate Me
+  static const Color userDot = Color(0xFF2563EB);
+  static const Color stationCore = Color(0xFF0EA5E9);
+  static const Color stationRing = Color(0x330EA5E9); // Màu nút Locate Me
 }
 
 // Tọa độ mặc định: Đà Nẵng — trung tâm địa lý Việt Nam
@@ -133,6 +138,9 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
   // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final stationsAsync = ref.watch(rescueStationControllerProvider);
+    final stationList = stationsAsync.value ?? const [];
+
     final markersAsync = ref.watch(adminMapProvider);
 
     ref.listen<AsyncValue<List<SosMapMarker>>>(adminMapProvider, (_, next) {
@@ -177,7 +185,8 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
               ),
               MarkerLayer(
                 markers: [
-                  ...markerList.map((m) => _buildMarker(m)), // Dùng spread operator (...)
+                  ...markerList.map((m) => _buildMarker(m)),
+                  ...stationList.map((s) => _buildStationMarker(s)), // Dùng spread operator (...)
                   // Vẽ thêm Marker Admin nếu đã lấy được vị trí
                   if (_adminLocation != null)
                     Marker(
@@ -245,7 +254,46 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     );
   }
 
-  Marker _buildMarker(SosMapMarker m) {
+  
+  Marker _buildStationMarker(RescueStation s) {
+    return Marker(
+      point: LatLng(s.latitude, s.longitude),
+      width: 48,
+      height: 48,
+      child: GestureDetector(
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (_) => _StationDetailSheet(station: s),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: _C.stationCore,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: _C.shadow,
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.health_and_safety_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+Marker _buildMarker(SosMapMarker m) {
     return Marker(
       point: LatLng(m.latitude, m.longitude),
       width: 56, height: 64,
@@ -807,6 +855,111 @@ class _AdminLocationMarker extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StationDetailSheet extends ConsumerWidget {
+  final RescueStation station;
+
+  const _StationDetailSheet({Key? key, required this.station}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            station.name,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Trạng thái: ' + (station.status == 'active' ? 'Hoạt động' : station.status == 'full' ? 'Đầy' : 'Ngưng hoạt động'),
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => RescueStationFormDialog(
+                        existing: station,
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Chỉnh sửa'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    final newStatus = station.status == 'active' ? 'full' : 'active';
+                    ref.read(rescueStationControllerProvider.notifier).updateStation(
+                      id: station.id,
+                      name: station.name,
+                      latitude: station.latitude,
+                      longitude: station.longitude,
+                      address: station.address,
+                      contactPhone: station.contactPhone,
+                      capacity: station.capacity,
+                      resourcesJson: station.resourcesJson,
+                      status: newStatus,
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: station.status == 'active' ? Colors.orange : Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(station.status == 'active' ? 'Đánh dấu đầy' : 'Đánh dấu HĐ'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ref.read(rescueStationControllerProvider.notifier).softDeleteStation(station.id);
+            },
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Xóa trạm cứu hộ'),
+          ),
+           const SizedBox(height: 20),
+        ],
       ),
     );
   }

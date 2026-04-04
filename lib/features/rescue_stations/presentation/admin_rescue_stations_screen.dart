@@ -76,9 +76,9 @@ class AdminRescueStationsScreen extends ConsumerWidget {
   }
 
   Future<void> _onCreate(BuildContext context, WidgetRef ref) async {
-    final formData = await showDialog<_RescueStationFormData>(
+    final formData = await showDialog<RescueStationFormData>(
       context: context,
-      builder: (_) => const _RescueStationFormDialog(),
+      builder: (_) => const RescueStationFormDialog(),
     );
 
     if (formData == null) return;
@@ -117,9 +117,9 @@ class AdminRescueStationsScreen extends ConsumerWidget {
     WidgetRef ref,
     RescueStation station,
   ) async {
-    final formData = await showDialog<_RescueStationFormData>(
+    final formData = await showDialog<RescueStationFormData>(
       context: context,
-      builder: (_) => _RescueStationFormDialog(existing: station),
+      builder: (_) => RescueStationFormDialog(existing: station),
     );
 
     if (formData == null) return;
@@ -413,16 +413,16 @@ class _TableRow extends StatelessWidget {
   }
 }
 
-class _RescueStationFormDialog extends StatefulWidget {
+class RescueStationFormDialog extends StatefulWidget {
   final RescueStation? existing;
-  const _RescueStationFormDialog({this.existing});
+  const RescueStationFormDialog({this.existing});
 
   @override
-  State<_RescueStationFormDialog> createState() =>
-      _RescueStationFormDialogState();
+  State<RescueStationFormDialog> createState() =>
+      RescueStationFormDialogState();
 }
 
-class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
+class RescueStationFormDialogState extends State<RescueStationFormDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _latCtrl;
   late final TextEditingController _lngCtrl;
@@ -693,7 +693,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
     }
 
     Navigator.of(context).pop(
-      _RescueStationFormData(
+      RescueStationFormData(
         name: name,
         latitude: lat,
         longitude: lng,
@@ -741,7 +741,7 @@ class _RescueStationFormDialogState extends State<_RescueStationFormDialog> {
   }
 }
 
-class _RescueStationFormData {
+class RescueStationFormData {
   final String name;
   final double latitude;
   final double longitude;
@@ -751,7 +751,7 @@ class _RescueStationFormData {
   final List<String> resources;
   final String status;
 
-  const _RescueStationFormData({
+  const RescueStationFormData({
     required this.name,
     required this.latitude,
     required this.longitude,
