@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
+import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -111,20 +112,18 @@ Future<Position> _determinePosition() async {
     ),
   );
 
-  _geoLog(
-    '✅ Tọa độ: lat=${pos.latitude}, lng=${pos.longitude}, '
-    'accuracy=${pos.accuracy.toStringAsFixed(1)}m',
-  );
+  _geoLog('✅ Tọa độ: lat=${pos.latitude}, lng=${pos.longitude}, '
+      'accuracy=${pos.accuracy.toStringAsFixed(1)}m');
   return pos;
 }
 
 /// Tạo danh sách các trạm cứu trợ giả định xung quanh [center].
 /// Offset tính theo độ (~1° ≈ 111 km).
 List<LatLng> _mockRescueStations(LatLng center) => [
-  LatLng(center.latitude + 0.018, center.longitude - 0.022), // ~2 km TN
-  LatLng(center.latitude - 0.014, center.longitude + 0.031), // ~2.5 km ĐN
-  LatLng(center.latitude + 0.030, center.longitude + 0.010), // ~3.3 km B
-];
+      LatLng(center.latitude + 0.018, center.longitude - 0.022), // ~2 km TN
+      LatLng(center.latitude - 0.014, center.longitude + 0.031), // ~2.5 km ĐN
+      LatLng(center.latitude + 0.030, center.longitude + 0.010), // ~3.3 km B
+    ];
 
 /// Tín hiệu SOS giả định ~3 km về phía ĐB so với [center].
 LatLng _mockSosLocation(LatLng center) =>
@@ -137,10 +136,7 @@ class LocationException implements Exception {
   final String message;
   final _LocErrCode code;
 
-  const LocationException(
-    this.message, {
-    this.code = _LocErrCode.permissionDenied,
-  });
+  const LocationException(this.message, {this.code = _LocErrCode.permissionDenied});
 
   @override
   String toString() => 'LocationException[$code]: $message';
@@ -183,10 +179,9 @@ class _EventMapScreenState extends State<EventMapScreen>
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
 
-    _pulseAnim = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
 
     // Fetch real GPS on startup — non-blocking
     _initLocation();
@@ -250,27 +245,21 @@ class _EventMapScreenState extends State<EventMapScreen>
 
   void _showLocationBanner(String message, _LocErrCode? code) {
     if (!mounted) return;
-    final isDeniedForever =
-        code == _LocErrCode.permissionDeniedForever ||
+    final isDeniedForever = code == _LocErrCode.permissionDeniedForever ||
         code == _LocErrCode.unableToDetermine;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(
-              Icons.location_off_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
+            const Icon(Icons.location_off_rounded,
+                color: Colors.white, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 message,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
+                    fontWeight: FontWeight.w600, fontSize: 12),
               ),
             ),
           ],
@@ -404,7 +393,9 @@ class _GpsLoadingChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _MapColors.shadow, blurRadius: 10)],
+        boxShadow: const [
+          BoxShadow(color: _MapColors.shadow, blurRadius: 10),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -476,11 +467,8 @@ class _GpsErrorChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.location_off_rounded,
-              color: Colors.white,
-              size: 14,
-            ),
+            const Icon(Icons.location_off_rounded,
+                color: Colors.white, size: 14),
             const SizedBox(width: 6),
             Text(
               _label,
@@ -514,9 +502,9 @@ class _GpsErrorChip extends StatelessWidget {
 }
 
 // =============================================================================
-// MAP LAYER  — now receives live LatLng values, no more hardcodes
+// MAP LAYER  — StatefulWidget để quản lý state đường đi thực tế
 // =============================================================================
-class _MapLayer extends StatelessWidget {
+class _MapLayer extends StatefulWidget {
   final MapController mapController;
   final Animation<double> pulseAnim;
   final LatLng userLocation;
@@ -531,116 +519,331 @@ class _MapLayer extends StatelessWidget {
     required this.rescueStations,
   });
 
-  // ---------------------------------------------------------------------------
-  // Tìm trạm cứu trợ gần vị trí người dân nhất
-  // ---------------------------------------------------------------------------
+  @override
+  State<_MapLayer> createState() => _MapLayerState();
+}
 
-  /// Duyệt qua [rescueStations] và so sánh khoảng cách đến [userLocation]
-  /// bằng `Geolocator.distanceBetween` (tính theo đường chim bay, đơn vị mét).
+class _MapLayerState extends State<_MapLayer> {
+  // ── Routing state ──────────────────────────────────────────────────────────
+
+  /// Danh sách điểm tọa độ tạo nên đường đi.
   ///
-  /// Trả về `null` nếu danh sách rỗng (tránh crash khi chưa load data).
-  LatLng? _findNearestStation() {
-    if (rescueStations.isEmpty) return null;
+  /// • Khi mới khởi tạo / API đang gọi / API lỗi: rỗng → không vẽ polyline.
+  /// • Sau khi API thành công: chứa nhiều điểm theo đường bộ thực tế.
+  /// • Sau khi fallback: chứa đúng 2 điểm [user, nearest] — đường chim bay.
+  List<LatLng> _routePoints = [];
 
-    LatLng nearest = rescueStations.first;
-    double minDistance = Geolocator.distanceBetween(
-      userLocation.latitude,
-      userLocation.longitude,
+  /// Trạm cứu trợ gần nhất — lưu lại để tránh tính lại mỗi rebuild.
+  LatLng? _nearestStation;
+
+  /// true khi đang fetch API (hiện loading indicator nhỏ trên bản đồ).
+  bool _routeLoading = false;
+
+  /// true nếu đang dùng fallback đường chim bay (do API lỗi).
+  bool _isFallback = false;
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _computeRouteFromProps(widget.userLocation, widget.rescueStations);
+  }
+
+  @override
+  void didUpdateWidget(_MapLayer old) {
+    super.didUpdateWidget(old);
+
+    // Chỉ tính lại đường khi vị trí người dùng thay đổi đáng kể (> 20m)
+    // hoặc danh sách trạm thay đổi — tránh gọi API liên tục khi GPS jitter.
+    final locationChanged = Geolocator.distanceBetween(
+          old.userLocation.latitude,
+          old.userLocation.longitude,
+          widget.userLocation.latitude,
+          widget.userLocation.longitude,
+        ) >
+        20; // mét
+
+    final stationsChanged =
+        old.rescueStations.length != widget.rescueStations.length;
+
+    if (locationChanged || stationsChanged) {
+      _computeRouteFromProps(widget.userLocation, widget.rescueStations);
+    }
+  }
+
+  // ── Core logic ─────────────────────────────────────────────────────────────
+
+  /// Pipeline chính:
+  ///   1. Tìm trạm gần nhất (Geolocator.distanceBetween)
+  ///   2. Gọi OpenRouteService.getRoute()
+  ///   3. Nếu thành công → cập nhật _routePoints với đường bộ thực tế
+  ///   4. Nếu thất bại → fallback về 2 điểm đường chim bay
+  Future<void> _computeRouteFromProps(
+    LatLng userLoc,
+    List<LatLng> stations,
+  ) async {
+    // ── Bước 1: Tìm trạm gần nhất ──────────────────────────────────────────
+    final nearest = _findNearestStation(userLoc, stations);
+    if (nearest == null) return; // Chưa có data trạm — chờ
+
+    _nearestStation = nearest;
+
+    // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
+    if (!mounted) return;
+    setState(() {
+      _routeLoading = true;
+      _isFallback = false;
+      _routePoints = []; // Xoá đường cũ trong khi fetch
+    });
+
+    try {
+      final points = await OpenRouteService.instance.getRoute(userLoc, nearest);
+
+      if (!mounted) return;
+      setState(() {
+        _routePoints = points;
+        _routeLoading = false;
+        _isFallback = false;
+      });
+
+      debugPrint('[MapLayer] Route OK: ${points.length} điểm tọa độ');
+    } on RoutingException catch (e) {
+      debugPrint('[MapLayer] RoutingException → fallback: $e');
+      _fallbackToStraightLine(userLoc, nearest);
+    } catch (e) {
+      // Bắt SocketException, TimeoutException, FormatException...
+      debugPrint('[MapLayer] Lỗi không xác định → fallback: $e');
+      _fallbackToStraightLine(userLoc, nearest);
+    }
+  }
+
+  /// Fallback: vẽ đường chim bay 2 điểm khi API không khả dụng.
+  void _fallbackToStraightLine(LatLng from, LatLng to) {
+    if (!mounted) return;
+    setState(() {
+      _routePoints = [from, to]; // 2 điểm = đường thẳng
+      _routeLoading = false;
+      _isFallback = true;
+    });
+  }
+
+  // ── Nearest station helper ─────────────────────────────────────────────────
+
+  /// Tìm trạm gần [userLoc] nhất bằng Geolocator.distanceBetween.
+  /// Trả về null nếu [stations] rỗng.
+  LatLng? _findNearestStation(LatLng userLoc, List<LatLng> stations) {
+    if (stations.isEmpty) return null;
+
+    LatLng nearest = stations.first;
+    double minDist = Geolocator.distanceBetween(
+      userLoc.latitude,
+      userLoc.longitude,
       nearest.latitude,
       nearest.longitude,
     );
 
-    for (final station in rescueStations.skip(1)) {
-      final distance = Geolocator.distanceBetween(
-        userLocation.latitude,
-        userLocation.longitude,
-        station.latitude,
-        station.longitude,
+    for (final st in stations.skip(1)) {
+      final d = Geolocator.distanceBetween(
+        userLoc.latitude,
+        userLoc.longitude,
+        st.latitude,
+        st.longitude,
       );
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearest = station;
+      if (d < minDist) {
+        minDist = d;
+        nearest = st;
       }
     }
 
     return nearest;
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    // Tính trạm gần nhất một lần tại đây — O(n), chạy mỗi rebuild nhưng
-    // danh sách nhỏ (<50 trạm) nên không gây vấn đề hiệu năng.
-    final nearestStation = _findNearestStation();
+    final hasRoute = _routePoints.length >= 2;
 
-    return FlutterMap(
-      mapController: mapController,
-      options: MapOptions(
-        initialCenter: userLocation,
-        initialZoom: 13.5,
-        minZoom: 5,
-        maxZoom: 19,
-        interactionOptions: const InteractionOptions(
-          flags: InteractiveFlag.all,
-        ),
-      ),
+    return Stack(
       children: [
-        // ── 1. Tile layer — OpenStreetMap ────────────────────────────────
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.omnidisaster.app',
-          tileProvider: NetworkTileProvider(),
-        ),
-
-        // ── 2. Routing polyline — nằm TRƯỚC MarkerLayer ──────────────────
-        // Vẽ đường dẫn nét đứt màu xanh từ vị trí người dân đến trạm gần nhất.
-        // Đặt trước MarkerLayer để đường vẽ hiển thị bên dưới các icon marker.
-        if (nearestStation != null)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [userLocation, nearestStation],
-                color: const Color(0xFF2563EB), // Xanh dương — khớp userDot
-                strokeWidth: 4.0,
-                pattern: StrokePattern.dashed(segments: [18, 12]),
-              ),
-            ],
+        // ── FlutterMap ───────────────────────────────────────────────────
+        FlutterMap(
+          mapController: widget.mapController,
+          options: MapOptions(
+            initialCenter: widget.userLocation,
+            initialZoom: 13.5,
+            minZoom: 5,
+            maxZoom: 19,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+            ),
           ),
-
-        // ── 3. Marker layer — nằm SAU PolylineLayer ──────────────────────
-        MarkerLayer(
-          markers: [
-            // ── Mock SOS signal ──────────────────────────────────────────
-            Marker(
-              point: sosLocation,
-              width: 56,
-              height: 56,
-              child: _SosMarker(),
+          children: [
+            // ── 1. Tile layer — OpenStreetMap ──────────────────────────
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.omnidisaster.app',
+              tileProvider: NetworkTileProvider(),
             ),
 
-            // ── Mock rescue stations (dynamic offset from real GPS) ───────
-            // Trạm gần nhất được highlight với size lớn hơn để dễ nhận ra
-            for (final station in rescueStations)
-              Marker(
-                point: station,
-                width: station == nearestStation ? 64 : 56,
-                height: station == nearestStation ? 64 : 56,
-                child: const _RescueMarker(),
+            // ── 2. Polyline layer — TRƯỚC MarkerLayer ──────────────────
+            // Đường bộ thực tế (nhiều điểm) khi API thành công,
+            // hoặc đường chim bay nét đứt (2 điểm) khi fallback.
+            if (hasRoute)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: _routePoints,
+                    color: Colors.blue,
+                    strokeWidth: 4.0,
+                    // Đường bộ thực tế: nét liền mượt hơn
+                    // Fallback đường chim bay: nét đứt để phân biệt
+                    pattern: StrokePattern.dashed(segments: [18, 12]),
+                  ),
+                ],
               ),
 
-            // ── User location (rendered last = on top) ───────────────────
-            Marker(
-              point: userLocation,
-              width: 56,
-              height: 56,
-              child: _UserLocationMarker(pulseAnim: pulseAnim),
+            // ── 3. Marker layer — SAU PolylineLayer ───────────────────
+            MarkerLayer(
+              markers: [
+                // ── Mock SOS signal ────────────────────────────────────
+                Marker(
+                  point: widget.sosLocation,
+                  width: 56,
+                  height: 56,
+                  child: _SosMarker(),
+                ),
+
+                // ── Rescue stations — trạm gần nhất highlight to hơn ──
+                for (final station in widget.rescueStations)
+                  Marker(
+                    point: station,
+                    width: station == _nearestStation ? 64 : 56,
+                    height: station == _nearestStation ? 64 : 56,
+                    child: const _RescueMarker(),
+                  ),
+
+                // ── User location (on top) ─────────────────────────────
+                Marker(
+                  point: widget.userLocation,
+                  width: 56,
+                  height: 56,
+                  child: _UserLocationMarker(pulseAnim: widget.pulseAnim),
+                ),
+              ],
+            ),
+
+            const RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution('OpenStreetMap contributors'),
+              ],
             ),
           ],
         ),
 
-        const RichAttributionWidget(
-          attributions: [TextSourceAttribution('OpenStreetMap contributors')],
-        ),
+        // ── Route loading indicator (góc trên phải bản đồ) ──────────────
+        if (_routeLoading)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _RouteLoadingChip(),
+          ),
+
+        // ── Fallback badge (thông báo nhẹ khi đang dùng đường chim bay) ─
+        if (_isFallback && !_routeLoading)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _RouteFallbackChip(
+              onRetry: () => _computeRouteFromProps(
+                widget.userLocation,
+                widget.rescueStations,
+              ),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+// =============================================================================
+// ROUTE LOADING CHIP — hiển thị khi đang gọi ORS API
+// =============================================================================
+class _RouteLoadingChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(color: _MapColors.shadow, blurRadius: 8),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.blue,
+            ),
+          ),
+          SizedBox(width: 7),
+          Text(
+            'Đang tính đường đi...',
+            style: TextStyle(
+              color: _MapColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// ROUTE FALLBACK CHIP — hiển thị khi API lỗi, cho phép retry
+// =============================================================================
+class _RouteFallbackChip extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _RouteFallbackChip({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade700,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [
+            BoxShadow(color: _MapColors.shadow, blurRadius: 8),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.route_outlined, color: Colors.white, size: 13),
+            SizedBox(width: 5),
+            Text(
+              'Đường chim bay · Thử lại',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -667,9 +870,8 @@ class _UserLocationMarker extends StatelessWidget {
               height: 36 * pulseAnim.value,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _MapColors.userDotRing.withOpacity(
-                  0.6 * (1 - pulseAnim.value + 0.3),
-                ),
+                color: _MapColors.userDotRing
+                    .withOpacity(0.6 * (1 - pulseAnim.value + 0.3)),
               ),
             ),
           ),
@@ -681,10 +883,9 @@ class _UserLocationMarker extends StatelessWidget {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: _MapColors.shadow,
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
+                    color: _MapColors.shadow,
+                    blurRadius: 6,
+                    offset: Offset(0, 2)),
               ],
             ),
           ),
@@ -845,10 +1046,7 @@ class _ZoomControls extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [
           BoxShadow(
-            color: _MapColors.shadow,
-            blurRadius: 12,
-            offset: Offset(0, 3),
-          ),
+              color: _MapColors.shadow, blurRadius: 12, offset: Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -882,11 +1080,8 @@ class _ZoomBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool isTop;
 
-  const _ZoomBtn({
-    required this.icon,
-    required this.onTap,
-    required this.isTop,
-  });
+  const _ZoomBtn(
+      {required this.icon, required this.onTap, required this.isTop});
 
   @override
   Widget build(BuildContext context) {
@@ -925,11 +1120,8 @@ class _LocateMeButton extends StatelessWidget {
         child: const SizedBox(
           width: 44,
           height: 44,
-          child: Icon(
-            Icons.my_location_rounded,
-            size: 20,
-            color: _MapColors.userDot,
-          ),
+          child: Icon(Icons.my_location_rounded,
+              size: 20, color: _MapColors.userDot),
         ),
       ),
     );
@@ -958,10 +1150,7 @@ class _BottomLegendSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: _MapColors.shadow,
-            blurRadius: 24,
-            offset: Offset(0, -6),
-          ),
+              color: _MapColors.shadow, blurRadius: 24, offset: Offset(0, -6)),
         ],
       ),
       child: Column(
@@ -985,11 +1174,8 @@ class _BottomLegendSheet extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.layers_rounded,
-                        size: 18,
-                        color: _MapColors.textSecondary,
-                      ),
+                      const Icon(Icons.layers_rounded,
+                          size: 18, color: _MapColors.textSecondary),
                       const SizedBox(width: 8),
                       const Text(
                         'Chú thích bản đồ',
@@ -1003,11 +1189,8 @@ class _BottomLegendSheet extends StatelessWidget {
                       AnimatedRotation(
                         turns: expanded ? 0.5 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: const Icon(
-                          Icons.expand_less_rounded,
-                          size: 22,
-                          color: _MapColors.textSecondary,
-                        ),
+                        child: const Icon(Icons.expand_less_rounded,
+                            size: 22, color: _MapColors.textSecondary),
                       ),
                     ],
                   ),
@@ -1112,11 +1295,8 @@ class _LegendContent extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                icon: const Icon(
-                  Icons.sos_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                icon: const Icon(Icons.sos_rounded,
+                    color: Colors.white, size: 22),
                 label: const Text(
                   'Phát tín hiệu SOS',
                   style: TextStyle(
@@ -1218,11 +1398,8 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
               color: _MapColors.sosRed.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.sos_rounded,
-              color: _MapColors.sosRed,
-              size: 34,
-            ),
+            child: const Icon(Icons.sos_rounded,
+                color: _MapColors.sosRed, size: 34),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -1248,14 +1425,12 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _sending
-                      ? null
-                      : () => Navigator.of(context).pop(),
+                  onPressed:
+                      _sending ? null : () => Navigator.of(context).pop(),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                     side: const BorderSide(color: _MapColors.divider),
                   ),
                   child: const Text(
@@ -1276,8 +1451,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _sending
                       ? const SizedBox(
@@ -1334,9 +1508,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
     final locId = 'loc_$postId';
 
     // ── 2. Save Post to Drift (offline-first) ──────────────────────────────
-    await db
-        .into(db.posts)
-        .insert(
+    await db.into(db.posts).insert(
           PostsCompanion.insert(
             id: postId,
             eventId: 'current_event_id',
@@ -1349,13 +1521,11 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
         );
 
     // ── 3. Save real GPS coordinates to Drift ──────────────────────────────
-    await db
-        .into(db.locations)
-        .insert(
+    await db.into(db.locations).insert(
           LocationsCompanion.insert(
             id: locId,
             postId: postId,
-            latitude: coords.latitude, // ← real GPS lat
+            latitude: coords.latitude,   // ← real GPS lat
             longitude: coords.longitude, // ← real GPS lng
           ),
         );
@@ -1381,8 +1551,8 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
               child: Text(
                 result.isSuccess
                     ? 'Đã gửi SOS! '
-                          '(${coords.latitude.toStringAsFixed(5)}, '
-                          '${coords.longitude.toStringAsFixed(5)})'
+                        '(${coords.latitude.toStringAsFixed(5)}, '
+                        '${coords.longitude.toStringAsFixed(5)})'
                     : 'Đã lưu offline. Sẽ gửi khi có mạng!',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
