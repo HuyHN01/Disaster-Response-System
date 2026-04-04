@@ -1,6 +1,7 @@
 // lib/core/services/firebase/sync_service.dart
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -16,6 +17,7 @@ class _Collections {
   static const String posts = 'posts';
   static const String locations = 'locations';
   static const String disasterEvents = 'disaster_events';
+  static const String rescueStations = 'rescue_stations';
 }
 
 // =============================================================================
@@ -50,16 +52,17 @@ class FirebaseSyncService {
   final Connectivity _connectivity;
 
   // Keeps track of the active Firestore listener so we can cancel it cleanly.
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _eventsSubscription;
+  _rescueStationsSubscription;
 
   FirebaseSyncService({
     required AppDatabase db,
     FirebaseFirestore? firestore,
     Connectivity? connectivity,
-  })  : _db = db,
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _connectivity = connectivity ?? Connectivity();
+  }) : _db = db,
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _connectivity = connectivity ?? Connectivity();
 
   // ---------------------------------------------------------------------------
   // PUBLIC API
@@ -95,10 +98,7 @@ class FirebaseSyncService {
 
     for (final post in pendingPosts) {
       try {
-        await _syncSinglePost(
-          post: post,
-          location: locationsByPostId[post.id],
-        );
+        await _syncSinglePost(post: post, location: locationsByPostId[post.id]);
         syncedCount++;
       } catch (e, st) {
         _log('Lỗi đồng bộ post ${post.id}: $e\n$st');
@@ -107,10 +107,41 @@ class FirebaseSyncService {
       }
     }
 
-    return SyncResult(
-      syncedCount: syncedCount,
-      failedIds: failedIds,
-    );
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
+  /// Pushes every local rescue station with `syncStatus == 'pending'`
+  /// up to Firestore and marks it as synced in Drift.
+  Future<SyncResult> syncPendingRescueStations() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ trạm cứu trợ.',
+      );
+    }
+
+    final pendingStations = await (_db.select(
+      _db.rescueStations,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingStations.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final station in pendingStations) {
+      try {
+        await _syncSingleRescueStation(station);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ rescue_station ${station.id}: $e\n$st');
+        failedIds.add(station.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
   }
 
   /// Opens a **realtime** Firestore listener on the `disaster_events`
@@ -130,10 +161,7 @@ class FirebaseSyncService {
         .orderBy('createdAt', descending: true);
 
     _eventsSubscription = query.snapshots().listen(
-      (snapshot) => _handleEventSnapshot(
-        snapshot,
-        onNewEvent: onNewEvent,
-      ),
+      (snapshot) => _handleEventSnapshot(snapshot, onNewEvent: onNewEvent),
       onError: (Object error, StackTrace st) {
         _log('Lỗi lắng nghe disaster_events: $error\n$st');
         onError?.call(error);
@@ -148,15 +176,52 @@ class FirebaseSyncService {
     _eventsSubscription = null;
   }
 
+  /// Opens a realtime Firestore listener on `rescue_stations`.
+  ///
+  /// The handler applies last-write-wins using `updatedAt` and keeps Drift
+  /// as the local source for offline features.
+  void listenToRescueStations({
+    void Function(RescueStation station)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _rescueStationsSubscription?.cancel();
+
+    final query = _firestore.collection(_Collections.rescueStations);
+
+    _rescueStationsSubscription = query.snapshots().listen(
+      (snapshot) => _handleRescueStationSnapshot(snapshot, onUpsert: onUpsert),
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe rescue_stations: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToRescueStations() async {
+    await _rescueStationsSubscription?.cancel();
+    _rescueStationsSubscription = null;
+  }
+
   /// Convenience method: call once at app start to wire up both directions.
   Future<SyncResult> startSync() async {
     listenToAdminEvents();
-    return syncPendingSOS();
+    listenToRescueStations();
+
+    final sosResult = await syncPendingSOS();
+    final stationResult = await syncPendingRescueStations();
+
+    if (!stationResult.isSuccess || stationResult.hasPartialFailure) {
+      _log('Rescue station sync result: $stationResult');
+    }
+
+    return sosResult;
   }
 
   /// Tears everything down — call when the user signs out or app disposes.
   Future<void> dispose() async {
     await stopListeningToAdminEvents();
+    await stopListeningToRescueStations();
   }
 
   // ---------------------------------------------------------------------------
@@ -164,12 +229,9 @@ class FirebaseSyncService {
   // ---------------------------------------------------------------------------
 
   Future<List<Post>> _queryPendingSOSPosts() async {
-    return (_db.select(_db.posts)
-          ..where(
-            (p) =>
-                p.postType.equals('sos') &
-                p.syncStatus.equals('pending'),
-          ))
+    return (_db.select(_db.posts)..where(
+          (p) => p.postType.equals('sos') & p.syncStatus.equals('pending'),
+        ))
         .get();
   }
 
@@ -178,9 +240,9 @@ class FirebaseSyncService {
   ) async {
     if (postIds.isEmpty) return {};
 
-    final locations = await (_db.select(_db.locations)
-          ..where((l) => l.postId.isIn(postIds)))
-        .get();
+    final locations = await (_db.select(
+      _db.locations,
+    )..where((l) => l.postId.isIn(postIds))).get();
 
     return {for (final loc in locations) loc.postId: loc};
   }
@@ -194,28 +256,27 @@ class FirebaseSyncService {
     final batch = _firestore.batch();
 
     // ── Write post document ──────────────────────────────────────────────
-    final postRef =
-        _firestore.collection(_Collections.posts).doc(post.id);
+    final postRef = _firestore.collection(_Collections.posts).doc(post.id);
     batch.set(postRef, _postToFirestore(post), SetOptions(merge: true));
 
     // ── Write location document (if available) ───────────────────────────
     if (location != null) {
-      final locRef =
-          _firestore.collection(_Collections.locations).doc(location.id);
-      batch.set(locRef, _locationToFirestore(location),
-          SetOptions(merge: true));
+      final locRef = _firestore
+          .collection(_Collections.locations)
+          .doc(location.id);
+      batch.set(
+        locRef,
+        _locationToFirestore(location),
+        SetOptions(merge: true),
+      );
     }
 
     // Commit — will throw if Firestore rejects the write.
     await batch.commit();
 
     // ── Mark as synced in Drift ──────────────────────────────────────────
-    await (_db.update(_db.posts)
-          ..where((p) => p.id.equals(post.id)))
-        .write(
-      const PostsCompanion(
-        syncStatus: Value('synced'),
-      ),
+    await (_db.update(_db.posts)..where((p) => p.id.equals(post.id))).write(
+      const PostsCompanion(syncStatus: Value('synced')),
     );
   }
 
@@ -246,24 +307,94 @@ class FirebaseSyncService {
         );
 
         // Upsert — insert or replace if the record already exists locally.
-        await _db
-            .into(_db.disasterEvents)
-            .insertOnConflictUpdate(companion);
+        await _db.into(_db.disasterEvents).insertOnConflictUpdate(companion);
 
         // Notify caller (e.g. to refresh a Riverpod provider).
         if (onNewEvent != null) {
-          final inserted = await (_db.select(_db.disasterEvents)
-                ..where((e) => e.id.equals(change.doc.id)))
-              .getSingleOrNull();
+          final inserted = await (_db.select(
+            _db.disasterEvents,
+          )..where((e) => e.id.equals(change.doc.id))).getSingleOrNull();
           if (inserted != null) onNewEvent(inserted);
         }
       } catch (e, st) {
-        _log(
-          'Lỗi xử lý disaster_event ${change.doc.id}: $e\n$st',
-        );
+        _log('Lỗi xử lý disaster_event ${change.doc.id}: $e\n$st');
         // Skip this document and continue with the rest.
       }
     }
+  }
+
+  Future<void> _handleRescueStationSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(RescueStation station)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await (_db.delete(
+            _db.rescueStations,
+          )..where((s) => s.id.equals(change.doc.id))).go();
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incoming = _firestoreToRescueStationCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        final existing = await (_db.select(
+          _db.rescueStations,
+        )..where((s) => s.id.equals(change.doc.id))).getSingleOrNull();
+
+        if (existing != null &&
+            existing.syncStatus == 'pending' &&
+            !_isIncomingStationNewer(existing, incoming)) {
+          // Local pending change is newer than incoming remote snapshot.
+          continue;
+        }
+
+        await _db.into(_db.rescueStations).insertOnConflictUpdate(incoming);
+
+        if (onUpsert != null) {
+          final inserted = await (_db.select(
+            _db.rescueStations,
+          )..where((s) => s.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onUpsert(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý rescue_station ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
+  bool _isIncomingStationNewer(
+    RescueStation local,
+    RescueStationsCompanion incoming,
+  ) {
+    final localUpdatedAt = local.updatedAt ?? local.createdAt;
+    final incomingUpdatedAt =
+        incoming.updatedAt.present && incoming.updatedAt.value != null
+        ? incoming.updatedAt.value!
+        : incoming.createdAt.value;
+    return !incomingUpdatedAt.isBefore(localUpdatedAt);
+  }
+
+  Future<void> _syncSingleRescueStation(RescueStation station) async {
+    final ref = _firestore
+        .collection(_Collections.rescueStations)
+        .doc(station.id);
+    await ref.set(_rescueStationToFirestore(station), SetOptions(merge: true));
+
+    await (_db.update(
+      _db.rescueStations,
+    )..where((s) => s.id.equals(station.id))).write(
+      RescueStationsCompanion(
+        syncStatus: const Value('synced'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -271,24 +402,40 @@ class FirebaseSyncService {
   // ---------------------------------------------------------------------------
 
   Map<String, dynamic> _postToFirestore(Post post) => {
-        'id': post.id,
-        'eventId': post.eventId,
-        'userId': post.userId,
-        'postType': post.postType,
-        'content': post.content,
-        'isVerified': post.isVerified,
-        'createdAt': Timestamp.fromDate(post.createdAt),
-        'syncStatus': 'synced',
-        'uploadedAt': FieldValue.serverTimestamp(),
-      };
+    'id': post.id,
+    'eventId': post.eventId,
+    'userId': post.userId,
+    'postType': post.postType,
+    'content': post.content,
+    'isVerified': post.isVerified,
+    'createdAt': Timestamp.fromDate(post.createdAt),
+    'syncStatus': 'synced',
+    'uploadedAt': FieldValue.serverTimestamp(),
+  };
 
   Map<String, dynamic> _locationToFirestore(Location loc) => {
-        'id': loc.id,
-        'postId': loc.postId,
-        'latitude': loc.latitude,
-        'longitude': loc.longitude,
-        'addressText': loc.addressText,
-      };
+    'id': loc.id,
+    'postId': loc.postId,
+    'latitude': loc.latitude,
+    'longitude': loc.longitude,
+    'addressText': loc.addressText,
+  };
+
+  Map<String, dynamic> _rescueStationToFirestore(RescueStation s) => {
+    'id': s.id,
+    'name': s.name,
+    'latitude': s.latitude,
+    'longitude': s.longitude,
+    'address': s.address,
+    'contactPhone': s.contactPhone,
+    'capacity': s.capacity,
+    'resourcesJson': s.resourcesJson,
+    'status': s.status,
+    'createdAt': Timestamp.fromDate(s.createdAt),
+    'updatedAt': Timestamp.fromDate(s.updatedAt ?? s.createdAt),
+    'deletedAt': s.deletedAt == null ? null : Timestamp.fromDate(s.deletedAt!),
+    'syncStatus': 'synced',
+  };
 
   DisasterEventsCompanion _firestoreToDisasterEventCompanion({
     required String docId,
@@ -309,6 +456,63 @@ class FirebaseSyncService {
     );
   }
 
+  RescueStationsCompanion _firestoreToRescueStationCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final now = DateTime.now();
+
+    final rawCreatedAt = data['createdAt'];
+    final rawUpdatedAt = data['updatedAt'];
+    final rawDeletedAt = data['deletedAt'];
+
+    final createdAt = rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : now;
+    final updatedAt = rawUpdatedAt is Timestamp
+        ? rawUpdatedAt.toDate()
+        : createdAt;
+    final deletedAt = rawDeletedAt is Timestamp ? rawDeletedAt.toDate() : null;
+
+    final rawLat = data['latitude'];
+    final rawLng = data['longitude'];
+    if (rawLat is! num || rawLng is! num) {
+      throw const FormatException(
+        'Rescue station thiếu latitude/longitude hợp lệ.',
+      );
+    }
+
+    final rawResources = data['resourcesJson'];
+    String resourcesJson;
+    if (rawResources == null) {
+      resourcesJson = '{}';
+    } else if (rawResources is String) {
+      resourcesJson = rawResources;
+    } else {
+      resourcesJson = jsonEncode(rawResources);
+    }
+
+    return RescueStationsCompanion.insert(
+      id: docId,
+      name: ((data['name'] as String?)?.trim().isNotEmpty ?? false)
+          ? (data['name'] as String).trim()
+          : '(Chưa đặt tên trạm)',
+      latitude: rawLat.toDouble(),
+      longitude: rawLng.toDouble(),
+      address: Value((data['address'] as String?)?.trim()),
+      contactPhone: Value((data['contactPhone'] as String?)?.trim()),
+      capacity: Value((data['capacity'] as num?)?.toInt()),
+      resourcesJson: Value(resourcesJson),
+      status: Value(
+        ((data['status'] as String?)?.trim().isNotEmpty ?? false)
+            ? (data['status'] as String).trim()
+            : 'active',
+      ),
+      createdAt: createdAt,
+      updatedAt: Value(updatedAt),
+      deletedAt: Value(deletedAt),
+      syncStatus: const Value('synced'),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // PRIVATE — Utilities
   // ---------------------------------------------------------------------------
@@ -316,9 +520,7 @@ class FirebaseSyncService {
   Future<bool> _isConnected() async {
     try {
       final results = await _connectivity.checkConnectivity();
-      return results.any(
-        (r) => r != ConnectivityResult.none,
-      );
+      return results.any((r) => r != ConnectivityResult.none);
     } catch (_) {
       return false;
     }
@@ -353,5 +555,5 @@ final firebaseSyncServiceProvider = Provider<FirebaseSyncService>((ref) {
 /// `main()` after Firebase is initialised.
 final initialSyncProvider = FutureProvider<SyncResult>((ref) async {
   final service = ref.watch(firebaseSyncServiceProvider);
-  return service.syncPendingSOS();
+  return service.startSync();
 });

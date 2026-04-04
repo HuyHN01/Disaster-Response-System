@@ -55,6 +55,11 @@ const List<_AdminNavDestination> _kNavDestinations = [
     route: RouteNames.adminMap,
   ),
   _AdminNavDestination(
+    icon: Icons.home_work_rounded,
+    label: 'Trạm cứu hộ',
+    route: RouteNames.adminRescueStations,
+  ),
+  _AdminNavDestination(
     icon: Icons.notifications_active_rounded,
     label: 'Cảnh báo SOS',
     route: RouteNames.adminDashboard, // placeholder — future route
@@ -88,6 +93,7 @@ class _AdminLayoutState extends State<AdminLayout> {
   /// Derives the selected nav index from the current GoRouter location.
   int _selectedIndex(String location) {
     if (location.startsWith(RouteNames.adminMap)) return 1;
+    if (location.startsWith(RouteNames.adminRescueStations)) return 2;
     // Future branches: add cases here as new admin routes are registered.
     return 0; // default: dashboard
   }
@@ -342,8 +348,9 @@ class AdminNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor =
-        isSelected ? AppColors.sidebarSelectedText : AppColors.textSecondary;
+    final iconColor = isSelected
+        ? AppColors.sidebarSelectedText
+        : AppColors.textSecondary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -364,8 +371,9 @@ class AdminNavItem extends StatelessWidget {
               vertical: 10,
             ),
             decoration: BoxDecoration(
-              color:
-                  isSelected ? AppColors.sidebarSelected : Colors.transparent,
+              color: isSelected
+                  ? AppColors.sidebarSelected
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -503,8 +511,7 @@ class AdminTopBar extends ConsumerWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.brandRed,
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
