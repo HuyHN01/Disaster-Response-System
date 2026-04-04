@@ -14,6 +14,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // =============================================================================
 // THEME TOKENS  (unchanged)
@@ -166,6 +167,9 @@ class _EventMapScreenState extends State<EventMapScreen>
   // ── UI state ─────────────────────────────────────────────────────────────
   bool _legendExpanded = true;
 
+  // ── Routing state (for external Google Maps directions) ──────────────────
+  LatLng? _routeDestination;
+
   @override
   void initState() {
     super.initState();
@@ -303,6 +307,101 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
+  void _onRouteDestinationChanged(LatLng? destination) {
+    if (_isSameLatLng(_routeDestination, destination)) return;
+    if (!mounted) return;
+
+    setState(() {
+      _routeDestination = destination;
+    });
+  }
+
+  bool _isSameLatLng(LatLng? a, LatLng? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+
+    const epsilon = 0.0000001;
+    return (a.latitude - b.latitude).abs() < epsilon &&
+        (a.longitude - b.longitude).abs() < epsilon;
+  }
+
+  Future<LatLng?> _resolveStartLocationForDirections() async {
+    if (_userLocation != null) return _userLocation;
+
+    try {
+      final pos = await _determinePosition();
+      if (!mounted) return null;
+
+      final location = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _userLocation = location;
+        _locationLoading = false;
+        _locationError = null;
+        _locationErrCode = null;
+      });
+      return location;
+    } on LocationException catch (e) {
+      _showLocationBanner(e.message, e.code);
+      return null;
+    } catch (_) {
+      _showLocationBanner('Không lấy được vị trí hiện tại để chỉ đường.', null);
+      return null;
+    }
+  }
+
+  Future<void> _openGoogleMapsDirections() async {
+    final destination = _routeDestination;
+    if (destination == null) {
+      _showDirectionError('Không có trạm cứu trợ để chỉ đường.');
+      return;
+    }
+
+    final origin = await _resolveStartLocationForDirections();
+    if (origin == null) {
+      _showDirectionError('Không xác định được vị trí hiện tại của bạn.');
+      return;
+    }
+
+    final startLat = origin.latitude;
+    final startLng = origin.longitude;
+    final endLat = destination.latitude;
+    final endLng = destination.longitude;
+
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&origin=$startLat,$startLng'
+      '&destination=$endLat,$endLng'
+      '&travelmode=driving',
+    );
+
+    try {
+      final launched = await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showDirectionError('Không thể mở Google Maps trên thiết bị này.');
+      }
+    } catch (e, st) {
+      debugPrint('[MAP] Open Google Maps failed: $e\n$st');
+      _showDirectionError('Đã xảy ra lỗi khi mở Google Maps.');
+    }
+  }
+
+  void _showDirectionError(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange.shade800,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // BUILD
   // ---------------------------------------------------------------------------
@@ -324,6 +423,7 @@ class _EventMapScreenState extends State<EventMapScreen>
                 pulseAnim: _pulseAnim,
                 userLocation: effectiveLocation,
                 sosLocation: _mockSosLocation(effectiveLocation),
+                onRouteTargetChanged: _onRouteDestinationChanged,
               ),
             ),
 
@@ -361,8 +461,19 @@ class _EventMapScreenState extends State<EventMapScreen>
             // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
-              bottom: _legendExpanded ? 272 : 148,
+              bottom: _legendExpanded ? 328 : 204,
               child: _LocateMeButton(onTap: _locateMe),
+            ),
+
+            // ── Directions button ────────────────────────────────────────
+            Positioned(
+              right: 14,
+              bottom: _legendExpanded ? 272 : 148,
+              child: _DirectionsButton(
+                onTap: _routeDestination == null
+                    ? null
+                    : _openGoogleMapsDirections,
+              ),
             ),
 
             // ── Bottom Legend + SOS Sheet ────────────────────────────────
@@ -514,12 +625,14 @@ class _MapLayer extends ConsumerStatefulWidget {
   final Animation<double> pulseAnim;
   final LatLng userLocation;
   final LatLng sosLocation;
+  final ValueChanged<LatLng?> onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
     required this.pulseAnim,
     required this.userLocation,
     required this.sosLocation,
+    required this.onRouteTargetChanged,
   });
 
   @override
@@ -609,11 +722,13 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _routeLoading = false;
         _isFallback = false;
       });
+      widget.onRouteTargetChanged(null);
       return;
     }
 
     final destinationPoint = LatLng(destination.latitude, destination.longitude);
     _routeStationId = destination.id;
+    widget.onRouteTargetChanged(destinationPoint);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -1228,6 +1343,42 @@ class _LocateMeButton extends StatelessWidget {
             Icons.my_location_rounded,
             size: 20,
             color: _MapColors.userDot,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DIRECTIONS BUTTON — Chỉ đường đến địa điểm được chọn
+// =============================================================================
+class _DirectionsButton extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _DirectionsButton({required this.onTap});
+
+  bool get _isEnabled => onTap != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _isEnabled ? _MapColors.fabBg : Colors.grey.shade200,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 4,
+      shadowColor: _MapColors.shadow,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(
+            Icons.directions_rounded,
+            size: 21,
+            color: _isEnabled
+                ? const Color(0xFF4285F4)
+                : _MapColors.textSecondary.withOpacity(0.6),
           ),
         ),
       ),
