@@ -78,6 +78,11 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     String status = 'active',
   }) async {
     final now = DateTime.now();
+    final existing = await _repo.getById(id);
+
+    if (existing == null) {
+      throw Exception('Không tìm thấy trạm cứu hộ để cập nhật.');
+    }
 
     await _repo.upsert(
       RescueStationsCompanion(
@@ -90,6 +95,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
         capacity: Value(capacity),
         resourcesJson: Value(resourcesJson),
         status: Value(status),
+        createdAt: Value(existing.createdAt),
         updatedAt: Value(now),
         syncStatus: const Value('pending'),
       ),

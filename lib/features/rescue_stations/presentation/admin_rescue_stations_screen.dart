@@ -157,7 +157,7 @@ class AdminRescueStationsScreen extends ConsumerWidget {
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Xóa trạm cứu hộ?'),
         content: Text(
           'Trạm "${station.name}" sẽ được đánh dấu ngưng hoạt động '
@@ -165,11 +165,11 @@ class AdminRescueStationsScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Hủy'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.brandRed),
             child: const Text('Xóa'),
           ),
