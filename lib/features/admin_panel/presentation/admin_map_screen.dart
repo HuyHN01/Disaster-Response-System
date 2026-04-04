@@ -31,6 +31,8 @@ class _C {
   static const Color userDot = Color(0xFF2563EB);
   static const Color stationCore = Color(0xFF0EA5E9);
   static const Color stationRing = Color(0x330EA5E9); // Màu nút Locate Me
+  static const Color rescueGreen = Color(0xFF16A34A);
+  static const Color stationGray = Color(0xFF9CA3AF);
 }
 
 // Tọa độ mặc định: Đà Nẵng — trung tâm địa lý Việt Nam
@@ -259,7 +261,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     return Marker(
       point: LatLng(s.latitude, s.longitude),
       width: 48,
-      height: 48,
+      height: 56,
       child: GestureDetector(
         onTap: () {
           showModalBottomSheet(
@@ -269,26 +271,8 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
             builder: (_) => _StationDetailSheet(station: s),
           );
         },
-        child: Container(
-          decoration: BoxDecoration(
-            color: _C.stationCore,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: _C.shadow,
-                blurRadius: 8,
-                offset: Offset(0, 3),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.health_and_safety_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
-          ),
+        child: _RescueMarker(
+          isActive: s.status == 'active',
         ),
       ),
     );
@@ -358,6 +342,50 @@ Marker _buildMarker(SosMapMarker m) {
         ),
       );
     }
+  }
+}
+
+// =============================================================================
+// RESCUE STATION MARKER
+// =============================================================================
+class _RescueMarker extends StatelessWidget {
+  final bool isActive;
+
+  const _RescueMarker({required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final markerColor = isActive ? _C.rescueGreen : _C.stationGray;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: markerColor,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: markerColor.withOpacity(0.4),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.medical_services_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+        CustomPaint(
+          size: const Size(10, 6),
+          painter: _PinTailPainter(color: markerColor),
+        ),
+      ],
+    );
   }
 }
 
