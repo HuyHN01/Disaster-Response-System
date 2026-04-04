@@ -595,12 +595,13 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     LatLng userLoc,
     List<RescueStation> stations,
   ) async {
-    // ── Bước 1: Tìm trạm gần nhất ──────────────────────────────────────────
-    final nearest = _findNearestStation(userLoc, stations);
-    if (nearest == null) {
+    // ── Bước 1: Chọn trạm đích (ưu tiên trạm user chọn, fallback gần nhất) ──
+    final destination = _resolveTargetStation(userLoc, stations);
+    if (destination == null) {
       if (!mounted) return;
       setState(() {
-        _nearestStationId = null;
+        _routeStationId = null;
+        _selectedStationId = null;
         _routePoints = const [];
         _routeLoading = false;
         _isFallback = false;
@@ -608,8 +609,8 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       return;
     }
 
-    final nearestPoint = LatLng(nearest.latitude, nearest.longitude);
-    _nearestStationId = nearest.id;
+    final destinationPoint = LatLng(destination.latitude, destination.longitude);
+    _routeStationId = destination.id;
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -622,7 +623,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     try {
       final points = await OpenRouteService.instance.getRoute(
         userLoc,
-        nearestPoint,
+        destinationPoint,
       );
 
       if (!mounted) return;
@@ -635,12 +636,37 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       debugPrint('[MapLayer] Route OK: ${points.length} điểm tọa độ');
     } on RoutingException catch (e) {
       debugPrint('[MapLayer] RoutingException → fallback: $e');
-      _fallbackToStraightLine(userLoc, nearestPoint);
+      _fallbackToStraightLine(userLoc, destinationPoint);
     } catch (e) {
       // Bắt SocketException, TimeoutException, FormatException...
       debugPrint('[MapLayer] Lỗi không xác định → fallback: $e');
-      _fallbackToStraightLine(userLoc, nearestPoint);
+      _fallbackToStraightLine(userLoc, destinationPoint);
     }
+  }
+
+  RescueStation? _resolveTargetStation(
+    LatLng userLoc,
+    List<RescueStation> stations,
+  ) {
+    if (stations.isEmpty) return null;
+
+    final selectedId = _selectedStationId;
+    if (selectedId != null) {
+      final selected = _findStationById(stations, selectedId);
+      if (selected != null) return selected;
+
+      // Trạm đã bị xoá/ẩn khỏi dữ liệu hiện tại, quay về chế độ mặc định.
+      _selectedStationId = null;
+    }
+
+    return _findNearestStation(userLoc, stations);
+  }
+
+  RescueStation? _findStationById(List<RescueStation> stations, String id) {
+    for (final station in stations) {
+      if (station.id == id) return station;
+    }
+    return null;
   }
 
   /// Fallback: vẽ đường chim bay 2 điểm khi API không khả dụng.
@@ -739,6 +765,39 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
               flags: InteractiveFlag.all,
             ),
           ),
+
+                    // ── User location (on top) ─────────────────────────────
+                    Marker(
+                      point: widget.userLocation,
+                      width: 56,
+                      height: 56,
+                      child: _UserLocationMarker(pulseAnim: widget.pulseAnim),
+                    ),
+                  ],
+                ),
+
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
+                ),
+              ],
+            ),
+
+            // ── Route loading indicator (góc trên phải bản đồ) ──────────────
+            if (_routeLoading)
+              Positioned(top: 12, right: 12, child: _RouteLoadingChip()),
+
+            // ── Fallback badge (thông báo nhẹ khi đang dùng đường chim bay) ─
+            if (_isFallback && !_routeLoading)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _RouteFallbackChip(
+                  onRetry: () =>
+                      _computeRouteFromProps(widget.userLocation, _latestStations),
+                ),
+              ),
           children: [
             // ── 1. Tile layer — OpenStreetMap ──────────────────────────
             TileLayer(

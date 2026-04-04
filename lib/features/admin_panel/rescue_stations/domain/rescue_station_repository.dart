@@ -1,4 +1,4 @@
-// lib/features/rescue_stations/domain/rescue_station_repository.dart
+// lib/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart
 
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';

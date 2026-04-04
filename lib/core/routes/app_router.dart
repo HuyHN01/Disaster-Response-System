@@ -11,7 +11,7 @@ import 'package:disaster_response_app/features/admin_panel/presentation/admin_la
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_post_editor_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
-import 'package:disaster_response_app/features/rescue_stations/presentation/admin_rescue_stations_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart';
 import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/domain/citizen_news_controller.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_detail_screen.dart';

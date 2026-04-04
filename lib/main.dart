@@ -2,7 +2,7 @@ import 'package:disaster_response_app/core/routes/app_router.dart';
 import 'package:disaster_response_app/core/services/firebase/fcm_service.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
-import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

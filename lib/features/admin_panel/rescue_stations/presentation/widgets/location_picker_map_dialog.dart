@@ -1,4 +1,4 @@
-// lib/features/rescue_stations/presentation/widgets/location_picker_map_dialog.dart
+// lib/features/admin_panel/rescue_stations/presentation/widgets/location_picker_map_dialog.dart
 
 import 'dart:async';
 

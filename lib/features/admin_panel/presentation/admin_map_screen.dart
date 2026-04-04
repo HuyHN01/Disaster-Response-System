@@ -2,11 +2,11 @@
 
 import 'dart:ui' as ui;
 import 'package:disaster_response_app/core/database/app_database.dart';
-import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 
 import 'package:disaster_response_app/features/admin_panel/domain/admin_map_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:disaster_response_app/features/rescue_stations/presentation/admin_rescue_stations_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
