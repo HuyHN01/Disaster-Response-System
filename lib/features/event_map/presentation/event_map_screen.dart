@@ -536,8 +536,11 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   /// • Sau khi fallback: chứa đúng 2 điểm [user, nearest] — đường chim bay.
   List<LatLng> _routePoints = [];
 
-  /// Trạm cứu trợ gần nhất — lưu id để highlight marker.
-  String? _nearestStationId;
+  /// Trạm đích hiện tại của route (mặc định: gần nhất, hoặc user chọn).
+  String? _routeStationId;
+
+  /// Trạm do user chủ động chọn bằng cách tap marker.
+  String? _selectedStationId;
 
   /// Snapshot trạm mới nhất dùng cho retry/fallback mà không cần rebuild.
   List<RescueStation> _latestStations = const [];
@@ -722,6 +725,16 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     return keys.join('|');
   }
 
+  void _onStationTapped(RescueStation station) {
+    if (_selectedStationId == station.id) return;
+
+    setState(() {
+      _selectedStationId = station.id;
+    });
+
+    _computeRouteFromProps(widget.userLocation, _latestStations);
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -765,39 +778,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
               flags: InteractiveFlag.all,
             ),
           ),
-
-                    // ── User location (on top) ─────────────────────────────
-                    Marker(
-                      point: widget.userLocation,
-                      width: 56,
-                      height: 56,
-                      child: _UserLocationMarker(pulseAnim: widget.pulseAnim),
-                    ),
-                  ],
-                ),
-
-                const RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
-                ),
-              ],
-            ),
-
-            // ── Route loading indicator (góc trên phải bản đồ) ──────────────
-            if (_routeLoading)
-              Positioned(top: 12, right: 12, child: _RouteLoadingChip()),
-
-            // ── Fallback badge (thông báo nhẹ khi đang dùng đường chim bay) ─
-            if (_isFallback && !_routeLoading)
-              Positioned(
-                top: 12,
-                right: 12,
-                child: _RouteFallbackChip(
-                  onRetry: () =>
-                      _computeRouteFromProps(widget.userLocation, _latestStations),
-                ),
-              ),
           children: [
             // ── 1. Tile layer — OpenStreetMap ──────────────────────────
             TileLayer(
@@ -834,13 +814,18 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                   child: _SosMarker(),
                 ),
 
-                // ── Rescue stations — trạm gần nhất highlight to hơn ──
+                // ── Rescue stations — trạm đích hiện tại highlight to hơn ──
                 for (final station in rescueStations)
                   Marker(
                     point: LatLng(station.latitude, station.longitude),
-                    width: station.id == _nearestStationId ? 64 : 56,
-                    height: station.id == _nearestStationId ? 64 : 56,
-                    child: const _RescueMarker(),
+                    width: station.id == _routeStationId ? 64 : 56,
+                    height: station.id == _routeStationId ? 64 : 56,
+                    child: GestureDetector(
+                      onTap: () => _onStationTapped(station),
+                      child: _RescueMarker(
+                        selected: station.id == _routeStationId,
+                      ),
+                    ),
                   ),
 
                 // ── User location (on top) ─────────────────────────────
@@ -1058,7 +1043,9 @@ class _SosMarker extends StatelessWidget {
 
 // ── Rescue Station: Green cross ───────────────────────────────────────────────
 class _RescueMarker extends StatelessWidget {
-  const _RescueMarker();
+  final bool selected;
+
+  const _RescueMarker({this.selected = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1066,15 +1053,15 @@ class _RescueMarker extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: selected ? 42 : 38,
+          height: selected ? 42 : 38,
           decoration: BoxDecoration(
             color: _MapColors.rescueGreen,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(0.4),
-                blurRadius: 10,
+                color: _MapColors.rescueGreen.withOpacity(selected ? 0.55 : 0.4),
+                blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
             ],
