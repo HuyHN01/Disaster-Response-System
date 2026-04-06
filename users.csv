@@ -1,0 +1,12 @@
+Trường,Kiểu dữ liệu,Mô tả
+uid,String,Mã định danh duy nhất do Firebase Auth cấp. Đây là khóa chính để liên kết với Auth.
+email,String,Email đăng nhập của người dùng.
+displayName,String,Tên hiển thị (có thể lấy từ Auth và cho phép người dùng chỉnh sửa).
+photoURL,String,Ảnh đại diện (nếu có).
+role,interger,"Vai trò: 0 = superadmin, 1 = admin, 2 = staff, 3 = user"
+status,interger,"Trạng thái tài khoản (1 = active, 0 = inactive, 3 = banned, 2 = pending)."
+createdAt,Timestamp,Thời điểm tạo tài khoản.
+updatedAt,Timestamp,Thời điểm cập nhật gần nhất.
+createdBy,String,UID của người tạo (nếu được tạo bởi Admin).
+lastLoginAt,Timestamp,Lần đăng nhập gần nhất (có thể cập nhật từ Auth).
+mfaEnabled,Boolean,Cho biết người dùng có bật xác thực hai lớp hay chưa. Mặc định là = False

@@ -51,6 +51,12 @@ abstract final class RouteNames {
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
   static const String adminDashboard = '/admin';
 
+  /// Admin login screen.
+  static const String adminLogin = '/admin/login';
+
+  /// Admin first-time registration screen.
+  static const String adminRegister = '/admin/register';
+
   /// Admin SOS map ([AdminMapScreen]) — rendered inside the admin ShellRoute.
   static const String adminMap = '/admin/map';
 
@@ -101,6 +107,8 @@ abstract final class RouteNames {
   static const String nameNewsDetail = 'news-detail';
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
+  static const String nameAdminLogin = 'admin-login';
+  static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';
   static const String nameAdminMap = 'admin-map';
   static const String nameAdminRescueStations = 'admin-rescue-stations';

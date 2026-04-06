@@ -1,46 +1,24 @@
-import 'dart:math' as math;
+import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-// ─────────────────────────────────────────────
-//  Entry point (remove if embedding in a project)
-// ─────────────────────────────────────────────
-void main() => runApp(const _App());
-
-class _App extends StatelessWidget {
-  const _App();
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'OmniDisaster – Cổng Quản Trị',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(fontFamily: 'Inter'),
-      home: const AdminLoginScreen(),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Color palette
-// ─────────────────────────────────────────────
 class _Colors {
-  static const background   = Color(0xFF0F0F11);
-  static const surface      = Color(0xFF1A1A1D);
-  static const badgeBg      = Color(0xFF1E1E22);
-  static const cyan         = Color(0xFF22D3EE);
-  static const white        = Color(0xFFFFFFFF);
-  static const rightBg      = Color(0xFFFFFFFF);
-  static const labelGrey    = Color(0xFF6B7280);
-  static const borderGrey   = Color(0xFFE5E7EB);
-  static const inputBg      = Color(0xFFF9FAFB);
-  static const emergency    = Color(0xFFDC2626);
-  static const footerGrey   = Color(0xFFD1D5DB);
-  static const linkGrey     = Color(0xFF9CA3AF);
-  static const leftFooter   = Color(0xFF6B7280);
+  static const background = Color(0xFF0F0F11);
+  static const badgeBg = Color(0xFF1E1E22);
+  static const cyan = Color(0xFF22D3EE);
+  static const white = Color(0xFFFFFFFF);
+  static const rightBg = Color(0xFFFFFFFF);
+  static const labelGrey = Color(0xFF6B7280);
+  static const borderGrey = Color(0xFFE5E7EB);
+  static const inputBg = Color(0xFFF9FAFB);
+  static const emergency = Color(0xFFDC2626);
+  static const footerGrey = Color(0xFFD1D5DB);
+  static const linkGrey = Color(0xFF9CA3AF);
+  static const leftFooter = Color(0xFF6B7280);
 }
 
-// ─────────────────────────────────────────────
-//  Root Screen
-// ─────────────────────────────────────────────
 class AdminLoginScreen extends StatelessWidget {
   const AdminLoginScreen({super.key});
 
@@ -68,9 +46,6 @@ class AdminLoginScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Left Panel
-// ─────────────────────────────────────────────
 class _LeftPanel extends StatelessWidget {
   const _LeftPanel();
 
@@ -80,17 +55,13 @@ class _LeftPanel extends StatelessWidget {
       color: _Colors.background,
       child: Stack(
         children: [
-          // Concentric circle background
           const Positioned.fill(child: _ConcentricCirclesPainter()),
-
-          // Content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Logo ──────────────────────────────────────
                   const Text(
                     'OmniDisaster',
                     style: TextStyle(
@@ -100,13 +71,7 @@ class _LeftPanel extends StatelessWidget {
                       letterSpacing: -0.3,
                     ),
                   ),
-
-                  // ── Status badge (centered) ───────────────────
-                  const Expanded(
-                    child: Center(child: _StatusBadge()),
-                  ),
-
-                  // ── Footer links ──────────────────────────────
+                  const Expanded(child: Center(child: _StatusBadge())),
                   Row(
                     children: const [
                       _FooterLink('CHÍNH SÁCH BẢO MẬT'),
@@ -124,9 +89,6 @@ class _LeftPanel extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Concentric Circles via CustomPaint
-// ─────────────────────────────────────────────
 class _ConcentricCirclesPainter extends StatelessWidget {
   const _ConcentricCirclesPainter();
 
@@ -155,9 +117,6 @@ class _CirclesPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ─────────────────────────────────────────────
-//  Status Badge
-// ─────────────────────────────────────────────
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge();
 
@@ -182,8 +141,8 @@ class _StatusBadge extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-              const Text(
-                'Hệ thống vận hành: Tất cả khu vực an toàn',
+          const Text(
+            'Hệ thống vận hành: Tất cả khu vực an toàn',
             style: TextStyle(
               color: Color(0xFFD1D5DB),
               fontSize: 14,
@@ -196,9 +155,6 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Footer link (left panel)
-// ─────────────────────────────────────────────
 class _FooterLink extends StatelessWidget {
   const _FooterLink(this.label);
   final String label;
@@ -223,21 +179,21 @@ class _FooterLink extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Right Panel
-// ─────────────────────────────────────────────
-class _RightPanel extends StatefulWidget {
+class _RightPanel extends ConsumerStatefulWidget {
   const _RightPanel();
 
   @override
-  State<_RightPanel> createState() => _RightPanelState();
+  ConsumerState<_RightPanel> createState() => _RightPanelState();
 }
 
-class _RightPanelState extends State<_RightPanel> {
-  final _emailController    = TextEditingController();
+class _RightPanelState extends ConsumerState<_RightPanel> {
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword     = true;
-  bool _keepSession         = false;
+
+  bool _obscurePassword = true;
+  bool _keepSession = false;
+  bool _isSubmitting = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -246,8 +202,44 @@ class _RightPanelState extends State<_RightPanel> {
     super.dispose();
   }
 
+  Future<void> _submitLogin() async {
+    final repo = ref.read(adminAuthRepositoryProvider);
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await repo.signInAdmin(
+        email: _emailController.text,
+        password: _passwordController.text,
+        keepSession: _keepSession,
+      );
+
+      if (!mounted) return;
+      context.go(RouteNames.adminDashboard);
+    } on AdminAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'Không thể đăng nhập. Vui lòng thử lại.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bootstrapState = ref.watch(adminBootstrapOpenProvider);
+    final canShowRegisterLink = bootstrapState.maybeWhen(
+      data: (isOpen) => isOpen,
+      orElse: () => false,
+    );
+
     return Container(
       color: _Colors.rightBg,
       child: Center(
@@ -258,7 +250,6 @@ class _RightPanelState extends State<_RightPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ───────────────────────────────────────
                 const Text(
                   'Cổng Quản trị',
                   style: TextStyle(
@@ -279,8 +270,6 @@ class _RightPanelState extends State<_RightPanel> {
                   ),
                 ),
                 const SizedBox(height: 36),
-
-                // ── Email ────────────────────────────────────────
                 _CustomTextField(
                   label: 'Địa chỉ email',
                   controller: _emailController,
@@ -288,15 +277,15 @@ class _RightPanelState extends State<_RightPanel> {
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 20),
-
-                // ── Password ─────────────────────────────────────
                 _CustomTextField(
                   label: 'Mật khẩu',
                   controller: _passwordController,
                   hintText: '••••••••••••',
                   obscureText: _obscurePassword,
                   suffixIcon: GestureDetector(
-                    onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onTap: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
                     child: Icon(
                       _obscurePassword
                           ? Icons.visibility_off_outlined
@@ -307,8 +296,6 @@ class _RightPanelState extends State<_RightPanel> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // ── Keep session checkbox ─────────────────────────
                 GestureDetector(
                   onTap: () => setState(() => _keepSession = !_keepSession),
                   behavior: HitTestBehavior.opaque,
@@ -346,35 +333,53 @@ class _RightPanelState extends State<_RightPanel> {
                     ],
                   ),
                 ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: Color(0xFFDC2626),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 28),
-
-                // ── Sign In Button ────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: _isSubmitting ? null : _submitLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _Colors.emergency,
                       foregroundColor: _Colors.white,
+                      disabledBackgroundColor: _Colors.emergency.withOpacity(0.5),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Đăng nhập',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Text(
+                            'Đăng nhập',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // ── Forgot password ───────────────────────────────
                 Center(
                   child: GestureDetector(
                     onTap: () {},
@@ -388,37 +393,42 @@ class _RightPanelState extends State<_RightPanel> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // ── Sign up ───────────────────────────────────────
-                Center(
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        color: _Colors.labelGrey,
-                        fontSize: 14,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Chưa có tài khoản? '),
-                        WidgetSpan(
-                          child: GestureDetector(
-                            onTap: () {},
-                            child: const Text(
-                              'Đăng ký tại đây',
-                              style: TextStyle(
-                                color: _Colors.emergency,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                if (canShowRegisterLink)
+                  Center(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(
+                          color: _Colors.labelGrey,
+                          fontSize: 14,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Chưa có tài khoản? '),
+                          WidgetSpan(
+                            child: GestureDetector(
+                              onTap: () => context.go(RouteNames.adminRegister),
+                              child: const Text(
+                                'Đăng ký tại đây',
+                                style: TextStyle(
+                                  color: _Colors.emergency,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ),
+                  )
+                else if (bootstrapState.isLoading)
+                  const Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                ),
                 const SizedBox(height: 56),
-
-                // ── Footer ────────────────────────────────────────
                 Center(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -458,9 +468,6 @@ class _RightPanelState extends State<_RightPanel> {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Reusable Custom Text Field
-// ─────────────────────────────────────────────
 class _CustomTextField extends StatelessWidget {
   const _CustomTextField({
     required this.label,
@@ -511,22 +518,32 @@ class _CustomTextField extends StatelessWidget {
                     child: suffixIcon,
                   )
                 : null,
-            suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+            suffixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 18,
               vertical: 16,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _Colors.borderGrey, width: 1.5),
+              borderSide: const BorderSide(
+                color: _Colors.borderGrey,
+                width: 1.5,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _Colors.borderGrey, width: 1.5),
+              borderSide: const BorderSide(
+                color: _Colors.borderGrey,
+                width: 1.5,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF6B7280), width: 1.5),
+              borderSide: const BorderSide(
+                color: Color(0xFF6B7280),
+                width: 1.5,
+              ),
             ),
           ),
         ),
