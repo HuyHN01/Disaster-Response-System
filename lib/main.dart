@@ -26,11 +26,11 @@ void main() async {
 
   // Load environment variables
   await dotenv.load(fileName: ".env");
-  final SUPABASE_URL = dotenv.get('SUPABASE_URL');
-  final SUPABASE_ANON_KEY = dotenv.get('SUPABASE_ANON_KEY');
+  final supabaseUrl = dotenv.get('SUPABASE_URL');
+  final supabaseAnonKey = dotenv.get('SUPABASE_ANON_KEY');
 
   // TODO: Initialize Supabase
-  await Supabase.initialize(url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY);
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   // TODO: Initialize Drift Database
 
@@ -55,6 +55,7 @@ class OmniDisasterApp extends ConsumerWidget {
     syncService.listenToRescueStations(
       onUpsert: (_) => ref.invalidate(rescueStationControllerProvider),
     );
+    syncService.listenToUsers();
 
     return MaterialApp.router(
       routerConfig: router,
