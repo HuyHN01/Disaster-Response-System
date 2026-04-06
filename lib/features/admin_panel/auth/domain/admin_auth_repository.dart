@@ -256,7 +256,7 @@ class AdminAuthRepository {
           if (rawMessage != null && rawMessage.isNotEmpty) {
             return rawMessage;
           }
-          return 'Đã có lỗi backend (${error.code.name}). Vui lòng thử lại.';
+          return 'Đã có lỗi backend (${error.code}). Vui lòng thử lại.';
       }
     }
 }
