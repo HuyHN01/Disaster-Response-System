@@ -1,13 +1,13 @@
-// lib/features/rescue_stations/presentation/admin_rescue_stations_screen.dart
+// lib/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart
 
 import 'dart:convert';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
-import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
-import 'package:disaster_response_app/features/rescue_stations/presentation/widgets/location_autocomplete_field.dart';
-import 'package:disaster_response_app/features/rescue_stations/presentation/widgets/location_picker_map_dialog.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_autocomplete_field.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_picker_map_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';

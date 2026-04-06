@@ -14,6 +14,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // =============================================================================
 // THEME TOKENS  (unchanged)
@@ -166,6 +167,9 @@ class _EventMapScreenState extends State<EventMapScreen>
   // ── UI state ─────────────────────────────────────────────────────────────
   bool _legendExpanded = true;
 
+  // ── Routing state (for external Google Maps directions) ──────────────────
+  LatLng? _routeDestination;
+
   @override
   void initState() {
     super.initState();
@@ -303,6 +307,101 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
+  void _onRouteDestinationChanged(LatLng? destination) {
+    if (_isSameLatLng(_routeDestination, destination)) return;
+    if (!mounted) return;
+
+    setState(() {
+      _routeDestination = destination;
+    });
+  }
+
+  bool _isSameLatLng(LatLng? a, LatLng? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+
+    const epsilon = 0.0000001;
+    return (a.latitude - b.latitude).abs() < epsilon &&
+        (a.longitude - b.longitude).abs() < epsilon;
+  }
+
+  Future<LatLng?> _resolveStartLocationForDirections() async {
+    if (_userLocation != null) return _userLocation;
+
+    try {
+      final pos = await _determinePosition();
+      if (!mounted) return null;
+
+      final location = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _userLocation = location;
+        _locationLoading = false;
+        _locationError = null;
+        _locationErrCode = null;
+      });
+      return location;
+    } on LocationException catch (e) {
+      _showLocationBanner(e.message, e.code);
+      return null;
+    } catch (_) {
+      _showLocationBanner('Không lấy được vị trí hiện tại để chỉ đường.', null);
+      return null;
+    }
+  }
+
+  Future<void> _openGoogleMapsDirections() async {
+    final destination = _routeDestination;
+    if (destination == null) {
+      _showDirectionError('Không có trạm cứu trợ để chỉ đường.');
+      return;
+    }
+
+    final origin = await _resolveStartLocationForDirections();
+    if (origin == null) {
+      _showDirectionError('Không xác định được vị trí hiện tại của bạn.');
+      return;
+    }
+
+    final startLat = origin.latitude;
+    final startLng = origin.longitude;
+    final endLat = destination.latitude;
+    final endLng = destination.longitude;
+
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&origin=$startLat,$startLng'
+      '&destination=$endLat,$endLng'
+      '&travelmode=driving',
+    );
+
+    try {
+      final launched = await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showDirectionError('Không thể mở Google Maps trên thiết bị này.');
+      }
+    } catch (e, st) {
+      debugPrint('[MAP] Open Google Maps failed: $e\n$st');
+      _showDirectionError('Đã xảy ra lỗi khi mở Google Maps.');
+    }
+  }
+
+  void _showDirectionError(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange.shade800,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // BUILD
   // ---------------------------------------------------------------------------
@@ -324,6 +423,7 @@ class _EventMapScreenState extends State<EventMapScreen>
                 pulseAnim: _pulseAnim,
                 userLocation: effectiveLocation,
                 sosLocation: _mockSosLocation(effectiveLocation),
+                onRouteTargetChanged: _onRouteDestinationChanged,
               ),
             ),
 
@@ -361,8 +461,19 @@ class _EventMapScreenState extends State<EventMapScreen>
             // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
-              bottom: _legendExpanded ? 272 : 148,
+              bottom: _legendExpanded ? 328 : 204,
               child: _LocateMeButton(onTap: _locateMe),
+            ),
+
+            // ── Directions button ────────────────────────────────────────
+            Positioned(
+              right: 14,
+              bottom: _legendExpanded ? 272 : 148,
+              child: _DirectionsButton(
+                onTap: _routeDestination == null
+                    ? null
+                    : _openGoogleMapsDirections,
+              ),
             ),
 
             // ── Bottom Legend + SOS Sheet ────────────────────────────────
@@ -514,12 +625,14 @@ class _MapLayer extends ConsumerStatefulWidget {
   final Animation<double> pulseAnim;
   final LatLng userLocation;
   final LatLng sosLocation;
+  final ValueChanged<LatLng?> onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
     required this.pulseAnim,
     required this.userLocation,
     required this.sosLocation,
+    required this.onRouteTargetChanged,
   });
 
   @override
@@ -536,8 +649,11 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   /// • Sau khi fallback: chứa đúng 2 điểm [user, nearest] — đường chim bay.
   List<LatLng> _routePoints = [];
 
-  /// Trạm cứu trợ gần nhất — lưu id để highlight marker.
-  String? _nearestStationId;
+  /// Trạm đích hiện tại của route (mặc định: gần nhất, hoặc user chọn).
+  String? _routeStationId;
+
+  /// Trạm do user chủ động chọn bằng cách tap marker.
+  String? _selectedStationId;
 
   /// Snapshot trạm mới nhất dùng cho retry/fallback mà không cần rebuild.
   List<RescueStation> _latestStations = const [];
@@ -595,21 +711,24 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     LatLng userLoc,
     List<RescueStation> stations,
   ) async {
-    // ── Bước 1: Tìm trạm gần nhất ──────────────────────────────────────────
-    final nearest = _findNearestStation(userLoc, stations);
-    if (nearest == null) {
+    // ── Bước 1: Chọn trạm đích (ưu tiên trạm user chọn, fallback gần nhất) ──
+    final destination = _resolveTargetStation(userLoc, stations);
+    if (destination == null) {
       if (!mounted) return;
       setState(() {
-        _nearestStationId = null;
+        _routeStationId = null;
+        _selectedStationId = null;
         _routePoints = const [];
         _routeLoading = false;
         _isFallback = false;
       });
+      widget.onRouteTargetChanged(null);
       return;
     }
 
-    final nearestPoint = LatLng(nearest.latitude, nearest.longitude);
-    _nearestStationId = nearest.id;
+    final destinationPoint = LatLng(destination.latitude, destination.longitude);
+    _routeStationId = destination.id;
+    widget.onRouteTargetChanged(destinationPoint);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -622,7 +741,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     try {
       final points = await OpenRouteService.instance.getRoute(
         userLoc,
-        nearestPoint,
+        destinationPoint,
       );
 
       if (!mounted) return;
@@ -635,12 +754,37 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       debugPrint('[MapLayer] Route OK: ${points.length} điểm tọa độ');
     } on RoutingException catch (e) {
       debugPrint('[MapLayer] RoutingException → fallback: $e');
-      _fallbackToStraightLine(userLoc, nearestPoint);
+      _fallbackToStraightLine(userLoc, destinationPoint);
     } catch (e) {
       // Bắt SocketException, TimeoutException, FormatException...
       debugPrint('[MapLayer] Lỗi không xác định → fallback: $e');
-      _fallbackToStraightLine(userLoc, nearestPoint);
+      _fallbackToStraightLine(userLoc, destinationPoint);
     }
+  }
+
+  RescueStation? _resolveTargetStation(
+    LatLng userLoc,
+    List<RescueStation> stations,
+  ) {
+    if (stations.isEmpty) return null;
+
+    final selectedId = _selectedStationId;
+    if (selectedId != null) {
+      final selected = _findStationById(stations, selectedId);
+      if (selected != null) return selected;
+
+      // Trạm đã bị xoá/ẩn khỏi dữ liệu hiện tại, quay về chế độ mặc định.
+      _selectedStationId = null;
+    }
+
+    return _findNearestStation(userLoc, stations);
+  }
+
+  RescueStation? _findStationById(List<RescueStation> stations, String id) {
+    for (final station in stations) {
+      if (station.id == id) return station;
+    }
+    return null;
   }
 
   /// Fallback: vẽ đường chim bay 2 điểm khi API không khả dụng.
@@ -694,6 +838,16 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             .toList()
           ..sort();
     return keys.join('|');
+  }
+
+  void _onStationTapped(RescueStation station) {
+    if (_selectedStationId == station.id) return;
+
+    setState(() {
+      _selectedStationId = station.id;
+    });
+
+    _computeRouteFromProps(widget.userLocation, _latestStations);
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -775,13 +929,18 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                   child: _SosMarker(),
                 ),
 
-                // ── Rescue stations — trạm gần nhất highlight to hơn ──
+                // ── Rescue stations — trạm đích hiện tại highlight to hơn ──
                 for (final station in rescueStations)
                   Marker(
                     point: LatLng(station.latitude, station.longitude),
-                    width: station.id == _nearestStationId ? 64 : 56,
-                    height: station.id == _nearestStationId ? 64 : 56,
-                    child: const _RescueMarker(),
+                    width: station.id == _routeStationId ? 64 : 56,
+                    height: station.id == _routeStationId ? 64 : 56,
+                    child: GestureDetector(
+                      onTap: () => _onStationTapped(station),
+                      child: _RescueMarker(
+                        selected: station.id == _routeStationId,
+                      ),
+                    ),
                   ),
 
                 // ── User location (on top) ─────────────────────────────
@@ -999,7 +1158,9 @@ class _SosMarker extends StatelessWidget {
 
 // ── Rescue Station: Green cross ───────────────────────────────────────────────
 class _RescueMarker extends StatelessWidget {
-  const _RescueMarker();
+  final bool selected;
+
+  const _RescueMarker({this.selected = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1007,15 +1168,15 @@ class _RescueMarker extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: selected ? 42 : 38,
+          height: selected ? 42 : 38,
           decoration: BoxDecoration(
             color: _MapColors.rescueGreen,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(0.4),
-                blurRadius: 10,
+                color: _MapColors.rescueGreen.withOpacity(selected ? 0.55 : 0.4),
+                blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -1182,6 +1343,42 @@ class _LocateMeButton extends StatelessWidget {
             Icons.my_location_rounded,
             size: 20,
             color: _MapColors.userDot,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DIRECTIONS BUTTON — Chỉ đường đến địa điểm được chọn
+// =============================================================================
+class _DirectionsButton extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _DirectionsButton({required this.onTap});
+
+  bool get _isEnabled => onTap != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _isEnabled ? _MapColors.fabBg : Colors.grey.shade200,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 4,
+      shadowColor: _MapColors.shadow,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(
+            Icons.directions_rounded,
+            size: 21,
+            color: _isEnabled
+                ? const Color(0xFF4285F4)
+                : _MapColors.textSecondary.withOpacity(0.6),
           ),
         ),
       ),

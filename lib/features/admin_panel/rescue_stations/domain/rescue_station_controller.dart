@@ -1,4 +1,4 @@
-// lib/features/rescue_stations/domain/rescue_station_controller.dart
+// lib/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';

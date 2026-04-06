@@ -4,7 +4,7 @@ import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/admin_sos_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
-import 'package:disaster_response_app/features/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
