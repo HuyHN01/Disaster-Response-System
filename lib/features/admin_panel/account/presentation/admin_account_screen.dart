@@ -258,7 +258,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => showAvatarUploadDialog(context),
                       icon: const Icon(Icons.upload_rounded,
                           size: 16, color: AppColors.textPrimary),
                       label: const Text(
@@ -994,6 +994,371 @@ class _PasswordStrengthBar extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Hàm hỗ trợ gọi Dialog nhanh từ bất kỳ đâu
+Future<void> showAvatarUploadDialog(BuildContext context) {
+  return showDialog(
+    context: context,
+    barrierDismissible: false, // Bắt buộc người dùng nhấn nút Hủy hoặc X (chống click nhầm ra ngoài)
+    builder: (BuildContext context) {
+      return const AvatarUploadDialog();
+    },
+  );
+}
+
+enum UploadStep { select, crop }
+enum UploadMethod { device, url }
+
+class AvatarUploadDialog extends StatefulWidget {
+  const AvatarUploadDialog({super.key});
+
+  @override
+  State<AvatarUploadDialog> createState() => _AvatarUploadDialogState();
+}
+
+class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
+  // Trạng thái hiện tại của quy trình
+  UploadStep _currentStep = UploadStep.select;
+  UploadMethod _method = UploadMethod.device;
+  
+  final TextEditingController _urlController = TextEditingController();
+  bool _isDownloading = false;
+  double _zoomValue = 1.0; 
+
+  // --- Bảng màu tinh chỉnh ---
+  final Color primaryRed = const Color(0xFFDA291C); // Đỏ cờ chuẩn, nổi bật trên nền trắng
+  final Color textDark = const Color(0xFF111827); // Đen xám đậm cho text chính
+  final Color textMuted = const Color(0xFF6B7280); // Xám nhạt cho text phụ
+  final Color borderGrey = const Color(0xFFE5E7EB); // Viền xám nhạt
+  final Color innerBackground = const Color(0xFFF3F4F6); // Nền xám cực nhạt cho tab/box
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  // --- Logic Xử lý ---
+
+  void _onFileSelected() {
+    // TODO: Triển khai FilePicker tại đây
+    setState(() {
+      _method = UploadMethod.device;
+      _currentStep = UploadStep.crop;
+    });
+  }
+
+  void _onUrlSubmitted() async {
+    if (_urlController.text.trim().isEmpty) return;
+
+    setState(() => _isDownloading = true);
+    
+    // TODO: Triển khai logic kiểm tra URL
+    await Future.delayed(const Duration(seconds: 1)); // Giả lập delay
+
+    setState(() {
+      _isDownloading = false;
+      _method = UploadMethod.url;
+      _currentStep = UploadStep.crop;
+    });
+  }
+
+  void _handleFinalConfirm() {
+    // TODO: Thực thi logic lưu ảnh
+    debugPrint("Đang upload ảnh đã crop lên server...");
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white, // Khóa cứng nền trắng
+      surfaceTintColor: Colors.transparent, // Loại bỏ hiệu ứng ám màu của Material 3
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 5,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          child: Padding(
+            padding: const EdgeInsets.all(32.0), // Tăng padding để Dialog thoáng hơn
+            child: _currentStep == UploadStep.select 
+                ? _buildSelectionStep() 
+                : _buildCropStep(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Giao diện BƯỚC 1: CHỌN NGUỒN ---
+
+  Widget _buildSelectionStep() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader("Cập nhật ảnh đại diện"),
+        const SizedBox(height: 24),
+        _buildTabSwitcher(),
+        const SizedBox(height: 24),
+        if (_method == UploadMethod.device) _buildDevicePicker() else _buildUrlInput(),
+        const SizedBox(height: 32),
+        _buildFooterButtons(
+          onCancel: () => Navigator.of(context).pop(),
+          confirmLabel: "Tiếp tục",
+          onConfirm: null, 
+          showConfirm: false,
+        ),
+      ],
+    );
+  }
+
+  // --- Giao diện BƯỚC 2: CROP & PREVIEW ---
+
+  Widget _buildCropStep() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildHeader("Chỉnh sửa ảnh"),
+        const SizedBox(height: 32),
+        
+        // Khu vực Preview hình tròn
+        Container(
+          width: 220,
+          height: 220,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: innerBackground,
+            border: Border.all(color: borderGrey, width: 1),
+          ),
+          child: ClipOval(
+            child: Transform.scale(
+              scale: _zoomValue,
+              // TODO: Thay Placeholder bằng ảnh thật
+              child: Image.network(
+                _method == UploadMethod.url ? _urlController.text : "https://via.placeholder.com/300",
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: textMuted),
+              ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 24),
+        Text("Kéo để điều chỉnh hoặc phóng to/thu nhỏ", style: TextStyle(color: textMuted, fontSize: 13)),
+        
+        // Thanh trượt Zoom
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: primaryRed,
+            inactiveTrackColor: borderGrey,
+            thumbColor: primaryRed,
+            overlayColor: primaryRed.withOpacity(0.1),
+          ),
+          child: Slider(
+            value: _zoomValue,
+            min: 1.0,
+            max: 3.0,
+            onChanged: (val) => setState(() => _zoomValue = val),
+          ),
+        ),
+        
+        const SizedBox(height: 32),
+        _buildFooterButtons(
+          onCancel: () => setState(() => _currentStep = UploadStep.select),
+          confirmLabel: "Xác nhận & Lưu",
+          onConfirm: _handleFinalConfirm,
+          cancelLabel: "Quay lại",
+        ),
+      ],
+    );
+  }
+
+  // --- Các Widget thành phần ---
+
+  Widget _buildHeader(String title) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title, 
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+        ),
+        IconButton(
+          icon: Icon(Icons.close, color: textMuted), 
+          onPressed: () => Navigator.pop(context),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(), // Thu gọn padding mặc định của icon
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabSwitcher() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: innerBackground, 
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderGrey, width: 0.5), // Thêm viền mờ cho khu vực tab
+      ),
+      child: Row(
+        children: [
+          _tabItem("Tải ảnh lên", UploadMethod.device),
+          _tabItem("Nhập URL", UploadMethod.url),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabItem(String label, UploadMethod method) {
+    bool isSelected = _method == method;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _method = method),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: isSelected 
+                ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] 
+                : [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label, 
+            style: TextStyle(
+              color: isSelected ? primaryRed : textMuted, 
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDevicePicker() {
+    return InkWell(
+      onTap: _onFileSelected,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(48),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: borderGrey, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: primaryRed.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.cloud_upload_outlined, size: 32, color: primaryRed),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Nhấn để chọn file từ máy tính", 
+              style: TextStyle(fontWeight: FontWeight.w500, color: textDark, fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Hỗ trợ JPG, PNG. Tối đa 5MB", 
+              style: TextStyle(color: textMuted, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUrlInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Dán link ảnh đại diện", 
+          style: TextStyle(fontWeight: FontWeight.w500, color: textDark, fontSize: 14),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _urlController,
+          style: TextStyle(color: textDark),
+          decoration: InputDecoration(
+            hintText: "https://...",
+            hintStyle: TextStyle(color: textMuted.withOpacity(0.6)),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            suffixIcon: _isDownloading 
+              ? const Padding(
+                  padding: EdgeInsets.all(14), 
+                  child: SizedBox(
+                    width: 20, height: 20, 
+                    child: CircularProgressIndicator(strokeWidth: 2)
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(Icons.arrow_forward_rounded, color: primaryRed),
+                  onPressed: _onUrlSubmitted,
+                ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: borderGrey, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: primaryRed, width: 1.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooterButtons({
+    required VoidCallback onCancel,
+    required String confirmLabel,
+    required VoidCallback? onConfirm,
+    String cancelLabel = "Hủy",
+    bool showConfirm = true,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: onCancel, 
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            foregroundColor: textMuted,
+          ),
+          child: Text(cancelLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        if (showConfirm) ...[
+          const SizedBox(width: 12),
+          ElevatedButton(
+            onPressed: onConfirm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryRed,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ]
       ],
     );
   }

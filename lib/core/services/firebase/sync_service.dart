@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:drift/drift.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // =============================================================================
@@ -56,7 +57,7 @@ class FirebaseSyncService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _rescueStationsSubscription;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _usersSubscription;
+  StreamSubscription<dynamic>? _usersSubscription;
 
   FirebaseSyncService({
     required AppDatabase db,
@@ -214,10 +215,44 @@ class FirebaseSyncService {
   }) {
     _usersSubscription?.cancel();
 
-    final query = _firestore.collection(_Collections.users);
+    final currentUser = fb_auth.FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      _log('Bỏ lắng nghe users: chưa có phiên đăng nhập.');
+      return;
+    }
 
-    _usersSubscription = query.snapshots().listen(
-      (snapshot) => _handleUsersSnapshot(snapshot, onUpsert: onUpsert),
+    final docRef = _firestore.collection(_Collections.users).doc(currentUser.uid);
+
+    _usersSubscription = docRef.snapshots().listen(
+      (snapshot) async {
+        try {
+          if (!snapshot.exists) {
+            await (_db.delete(_db.users)
+                  ..where((u) => u.id.equals(currentUser.uid)))
+                .go();
+            return;
+          }
+
+          final data = snapshot.data();
+          if (data == null) return;
+
+          final incoming = _firestoreToUserCompanion(
+            docId: snapshot.id,
+            data: data,
+          );
+
+          await _db.into(_db.users).insertOnConflictUpdate(incoming);
+
+          if (onUpsert != null) {
+            final inserted = await (_db.select(
+              _db.users,
+            )..where((u) => u.id.equals(snapshot.id))).getSingleOrNull();
+            if (inserted != null) onUpsert(inserted);
+          }
+        } catch (e, st) {
+          _log('Lỗi xử lý user ${snapshot.id}: $e\n$st');
+        }
+      },
       onError: (Object error, StackTrace st) {
         _log('Lỗi lắng nghe users: $error\n$st');
         onError?.call(error);
