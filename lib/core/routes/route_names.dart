@@ -63,6 +63,9 @@ abstract final class RouteNames {
   /// Admin rescue stations management ([AdminRescueStationsScreen]).
   static const String adminRescueStations = '/admin/rescue-stations';
 
+  /// Admin personal account management ([AdminAccountScreen]).
+  static const String adminAccount = '/admin/account';
+
   /// Admin event detail ([AdminEventDetailScreen]).
   /// Requires a [paramEventId] path parameter and a [DisasterEvent] via `extra`.
   static const String adminEventDetail = '/admin/events/:eventId';
@@ -85,6 +88,7 @@ abstract final class RouteNames {
   static const String segNewsDetail = ':postId';
   static const String segAdminMap = 'map';
   static const String segAdminRescueStations = 'rescue-stations';
+  static const String segAdminAccount = 'account';
   static const String segAdminEventDetail = 'events/:eventId';
   static const String segAdminPostCreate = 'posts/new';
   static const String segAdminPostEdit = 'posts/:postId/edit';
@@ -112,6 +116,7 @@ abstract final class RouteNames {
   static const String nameAdminDashboard = 'admin-dashboard';
   static const String nameAdminMap = 'admin-map';
   static const String nameAdminRescueStations = 'admin-rescue-stations';
+  static const String nameAdminAccount = 'admin-account';
   static const String nameAdminEventDetail = 'admin-event-detail';
   static const String nameAdminPostCreate = 'admin-post-create';
   static const String nameAdminPostEdit = 'admin-post-edit';

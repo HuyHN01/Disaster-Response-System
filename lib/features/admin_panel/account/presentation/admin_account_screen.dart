@@ -11,7 +11,6 @@
 // Import AppColors từ event_dashboard_screen.dart (hoặc tách ra core/theme nếu cần).
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ─── Borrow AppColors from the existing dashboard file ───────────────────────
 // If AppColors is already in a shared file (e.g. core/theme/app_colors.dart),
@@ -233,11 +232,11 @@ class _ProfileCardState extends State<_ProfileCard> {
                     const SizedBox(height: 10),
                     _MetaRow(
                         icon: Icons.shield_outlined,
-                        text: 'ROLE: SUPER ADMIN'),
+                        text: 'VAI TRÒ: QUẢN TRỊ VIÊN CẤP CAO'),
                     const SizedBox(height: 4),
                     _MetaRow(
                         icon: Icons.calendar_today_outlined,
-                        text: 'ACCOUNT CREATED: MARCH 15, 2026'),
+                        text: 'NGÀY TẠO TÀI KHOẢN: 15 THÁNG 3, 2026'),
                   ],
                 ),
               ),

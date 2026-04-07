@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/features/admin_panel/account/presentation/admin_account_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/presentation/admin_login_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/presentation/admin_register_screen.dart';
@@ -203,6 +204,11 @@ abstract final class AppRouter {
           path: RouteNames.adminRescueStations,
           name: RouteNames.nameAdminRescueStations,
           builder: (context, state) => const AdminRescueStationsScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.adminAccount,
+          name: RouteNames.nameAdminAccount,
+          builder: (context, state) => const AdminAccountScreen(),
         ),
       ],
     ),
