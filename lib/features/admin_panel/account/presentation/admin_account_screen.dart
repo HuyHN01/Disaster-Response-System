@@ -11,21 +11,26 @@
 // Import AppColors từ event_dashboard_screen.dart (hoặc tách ra core/theme nếu cần).
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ─── Borrow AppColors from the existing dashboard file ───────────────────────
 // If AppColors is already in a shared file (e.g. core/theme/app_colors.dart),
 // replace this import with the correct path.
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_models.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart'
     show AppColors;
 
 // =============================================================================
 // ROOT SCREEN
 // =============================================================================
-class AdminAccountScreen extends StatelessWidget {
+class AdminAccountScreen extends ConsumerWidget {
   const AdminAccountScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(adminSessionProfileProvider);
+
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
       body: SingleChildScrollView(
@@ -40,23 +45,29 @@ class AdminAccountScreen extends StatelessWidget {
             // ── Responsive layout: cards stacked on narrow, side-by-side wide ─
             LayoutBuilder(
               builder: (context, constraints) {
+                final Widget profileCard = profileAsync.when(
+                  data: (profile) => _ProfileCard(profile: profile),
+                  loading: () => const _ProfileCardSkeleton(),
+                  error: (_, __) => const _ProfileCardError(),
+                );
+
                 if (constraints.maxWidth >= 860) {
                   // Wide: profile left (flex 3) + password right (flex 2)
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Flexible(flex: 3, child: _ProfileCard()),
-                      SizedBox(width: 20),
-                      Flexible(flex: 2, child: _ChangePasswordCard()),
+                    children: [
+                      Flexible(flex: 3, child: profileCard),
+                      const SizedBox(width: 20),
+                      const Flexible(flex: 2, child: _ChangePasswordCard()),
                     ],
                   );
                 }
                 // Narrow: stack vertically
-                return const Column(
+                return Column(
                   children: [
-                    _ProfileCard(),
-                    SizedBox(height: 20),
-                    _ChangePasswordCard(),
+                    profileCard,
+                    const SizedBox(height: 20),
+                    const _ChangePasswordCard(),
                   ],
                 );
               },
@@ -120,21 +131,64 @@ class _PageHeader extends StatelessWidget {
 // PROFILE CARD
 // =============================================================================
 class _ProfileCard extends StatefulWidget {
-  const _ProfileCard();
+  const _ProfileCard({required this.profile});
+
+  final AdminUserProfile? profile;
 
   @override
   State<_ProfileCard> createState() => _ProfileCardState();
 }
 
 class _ProfileCardState extends State<_ProfileCard> {
-  final _displayNameCtrl =
-      TextEditingController(text: 'Admin Minh');
+  late final TextEditingController _displayNameCtrl;
+  late final TextEditingController _emailCtrl;
   bool _saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayNameCtrl = TextEditingController(
+      text: widget.profile?.displayName ?? '',
+    );
+    _emailCtrl = TextEditingController(text: widget.profile?.email ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final newDisplayName = widget.profile?.displayName ?? '';
+    if (_displayNameCtrl.text != newDisplayName) {
+      _displayNameCtrl.text = newDisplayName;
+    }
+
+    final newEmail = widget.profile?.email ?? '';
+    if (_emailCtrl.text != newEmail) {
+      _emailCtrl.text = newEmail;
+    }
+  }
 
   @override
   void dispose() {
     _displayNameCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
+  }
+
+  String get _roleLabel {
+    final role = widget.profile?.role;
+    if (role == UserRoles.superAdmin) return 'Vai trò: Quản trị viên cấp cao';
+    if (role == UserRoles.admin) return 'Vai trò: Quản trị viên';
+    return 'Vai trò: Chưa xác định';
+  }
+
+  String get _createdAtLabel {
+    final createdAt = widget.profile?.createdAt;
+    if (createdAt == null) return 'Ngày tạo tài khoản: Chưa cập nhật';
+    final day = createdAt.day.toString().padLeft(2, '0');
+    final month = createdAt.month.toString().padLeft(2, '0');
+    final year = createdAt.year.toString();
+    return 'Ngày tạo tài khoản: $day Tháng $month, $year';
   }
 
   void _onSave() {
@@ -172,11 +226,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                       border: Border.all(
                           color: AppColors.border, width: 3),
                     ),
-                    child: const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: AppColors.brandRed,
-                    ),
+                    child: _Avatar(photoUrl: widget.profile?.photoURL),
                   ),
                   // Camera badge
                   Positioned(
@@ -232,11 +282,11 @@ class _ProfileCardState extends State<_ProfileCard> {
                     const SizedBox(height: 10),
                     _MetaRow(
                         icon: Icons.shield_outlined,
-                        text: 'VAI TRÒ: QUẢN TRỊ VIÊN CẤP CAO'),
+                        text: _roleLabel),
                     const SizedBox(height: 4),
                     _MetaRow(
                         icon: Icons.calendar_today_outlined,
-                        text: 'NGÀY TẠO TÀI KHOẢN: 15 THÁNG 3, 2026'),
+                        text: _createdAtLabel),
                   ],
                 ),
               ),
@@ -265,7 +315,8 @@ class _ProfileCardState extends State<_ProfileCard> {
                     Expanded(
                       child: _DarkTextField(
                         label: 'Địa chỉ Email',
-                        hintText: 'admin@omnidisaster.org',
+                        controller: _emailCtrl,
+                        hintText: 'Chưa có email',
                         readOnly: true,
                         suffixIcon: Tooltip(
                           message: 'Email không thể thay đổi',
@@ -290,7 +341,8 @@ class _ProfileCardState extends State<_ProfileCard> {
                   const SizedBox(height: 16),
                   _DarkTextField(
                     label: 'Địa chỉ Email',
-                    hintText: 'admin@omnidisaster.org',
+                    controller: _emailCtrl,
+                    hintText: 'Chưa có email',
                     readOnly: true,
                     suffixIcon: const Icon(
                       Icons.lock_outline_rounded,
@@ -319,6 +371,80 @@ class _ProfileCardState extends State<_ProfileCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({this.photoUrl});
+
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl != null && photoUrl!.trim().isNotEmpty;
+
+    if (!hasPhoto) {
+      return const Icon(
+        Icons.person,
+        size: 40,
+        color: AppColors.brandRed,
+      );
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl!,
+        width: 80,
+        height: 80,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return const Icon(
+            Icons.person,
+            size: 40,
+            color: AppColors.brandRed,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProfileCardSkeleton extends StatelessWidget {
+  const _ProfileCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _SectionCard(
+      child: SizedBox(
+        height: 260,
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.brandRed),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileCardError extends StatelessWidget {
+  const _ProfileCardError();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _SectionCard(
+      child: SizedBox(
+        height: 180,
+        child: Center(
+          child: Text(
+            'Không tải được hồ sơ tài khoản.',
+            style: TextStyle(
+              color: AppColors.brandRed,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
