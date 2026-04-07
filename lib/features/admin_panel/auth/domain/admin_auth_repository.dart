@@ -64,6 +64,13 @@ class AdminAuthRepository {
     return AdminUserProfile.fromFirestore(snap);
   }
 
+  Stream<AdminUserProfile?> watchUserProfile(String uid) {
+    return _usersRef.doc(uid).snapshots().map((snap) {
+      if (!snap.exists) return null;
+      return AdminUserProfile.fromFirestore(snap);
+    });
+  }
+
   Future<AdminUserProfile?> getCurrentAdminProfile() async {
     final user = _auth.currentUser;
     if (user == null) return null;
@@ -189,6 +196,37 @@ class AdminAuthRepository {
 
   Future<void> signOut() => _auth.signOut();
 
+  Future<void> updateCurrentAdminAvatar({required String photoUrl}) async {
+    final normalizedUrl = photoUrl.trim();
+    if (normalizedUrl.isEmpty) {
+      throw const AdminAuthException('URL ảnh đại diện không hợp lệ.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AdminAuthException('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+
+    final previousPhotoUrl = user.photoURL;
+
+    try {
+      await user.updatePhotoURL(normalizedUrl);
+      await _usersRef.doc(user.uid).set({
+        'photoURL': normalizedUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseAuthException catch (e) {
+      throw AdminAuthException(_mapAuthError(e));
+    } on FirebaseException catch (e) {
+      try {
+        await user.updatePhotoURL(previousPhotoUrl);
+      } catch (_) {
+        // Keep original error as the source of truth.
+      }
+      throw AdminAuthException(_mapFirestoreError(e));
+    }
+  }
+
   String _mapAuthError(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
@@ -277,8 +315,8 @@ final adminBootstrapOpenProvider = FutureProvider<bool>((ref) async {
 final adminSessionProfileProvider = StreamProvider<AdminUserProfile?>((ref) {
   final repo = ref.watch(adminAuthRepositoryProvider);
 
-  return repo.authStateChanges().asyncMap((user) async {
-    if (user == null) return null;
-    return repo.fetchUserProfile(user.uid);
+  return repo.authStateChanges().asyncExpand((user) {
+    if (user == null) return Stream.value(null);
+    return repo.watchUserProfile(user.uid);
   });
 });

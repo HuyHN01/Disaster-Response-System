@@ -10,12 +10,21 @@
 //
 // Import AppColors từ event_dashboard_screen.dart (hoặc tách ra core/theme nếu cần).
 
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:crop_your_image/crop_your_image.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 // ─── Borrow AppColors from the existing dashboard file ───────────────────────
 // If AppColors is already in a shared file (e.g. core/theme/app_colors.dart),
 // replace this import with the correct path.
+import 'package:disaster_response_app/core/services/firebase/firebase_avatar_storage_service.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_models.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart'
@@ -115,10 +124,7 @@ class _PageHeader extends StatelessWidget {
             ),
             Text(
               'Quản lý thông tin hồ sơ và bảo mật tài khoản',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -205,10 +211,7 @@ class _ProfileCardState extends State<_ProfileCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Section title ──────────────────────────────────────────────
-          _SectionTitle(
-            icon: Icons.person_rounded,
-            label: 'Hồ sơ cá nhân',
-          ),
+          _SectionTitle(icon: Icons.person_rounded, label: 'Hồ sơ cá nhân'),
           const SizedBox(height: 20),
 
           // ── Avatar + meta ──────────────────────────────────────────────
@@ -223,8 +226,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.statIconRedBg,
-                      border: Border.all(
-                          color: AppColors.border, width: 3),
+                      border: Border.all(color: AppColors.border, width: 3),
                     ),
                     child: _Avatar(photoUrl: widget.profile?.photoURL),
                   ),
@@ -238,8 +240,7 @@ class _ProfileCardState extends State<_ProfileCard> {
                       decoration: BoxDecoration(
                         color: AppColors.brandRed,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white, width: 2),
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: const Icon(
                         Icons.camera_alt_rounded,
@@ -259,8 +260,11 @@ class _ProfileCardState extends State<_ProfileCard> {
                   children: [
                     OutlinedButton.icon(
                       onPressed: () => showAvatarUploadDialog(context),
-                      icon: const Icon(Icons.upload_rounded,
-                          size: 16, color: AppColors.textPrimary),
+                      icon: const Icon(
+                        Icons.upload_rounded,
+                        size: 16,
+                        color: AppColors.textPrimary,
+                      ),
                       label: const Text(
                         'Tải ảnh lên',
                         style: TextStyle(
@@ -271,22 +275,25 @@ class _ProfileCardState extends State<_ProfileCard> {
                       ),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(
-                            color: AppColors.border, width: 1.5),
+                          color: AppColors.border,
+                          width: 1.5,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
-                    _MetaRow(
-                        icon: Icons.shield_outlined,
-                        text: _roleLabel),
+                    _MetaRow(icon: Icons.shield_outlined, text: _roleLabel),
                     const SizedBox(height: 4),
                     _MetaRow(
-                        icon: Icons.calendar_today_outlined,
-                        text: _createdAtLabel),
+                      icon: Icons.calendar_today_outlined,
+                      text: _createdAtLabel,
+                    ),
                   ],
                 ),
               ),
@@ -364,10 +371,7 @@ class _ProfileCardState extends State<_ProfileCard> {
               duration: const Duration(milliseconds: 250),
               child: _saved
                   ? _SuccessButton(key: const ValueKey('success'))
-                  : _SaveButton(
-                      key: const ValueKey('save'),
-                      onTap: _onSave,
-                    ),
+                  : _SaveButton(key: const ValueKey('save'), onTap: _onSave),
             ),
           ),
         ],
@@ -386,11 +390,7 @@ class _Avatar extends StatelessWidget {
     final hasPhoto = photoUrl != null && photoUrl!.trim().isNotEmpty;
 
     if (!hasPhoto) {
-      return const Icon(
-        Icons.person,
-        size: 40,
-        color: AppColors.brandRed,
-      );
+      return const Icon(Icons.person, size: 40, color: AppColors.brandRed);
     }
 
     return ClipOval(
@@ -400,11 +400,7 @@ class _Avatar extends StatelessWidget {
         height: 80,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) {
-          return const Icon(
-            Icons.person,
-            size: 40,
-            color: AppColors.brandRed,
-          );
+          return const Icon(Icons.person, size: 40, color: AppColors.brandRed);
         },
       ),
     );
@@ -462,11 +458,11 @@ class _ChangePasswordCard extends StatefulWidget {
 
 class _ChangePasswordCardState extends State<_ChangePasswordCard> {
   final _currentCtrl = TextEditingController();
-  final _newCtrl     = TextEditingController();
+  final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
   bool _obscureCurrent = true;
-  bool _obscureNew     = true;
+  bool _obscureNew = true;
   bool _obscureConfirm = true;
   String? _errorMsg;
 
@@ -485,8 +481,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
       return;
     }
     if (_newCtrl.text.length < 8) {
-      setState(
-          () => _errorMsg = 'Mật khẩu mới phải có ít nhất 8 ký tự.');
+      setState(() => _errorMsg = 'Mật khẩu mới phải có ít nhất 8 ký tự.');
       return;
     }
     // TODO: call auth service
@@ -495,8 +490,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
         content: const Text('Mật khẩu đã được cập nhật!'),
         backgroundColor: const Color(0xFF16A34A),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
     _currentCtrl.clear();
@@ -511,10 +505,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Section title ──────────────────────────────────────────────
-          _SectionTitle(
-            icon: Icons.lock_reset_rounded,
-            label: 'Đổi mật khẩu',
-          ),
+          _SectionTitle(icon: Icons.lock_reset_rounded, label: 'Đổi mật khẩu'),
           const SizedBox(height: 20),
 
           // ── Current password ───────────────────────────────────────────
@@ -560,8 +551,9 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                         obscureText: _obscureConfirm,
                         suffixIcon: _EyeToggle(
                           obscure: _obscureConfirm,
-                          onToggle: () =>
-                              setState(() => _obscureConfirm = !_obscureConfirm),
+                          onToggle: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm,
+                          ),
                         ),
                       ),
                     ),
@@ -602,18 +594,19 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
           if (_errorMsg != null) ...[
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFFEE2E2),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFFCA5A5), width: 1),
+                border: Border.all(color: const Color(0xFFFCA5A5), width: 1),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: AppColors.brandRed, size: 16),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: AppColors.brandRed,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -801,9 +794,7 @@ class _DarkTextField extends StatelessWidget {
           keyboardType: keyboardType,
           onChanged: onChanged,
           style: TextStyle(
-            color: readOnly
-                ? AppColors.textMuted
-                : AppColors.textPrimary,
+            color: readOnly ? AppColors.textMuted : AppColors.textPrimary,
             fontSize: 14,
           ),
           decoration: InputDecoration(
@@ -813,34 +804,35 @@ class _DarkTextField extends StatelessWidget {
               fontSize: 14,
             ),
             filled: true,
-            fillColor:
-                readOnly ? AppColors.divider : AppColors.scaffoldBg,
+            fillColor: readOnly ? AppColors.divider : AppColors.scaffoldBg,
             suffixIcon: suffixIcon != null
                 ? Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: suffixIcon,
                   )
                 : null,
-            suffixIconConstraints:
-                const BoxConstraints(minWidth: 0, minHeight: 0),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 0,
+              minHeight: 0,
+            ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 13,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(
-                  color: AppColors.border, width: 1.2),
+              borderSide: const BorderSide(color: AppColors.border, width: 1.2),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(
-                  color: AppColors.border, width: 1.2),
+              borderSide: const BorderSide(color: AppColors.border, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
               borderSide: const BorderSide(
-                  color: AppColors.brandRed, width: 1.5),
+                color: AppColors.brandRed,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -860,9 +852,7 @@ class _EyeToggle extends StatelessWidget {
     return GestureDetector(
       onTap: onToggle,
       child: Icon(
-        obscure
-            ? Icons.visibility_off_outlined
-            : Icons.visibility_outlined,
+        obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
         color: AppColors.textMuted,
         size: 18,
       ),
@@ -891,9 +881,7 @@ class _SaveButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.brandRed,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
@@ -908,8 +896,11 @@ class _SuccessButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: null,
-      icon: const Icon(Icons.check_circle_rounded,
-          size: 16, color: Colors.white),
+      icon: const Icon(
+        Icons.check_circle_rounded,
+        size: 16,
+        color: Colors.white,
+      ),
       label: const Text(
         'Đã lưu!',
         style: TextStyle(
@@ -923,9 +914,7 @@ class _SuccessButton extends StatelessWidget {
         disabledBackgroundColor: const Color(0xFF16A34A),
         disabledForegroundColor: Colors.white,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
@@ -948,21 +937,31 @@ class _PasswordStrengthBar extends StatelessWidget {
 
   Color get _color {
     switch (_strength) {
-      case 1: return const Color(0xFFEF4444);
-      case 2: return const Color(0xFFF97316);
-      case 3: return const Color(0xFFEAB308);
-      case 4: return const Color(0xFF16A34A);
-      default: return AppColors.border;
+      case 1:
+        return const Color(0xFFEF4444);
+      case 2:
+        return const Color(0xFFF97316);
+      case 3:
+        return const Color(0xFFEAB308);
+      case 4:
+        return const Color(0xFF16A34A);
+      default:
+        return AppColors.border;
     }
   }
 
   String get _label {
     switch (_strength) {
-      case 1: return 'Yếu';
-      case 2: return 'Trung bình';
-      case 3: return 'Khá';
-      case 4: return 'Mạnh';
-      default: return '';
+      case 1:
+        return 'Yếu';
+      case 2:
+        return 'Trung bình';
+      case 3:
+        return 'Khá';
+      case 4:
+        return 'Mạnh';
+      default:
+        return '';
     }
   }
 
@@ -1003,7 +1002,8 @@ class _PasswordStrengthBar extends StatelessWidget {
 Future<void> showAvatarUploadDialog(BuildContext context) {
   return showDialog(
     context: context,
-    barrierDismissible: false, // Bắt buộc người dùng nhấn nút Hủy hoặc X (chống click nhầm ra ngoài)
+    barrierDismissible:
+        false, // Bắt buộc người dùng nhấn nút Hủy hoặc X (chống click nhầm ra ngoài)
     builder: (BuildContext context) {
       return const AvatarUploadDialog();
     },
@@ -1011,30 +1011,47 @@ Future<void> showAvatarUploadDialog(BuildContext context) {
 }
 
 enum UploadStep { select, crop }
+
 enum UploadMethod { device, url }
 
-class AvatarUploadDialog extends StatefulWidget {
+class AvatarUploadDialog extends ConsumerStatefulWidget {
   const AvatarUploadDialog({super.key});
 
   @override
-  State<AvatarUploadDialog> createState() => _AvatarUploadDialogState();
+  ConsumerState<AvatarUploadDialog> createState() => _AvatarUploadDialogState();
 }
 
-class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
-  // Trạng thái hiện tại của quy trình
+class _AvatarUploadDialogState extends ConsumerState<AvatarUploadDialog> {
+  static const int _maxFileSizeBytes = 5 * 1024 * 1024;
+  static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
+
+  final ImagePicker _imagePicker = ImagePicker();
+  final CropController _cropController = CropController();
+  final TextEditingController _urlController = TextEditingController();
+
   UploadStep _currentStep = UploadStep.select;
   UploadMethod _method = UploadMethod.device;
-  
-  final TextEditingController _urlController = TextEditingController();
+
+  Uint8List? _selectedImageBytes;
+  String _selectedContentType = 'image/jpeg';
+  bool _isPicking = false;
   bool _isDownloading = false;
-  double _zoomValue = 1.0; 
+  bool _isCropping = false;
+  bool _isSaving = false;
+  String? _errorMessage;
 
   // --- Bảng màu tinh chỉnh ---
-  final Color primaryRed = const Color(0xFFDA291C); // Đỏ cờ chuẩn, nổi bật trên nền trắng
+  final Color primaryRed = const Color(
+    0xFFDA291C,
+  ); // Đỏ cờ chuẩn, nổi bật trên nền trắng
   final Color textDark = const Color(0xFF111827); // Đen xám đậm cho text chính
   final Color textMuted = const Color(0xFF6B7280); // Xám nhạt cho text phụ
   final Color borderGrey = const Color(0xFFE5E7EB); // Viền xám nhạt
-  final Color innerBackground = const Color(0xFFF3F4F6); // Nền xám cực nhạt cho tab/box
+  final Color innerBackground = const Color(
+    0xFFF3F4F6,
+  ); // Nền xám cực nhạt cho tab/box
+
+  bool get _isBusy => _isPicking || _isDownloading || _isCropping || _isSaving;
 
   @override
   void dispose() {
@@ -1044,40 +1061,276 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
 
   // --- Logic Xử lý ---
 
-  void _onFileSelected() {
-    // TODO: Triển khai FilePicker tại đây
-    setState(() {
-      _method = UploadMethod.device;
-      _currentStep = UploadStep.crop;
-    });
-  }
-
-  void _onUrlSubmitted() async {
-    if (_urlController.text.trim().isEmpty) return;
-
-    setState(() => _isDownloading = true);
-    
-    // TODO: Triển khai logic kiểm tra URL
-    await Future.delayed(const Duration(seconds: 1)); // Giả lập delay
+  Future<void> _onFileSelected() async {
+    if (_isBusy) return;
 
     setState(() {
-      _isDownloading = false;
-      _method = UploadMethod.url;
-      _currentStep = UploadStep.crop;
+      _errorMessage = null;
+      _isPicking = true;
     });
+
+    try {
+      final selectedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
+
+      if (!mounted || selectedFile == null) {
+        return;
+      }
+
+      final extension = _extractExtension(selectedFile);
+      if (!_allowedExtensions.contains(extension)) {
+        throw const AdminAuthException(
+          'Định dạng ảnh không hỗ trợ. Vui lòng chọn JPG, JPEG, PNG hoặc WEBP.',
+        );
+      }
+
+      final bytes = await selectedFile.readAsBytes();
+      if (bytes.length > _maxFileSizeBytes) {
+        throw const AdminAuthException('Kích thước ảnh vượt quá 5MB.');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _method = UploadMethod.device;
+        _selectedImageBytes = bytes;
+        _selectedContentType = _contentTypeFromExtension(extension);
+        _currentStep = UploadStep.crop;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _toUserMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _isPicking = false);
+      }
+    }
   }
 
-  void _handleFinalConfirm() {
-    // TODO: Thực thi logic lưu ảnh
-    debugPrint("Đang upload ảnh đã crop lên server...");
-    Navigator.of(context).pop();
+  Future<void> _onUrlSubmitted() async {
+    if (_isBusy) return;
+
+    final rawUrl = _urlController.text.trim();
+    if (rawUrl.isEmpty) {
+      setState(() {
+        _errorMessage = 'Vui lòng nhập URL ảnh.';
+      });
+      return;
+    }
+
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      setState(() {
+        _errorMessage = 'URL không hợp lệ. Vui lòng dùng link http/https.';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = null;
+      _isDownloading = true;
+    });
+
+    try {
+      final response = await http
+          .get(uri, headers: {'Accept': 'image/*'})
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw AdminAuthException(
+          'Không thể tải ảnh từ URL (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final bytes = response.bodyBytes;
+      if (bytes.isEmpty) {
+        throw const AdminAuthException('Dữ liệu ảnh từ URL đang rỗng.');
+      }
+      if (bytes.length > _maxFileSizeBytes) {
+        throw const AdminAuthException('Kích thước ảnh vượt quá 5MB.');
+      }
+
+      final contentType = _resolveContentTypeFromUrl(
+        uri: uri,
+        responseContentType: response.headers['content-type'],
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _method = UploadMethod.url;
+        _selectedImageBytes = bytes;
+        _selectedContentType = contentType;
+        _currentStep = UploadStep.crop;
+      });
+    } on http.ClientException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _toUserMessage(e));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _toUserMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
+  }
+
+  String _extractExtension(XFile file) {
+    final fileName = file.name.trim().toLowerCase();
+    final lastDot = fileName.lastIndexOf('.');
+    if (lastDot >= 0 && lastDot < fileName.length - 1) {
+      return fileName.substring(lastDot + 1);
+    }
+    return '';
+  }
+
+  String _contentTypeFromExtension(String extension) {
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  String _extractExtensionFromPath(String path) {
+    final normalizedPath = path.trim().toLowerCase();
+    final lastDot = normalizedPath.lastIndexOf('.');
+    if (lastDot >= 0 && lastDot < normalizedPath.length - 1) {
+      return normalizedPath.substring(lastDot + 1);
+    }
+    return '';
+  }
+
+  String? _normalizeImageContentType(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final normalized = value.split(';').first.trim().toLowerCase();
+    if (normalized == 'image/jpg') return 'image/jpeg';
+    return normalized;
+  }
+
+  bool _isAllowedImageContentType(String contentType) {
+    return contentType == 'image/jpeg' ||
+        contentType == 'image/png' ||
+        contentType == 'image/webp';
+  }
+
+  String _resolveContentTypeFromUrl({
+    required Uri uri,
+    required String? responseContentType,
+  }) {
+    final normalizedType = _normalizeImageContentType(responseContentType);
+    if (normalizedType != null && _isAllowedImageContentType(normalizedType)) {
+      return normalizedType;
+    }
+
+    final extension = _extractExtensionFromPath(uri.path);
+    if (_allowedExtensions.contains(extension)) {
+      return _contentTypeFromExtension(extension);
+    }
+
+    throw const AdminAuthException(
+      'Định dạng ảnh từ URL không hỗ trợ. Vui lòng dùng JPG, JPEG, PNG hoặc WEBP.',
+    );
+  }
+
+  String _toUserMessage(Object error) {
+    if (error is TimeoutException) {
+      return 'Hết thời gian tải ảnh từ URL. Vui lòng thử lại.';
+    }
+    if (error is http.ClientException) {
+      final raw = error.message.toLowerCase();
+      if (kIsWeb &&
+          (raw.contains('xmlhttprequest') ||
+              raw.contains('cors') ||
+              raw.contains('cross-origin'))) {
+        return 'Không thể tải ảnh từ website này do chặn CORS/hotlink trên trình duyệt. Vui lòng dùng URL ảnh từ nguồn khác hoặc tải file từ thiết bị.';
+      }
+      return 'Không thể kết nối tới URL ảnh. Vui lòng kiểm tra lại link hoặc mạng Internet.';
+    }
+    if (error is AdminAuthException) return error.message;
+    return 'Đã có lỗi khi xử lý ảnh. Vui lòng thử lại.';
+  }
+
+  Future<void> _handleFinalConfirm() async {
+    if (_selectedImageBytes == null || _isBusy) return;
+    setState(() {
+      _errorMessage = null;
+      _isCropping = true;
+    });
+
+    _cropController.cropCircle();
+  }
+
+  Future<void> _onCropped(CropResult result) async {
+    switch (result) {
+      case CropSuccess(:final croppedImage):
+        await _persistAvatar(croppedImage);
+      case CropFailure(:final cause):
+        if (!mounted) return;
+        setState(() {
+          _isCropping = false;
+          _errorMessage = 'Không thể cắt ảnh: $cause';
+        });
+    }
+  }
+
+  Future<void> _persistAvatar(Uint8List croppedImage) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isCropping = false;
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw const AdminAuthException(
+          'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+        );
+      }
+
+      final avatarUrl = await FirebaseAvatarStorageService.uploadAdminAvatar(
+        uid: user.uid,
+        imageBytes: croppedImage,
+        contentType: _selectedContentType,
+      );
+
+      await ref
+          .read(adminAuthRepositoryProvider)
+          .updateCurrentAdminAvatar(photoUrl: avatarUrl);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Ảnh đại diện đã được cập nhật.'),
+          backgroundColor: const Color(0xFF16A34A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _toUserMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.white, // Khóa cứng nền trắng
-      surfaceTintColor: Colors.transparent, // Loại bỏ hiệu ứng ám màu của Material 3
+      surfaceTintColor:
+          Colors.transparent, // Loại bỏ hiệu ứng ám màu của Material 3
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 5,
       child: ConstrainedBox(
@@ -1086,9 +1339,11 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
           child: Padding(
-            padding: const EdgeInsets.all(32.0), // Tăng padding để Dialog thoáng hơn
-            child: _currentStep == UploadStep.select 
-                ? _buildSelectionStep() 
+            padding: const EdgeInsets.all(
+              32.0,
+            ), // Tăng padding để Dialog thoáng hơn
+            child: _currentStep == UploadStep.select
+                ? _buildSelectionStep()
                 : _buildCropStep(),
           ),
         ),
@@ -1103,16 +1358,23 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHeader("Cập nhật ảnh đại diện"),
+        _buildHeader('Cập nhật ảnh đại diện'),
         const SizedBox(height: 24),
         _buildTabSwitcher(),
         const SizedBox(height: 24),
-        if (_method == UploadMethod.device) _buildDevicePicker() else _buildUrlInput(),
-        const SizedBox(height: 32),
+        if (_method == UploadMethod.device)
+          _buildDevicePicker()
+        else
+          _buildUrlInput(),
+        if (_errorMessage != null) ...[
+          const SizedBox(height: 16),
+          _buildErrorBanner(_errorMessage!),
+        ],
+        const SizedBox(height: 24),
         _buildFooterButtons(
           onCancel: () => Navigator.of(context).pop(),
-          confirmLabel: "Tiếp tục",
-          onConfirm: null, 
+          confirmLabel: '',
+          onConfirm: null,
           showConfirm: false,
         ),
       ],
@@ -1122,59 +1384,101 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
   // --- Giao diện BƯỚC 2: CROP & PREVIEW ---
 
   Widget _buildCropStep() {
+    final selectedImage = _selectedImageBytes;
+    if (selectedImage == null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader('Chỉnh sửa ảnh'),
+          const SizedBox(height: 24),
+          Text(
+            'Chưa có ảnh được chọn.',
+            style: TextStyle(color: textMuted, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          _buildFooterButtons(
+            onCancel: () => setState(() => _currentStep = UploadStep.select),
+            confirmLabel: _method == UploadMethod.device
+                ? 'Chọn lại ảnh'
+                : 'Tải lại từ URL',
+            onConfirm: _method == UploadMethod.device
+                ? _onFileSelected
+                : _onUrlSubmitted,
+            cancelLabel: 'Quay lại',
+          ),
+        ],
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHeader("Chỉnh sửa ảnh"),
-        const SizedBox(height: 32),
-        
-        // Khu vực Preview hình tròn
+        _buildHeader('Chỉnh sửa ảnh'),
+        const SizedBox(height: 20),
         Container(
-          width: 220,
-          height: 220,
+          height: 320,
+          width: double.infinity,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
             color: innerBackground,
             border: Border.all(color: borderGrey, width: 1),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: ClipOval(
-            child: Transform.scale(
-              scale: _zoomValue,
-              // TODO: Thay Placeholder bằng ảnh thật
-              child: Image.network(
-                _method == UploadMethod.url ? _urlController.text : "https://via.placeholder.com/300",
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: textMuted),
-              ),
+          clipBehavior: Clip.hardEdge,
+          child: Crop(
+            image: selectedImage,
+            controller: _cropController,
+            withCircleUi: true,
+            interactive: true,
+            fixCropRect: true,
+            maskColor: Colors.black.withValues(alpha: 0.45),
+            baseColor: innerBackground,
+            willUpdateScale: (newScale) => newScale <= 5,
+            progressIndicator: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
+            onCropped: _onCropped,
           ),
         ),
-        
+        const SizedBox(height: 12),
+        Text(
+          'Kéo ảnh để di chuyển. Dùng lăn chuột hoặc chụm để phóng to/thu nhỏ.',
+          style: TextStyle(color: textMuted, fontSize: 13),
+        ),
+        if (_isCropping || _isSaving) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: primaryRed,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _isSaving
+                    ? 'Đang tải ảnh và cập nhật hồ sơ...'
+                    : 'Đang xử lý ảnh...',
+                style: TextStyle(color: textMuted, fontSize: 13),
+              ),
+            ],
+          ),
+        ],
+        if (_errorMessage != null) ...[
+          const SizedBox(height: 12),
+          _buildErrorBanner(_errorMessage!),
+        ],
         const SizedBox(height: 24),
-        Text("Kéo để điều chỉnh hoặc phóng to/thu nhỏ", style: TextStyle(color: textMuted, fontSize: 13)),
-        
-        // Thanh trượt Zoom
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: primaryRed,
-            inactiveTrackColor: borderGrey,
-            thumbColor: primaryRed,
-            overlayColor: primaryRed.withOpacity(0.1),
-          ),
-          child: Slider(
-            value: _zoomValue,
-            min: 1.0,
-            max: 3.0,
-            onChanged: (val) => setState(() => _zoomValue = val),
-          ),
-        ),
-        
-        const SizedBox(height: 32),
         _buildFooterButtons(
-          onCancel: () => setState(() => _currentStep = UploadStep.select),
-          confirmLabel: "Xác nhận & Lưu",
-          onConfirm: _handleFinalConfirm,
-          cancelLabel: "Quay lại",
+          onCancel: _isBusy
+              ? null
+              : () => setState(() => _currentStep = UploadStep.select),
+          confirmLabel: _isSaving ? 'Đang lưu...' : 'Xác nhận & Lưu',
+          onConfirm: _isBusy ? null : _handleFinalConfirm,
+          cancelLabel: 'Quay lại',
         ),
       ],
     );
@@ -1187,16 +1491,49 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          title, 
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textDark),
+          title,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: textDark,
+          ),
         ),
         IconButton(
-          icon: Icon(Icons.close, color: textMuted), 
-          onPressed: () => Navigator.pop(context),
+          icon: Icon(Icons.close, color: textMuted),
+          onPressed: _isBusy ? null : () => Navigator.pop(context),
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(), // Thu gọn padding mặc định của icon
+          constraints:
+              const BoxConstraints(), // Thu gọn padding mặc định của icon
         ),
       ],
+    );
+  }
+
+  Widget _buildErrorBanner(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFCA5A5), width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.brandRed,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: AppColors.brandRed, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1204,38 +1541,52 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: innerBackground, 
+        color: innerBackground,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderGrey, width: 0.5), // Thêm viền mờ cho khu vực tab
+        border: Border.all(color: borderGrey, width: 0.5),
       ),
       child: Row(
         children: [
-          _tabItem("Tải ảnh lên", UploadMethod.device),
-          _tabItem("Nhập URL", UploadMethod.url),
+          _tabItem('Tải ảnh lên', UploadMethod.device),
+          _tabItem('Nhập URL', UploadMethod.url),
         ],
       ),
     );
   }
 
   Widget _tabItem(String label, UploadMethod method) {
-    bool isSelected = _method == method;
+    final isSelected = _method == method;
+
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _method = method),
+        onTap: _isBusy
+            ? null
+            : () {
+                setState(() {
+                  _errorMessage = null;
+                  _method = method;
+                });
+              },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: isSelected ? Colors.white : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
-            boxShadow: isSelected 
-                ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))] 
-                : [],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : const [],
           ),
           alignment: Alignment.center,
           child: Text(
-            label, 
+            label,
             style: TextStyle(
-              color: isSelected ? primaryRed : textMuted, 
+              color: isSelected ? primaryRed : textMuted,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               fontSize: 14,
             ),
@@ -1247,7 +1598,7 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
 
   Widget _buildDevicePicker() {
     return InkWell(
-      onTap: _onFileSelected,
+      onTap: _isBusy ? null : _onFileSelected,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(48),
@@ -1262,19 +1613,38 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: primaryRed.withOpacity(0.05),
+                color: primaryRed.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.cloud_upload_outlined, size: 32, color: primaryRed),
+              child: _isPicking
+                  ? SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: primaryRed,
+                      ),
+                    )
+                  : Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 32,
+                      color: primaryRed,
+                    ),
             ),
             const SizedBox(height: 16),
             Text(
-              "Nhấn để chọn file từ máy tính", 
-              style: TextStyle(fontWeight: FontWeight.w500, color: textDark, fontSize: 15),
+              _isPicking
+                  ? 'Đang mở thư viện ảnh...'
+                  : 'Nhấn để chọn ảnh từ thiết bị',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: textDark,
+                fontSize: 15,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              "Hỗ trợ JPG, PNG. Tối đa 5MB", 
+              'Hỗ trợ JPG, JPEG, PNG, WEBP. Tối đa 5MB',
               style: TextStyle(color: textMuted, fontSize: 13),
             ),
           ],
@@ -1288,31 +1658,41 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Dán link ảnh đại diện", 
-          style: TextStyle(fontWeight: FontWeight.w500, color: textDark, fontSize: 14),
+          'Dán link ảnh đại diện',
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            color: textDark,
+            fontSize: 14,
+          ),
         ),
         const SizedBox(height: 10),
         TextFormField(
           controller: _urlController,
+          enabled: !_isBusy,
+          onFieldSubmitted: (_) => _onUrlSubmitted(),
           style: TextStyle(color: textDark),
           decoration: InputDecoration(
-            hintText: "https://...",
-            hintStyle: TextStyle(color: textMuted.withOpacity(0.6)),
+            hintText: 'https://...',
+            hintStyle: TextStyle(color: textMuted.withValues(alpha: 0.6)),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            suffixIcon: _isDownloading 
-              ? const Padding(
-                  padding: EdgeInsets.all(14), 
-                  child: SizedBox(
-                    width: 20, height: 20, 
-                    child: CircularProgressIndicator(strokeWidth: 2)
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            suffixIcon: _isDownloading
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.arrow_forward_rounded, color: primaryRed),
+                    onPressed: _onUrlSubmitted,
                   ),
-                )
-              : IconButton(
-                  icon: Icon(Icons.arrow_forward_rounded, color: primaryRed),
-                  onPressed: _onUrlSubmitted,
-                ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: borderGrey, width: 1),
@@ -1323,42 +1703,55 @@ class _AvatarUploadDialogState extends State<AvatarUploadDialog> {
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Hỗ trợ JPG, JPEG, PNG, WEBP. Tối đa 5MB',
+          style: TextStyle(color: textMuted, fontSize: 12),
+        ),
       ],
     );
   }
 
   Widget _buildFooterButtons({
-    required VoidCallback onCancel,
+    required VoidCallback? onCancel,
     required String confirmLabel,
-    required VoidCallback? onConfirm,
-    String cancelLabel = "Hủy",
+    required Future<void> Function()? onConfirm,
+    String cancelLabel = 'Hủy',
     bool showConfirm = true,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         TextButton(
-          onPressed: onCancel, 
+          onPressed: onCancel,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             foregroundColor: textMuted,
           ),
-          child: Text(cancelLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+          child: Text(
+            cancelLabel,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
         if (showConfirm) ...[
           const SizedBox(width: 12),
           ElevatedButton(
-            onPressed: onConfirm,
+            onPressed: onConfirm == null ? null : () => onConfirm(),
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryRed,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: Text(confirmLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(
+              confirmLabel,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
-        ]
+        ],
       ],
     );
   }
