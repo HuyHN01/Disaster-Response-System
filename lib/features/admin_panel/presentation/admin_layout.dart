@@ -15,11 +15,14 @@
 //                 └── child         — injected by GoRouter ShellRoute
 
 import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_models.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:typed_data';
 
 // ── Sidebar animation constants ───────────────────────────────────────────────
 const Duration kAdminSidebarDuration = Duration(milliseconds: 220);
@@ -138,7 +141,7 @@ class _AdminLayoutState extends State<AdminLayout> {
 // =============================================================================
 // ADMIN SIDEBAR
 // =============================================================================
-class AdminSidebar extends StatelessWidget {
+class AdminSidebar extends ConsumerWidget {
   final int selectedIndex;
   final bool isCollapsed;
   final ValueChanged<int> onItemSelected;
@@ -153,7 +156,37 @@ class AdminSidebar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(adminSessionProfileProvider);
+
+    final roleText = profileAsync.maybeWhen(
+      data: (profile) {
+        final role = profile?.role;
+        if (role == UserRoles.superAdmin) return 'Quản trị viên cấp cao';
+        if (role == UserRoles.admin) return 'Quản trị viên';
+        return 'Người dùng hệ thống';
+      },
+      orElse: () => 'Đang tải...',
+    );
+
+    final displayNameText = profileAsync.maybeWhen(
+      data: (profile) {
+        final name = (profile?.displayName ?? '').trim();
+        return name.isEmpty ? 'Chưa cập nhật tên' : name;
+      },
+      orElse: () => 'Đang tải hồ sơ...',
+    );
+
+    final photoUrl = profileAsync.maybeWhen(
+      data: (profile) => profile?.photoUrl,
+      orElse: () => null,
+    );
+
+    final avatarRefreshKey = profileAsync.maybeWhen(
+      data: (profile) => profile?.updatedAt?.millisecondsSinceEpoch,
+      orElse: () => null,
+    );
+
     return AnimatedContainer(
       duration: kAdminSidebarDuration,
       curve: kAdminSidebarCurve,
@@ -278,39 +311,34 @@ class AdminSidebar extends StatelessWidget {
                       ? MainAxisAlignment.center
                       : MainAxisAlignment.start,
                   children: [
-                    const CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppColors.brandRed,
-                      child: Text(
-                        'AD',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    _FooterAvatar(
+                      photoUrl: photoUrl,
+                      initials: _initialsFromName(displayNameText),
+                      refreshKey: avatarRefreshKey,
                     ),
                     AnimatedSize(
                       duration: kAdminSidebarDuration,
                       curve: kAdminSidebarCurve,
                       child: isCollapsed
                           ? const SizedBox.shrink()
-                          : const Padding(
+                          : Padding(
                               padding: EdgeInsets.only(left: 10),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Quản trị viên',
-                                    style: TextStyle(
+                                    roleText,
+                                    style: const TextStyle(
                                       color: AppColors.textPrimary,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    'admin@omnidisaster.org',
-                                    style: TextStyle(
+                                    displayNameText,
+                                    style: const TextStyle(
                                       color: AppColors.textMuted,
                                       fontSize: 11,
                                     ),
@@ -327,6 +355,118 @@ class AdminSidebar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  String _initialsFromName(String raw) {
+    final parts = raw.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty);
+    if (parts.isEmpty) return 'AD';
+    if (parts.length == 1) {
+      final word = parts.first;
+      final take = word.length >= 2 ? 2 : 1;
+      return word.substring(0, take).toUpperCase();
+    }
+    final first = parts.first.substring(0, 1).toUpperCase();
+    final last = parts.last.substring(0, 1).toUpperCase();
+    return '$first$last';
+  }
+}
+
+class _FooterAvatar extends ConsumerStatefulWidget {
+  const _FooterAvatar({
+    required this.photoUrl,
+    required this.initials,
+    this.refreshKey,
+  });
+
+  final String? photoUrl;
+  final String initials;
+  final int? refreshKey;
+
+  @override
+  ConsumerState<_FooterAvatar> createState() => _FooterAvatarState();
+}
+
+class _FooterAvatarState extends ConsumerState<_FooterAvatar> {
+  late Future<Uint8List?> _avatarBytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _avatarBytesFuture = _loadAvatarBytes(widget.photoUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FooterAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoUrl != widget.photoUrl ||
+        oldWidget.refreshKey != widget.refreshKey) {
+      _avatarBytesFuture = _loadAvatarBytes(widget.photoUrl);
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytes(String? rawUrl) async {
+    final normalized = rawUrl?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+
+    try {
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: normalized)
+          .timeout(const Duration(seconds: 20));
+      return downloaded.bytes;
+    } catch (error) {
+      debugPrint('Footer avatar bytes fetch failed for URL: $normalized');
+      debugPrint('Footer avatar bytes fetch error: $error');
+      return null;
+    }
+  }
+
+  Widget _fallback() {
+    return Center(
+      child: Text(
+        widget.initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = (widget.photoUrl ?? '').trim();
+    final hasPhoto = normalized.isNotEmpty;
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: AppColors.brandRed,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: hasPhoto
+          ? FutureBuilder<Uint8List?>(
+              key: ValueKey('${widget.refreshKey ?? 0}-$normalized'),
+              future: _avatarBytesFuture,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                if (bytes == null || bytes.isEmpty) {
+                  return _fallback();
+                }
+
+                return Image.memory(
+                  bytes,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                );
+              },
+            )
+          : _fallback(),
     );
   }
 }
