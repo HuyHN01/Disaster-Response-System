@@ -134,18 +134,20 @@ class _PageHeader extends StatelessWidget {
 // =============================================================================
 // PROFILE CARD
 // =============================================================================
-class _ProfileCard extends StatefulWidget {
+class _ProfileCard extends ConsumerStatefulWidget {
   const _ProfileCard({required this.profile});
 
   final AdminUserProfile? profile;
 
   @override
-  State<_ProfileCard> createState() => _ProfileCardState();
+  ConsumerState<_ProfileCard> createState() => _ProfileCardState();
 }
 
-class _ProfileCardState extends State<_ProfileCard> {
+class _ProfileCardState extends ConsumerState<_ProfileCard> {
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _emailCtrl;
+  bool _isEditingDisplayName = false;
+  bool _isSavingProfile = false;
   bool _saved = false;
 
   @override
@@ -162,7 +164,7 @@ class _ProfileCardState extends State<_ProfileCard> {
     super.didUpdateWidget(oldWidget);
 
     final newDisplayName = widget.profile?.displayName ?? '';
-    if (_displayNameCtrl.text != newDisplayName) {
+    if (!_isEditingDisplayName && _displayNameCtrl.text != newDisplayName) {
       _displayNameCtrl.text = newDisplayName;
     }
 
@@ -195,10 +197,70 @@ class _ProfileCardState extends State<_ProfileCard> {
     return 'Ngày tạo tài khoản: $day Tháng $month, $year';
   }
 
-  void _onSave() {
-    setState(() => _saved = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _saved = false);
+  bool get _hasDisplayNameChange {
+    final currentName = _displayNameCtrl.text.trim();
+    final initialName = (widget.profile?.displayName ?? '').trim();
+    return currentName.isNotEmpty && currentName != initialName;
+  }
+
+  Future<void> _onSave() async {
+    if (_isSavingProfile) return;
+
+    if (!_hasDisplayNameChange) {
+      setState(() => _saved = true);
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _saved = false);
+      });
+      return;
+    }
+
+    setState(() {
+      _isSavingProfile = true;
+      _saved = false;
+    });
+
+    try {
+      await ref
+          .read(adminAuthRepositoryProvider)
+          .updateCurrentAdminDisplayName(displayName: _displayNameCtrl.text);
+
+      if (!mounted) return;
+      setState(() {
+        _isSavingProfile = false;
+        _isEditingDisplayName = false;
+        _saved = true;
+      });
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _saved = false);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSavingProfile = false);
+      final message = e is AdminAuthException
+          ? e.message
+          : 'Không thể cập nhật tên hiển thị. Vui lòng thử lại.';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.brandRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+  }
+
+  void _toggleDisplayNameEditing() {
+    if (_isSavingProfile) return;
+    setState(() {
+      if (_isEditingDisplayName) {
+        _displayNameCtrl.text = widget.profile?.displayName ?? '';
+        _isEditingDisplayName = false;
+      } else {
+        _isEditingDisplayName = true;
+      }
     });
   }
 
@@ -226,7 +288,11 @@ class _ProfileCardState extends State<_ProfileCard> {
                       color: AppColors.statIconRedBg,
                       border: Border.all(color: AppColors.border, width: 3),
                     ),
-                    child: _Avatar(photoUrl: widget.profile?.photoURL),
+                    child: _Avatar(
+                      photoUrl:
+                          widget.profile?.photoURL ??
+                          FirebaseAuth.instance.currentUser?.photoURL,
+                    ),
                   ),
                   // Camera badge
                   Positioned(
@@ -314,6 +380,20 @@ class _ProfileCardState extends State<_ProfileCard> {
                         label: 'Tên hiển thị',
                         controller: _displayNameCtrl,
                         hintText: 'Nhập tên hiển thị',
+                        readOnly: !_isEditingDisplayName || _isSavingProfile,
+                        suffixIcon: IconButton(
+                          onPressed: _toggleDisplayNameEditing,
+                          tooltip: _isEditingDisplayName
+                              ? 'Hủy chỉnh sửa'
+                              : 'Chỉnh sửa tên hiển thị',
+                          icon: Icon(
+                            _isEditingDisplayName
+                                ? Icons.close_rounded
+                                : Icons.edit_rounded,
+                            size: 18,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -342,6 +422,20 @@ class _ProfileCardState extends State<_ProfileCard> {
                     label: 'Tên hiển thị',
                     controller: _displayNameCtrl,
                     hintText: 'Nhập tên hiển thị',
+                    readOnly: !_isEditingDisplayName || _isSavingProfile,
+                    suffixIcon: IconButton(
+                      onPressed: _toggleDisplayNameEditing,
+                      tooltip: _isEditingDisplayName
+                          ? 'Hủy chỉnh sửa'
+                          : 'Chỉnh sửa tên hiển thị',
+                      icon: Icon(
+                        _isEditingDisplayName
+                            ? Icons.close_rounded
+                            : Icons.edit_rounded,
+                        size: 18,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _DarkTextField(
@@ -369,7 +463,11 @@ class _ProfileCardState extends State<_ProfileCard> {
               duration: const Duration(milliseconds: 250),
               child: _saved
                   ? _SuccessButton(key: const ValueKey('success'))
-                  : _SaveButton(key: const ValueKey('save'), onTap: _onSave),
+                  : _SaveButton(
+                      key: const ValueKey('save'),
+                      onTap: _isSavingProfile ? null : _onSave,
+                      isLoading: _isSavingProfile,
+                    ),
             ),
           ),
         ],
@@ -378,29 +476,95 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 }
 
-class _Avatar extends StatelessWidget {
+class _Avatar extends ConsumerStatefulWidget {
   const _Avatar({this.photoUrl});
 
   final String? photoUrl;
 
   @override
+  ConsumerState<_Avatar> createState() => _AvatarState();
+}
+
+class _AvatarState extends ConsumerState<_Avatar> {
+  late Future<Uint8List?> _avatarBytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _avatarBytesFuture = _loadAvatarBytes(widget.photoUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Avatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoUrl != widget.photoUrl) {
+      _avatarBytesFuture = _loadAvatarBytes(widget.photoUrl);
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytes(String? rawUrl) async {
+    final normalizedUrl = rawUrl?.trim() ?? '';
+    if (normalizedUrl.isEmpty) return null;
+
+    try {
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: normalizedUrl)
+          .timeout(const Duration(seconds: 20));
+      return downloaded.bytes;
+    } catch (error) {
+      debugPrint('Avatar bytes fetch failed for URL: $normalizedUrl');
+      debugPrint('Avatar bytes fetch error: $error');
+      return null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final hasPhoto = photoUrl != null && photoUrl!.trim().isNotEmpty;
+    final normalizedPhotoUrl = widget.photoUrl?.trim() ?? '';
+    final hasPhoto = normalizedPhotoUrl.isNotEmpty;
 
     if (!hasPhoto) {
       return const Icon(Icons.person, size: 40, color: AppColors.brandRed);
     }
 
-    return ClipOval(
-      child: Image.network(
-        photoUrl!,
-        width: 80,
-        height: 80,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return const Icon(Icons.person, size: 40, color: AppColors.brandRed);
-        },
-      ),
+    return FutureBuilder<Uint8List?>(
+      key: ValueKey(normalizedPhotoUrl),
+      future: _avatarBytesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            width: 80,
+            height: 80,
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        final bytes = snapshot.data;
+        if (bytes == null || bytes.isEmpty) {
+          return const Icon(
+            Icons.broken_image_outlined,
+            size: 38,
+            color: AppColors.textMuted,
+          );
+        }
+
+        return ClipOval(
+          child: Image.memory(
+            bytes,
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          ),
+        );
+      },
     );
   }
 }
@@ -860,17 +1024,28 @@ class _EyeToggle extends StatelessWidget {
 
 /// Animated Save Profile button.
 class _SaveButton extends StatelessWidget {
-  const _SaveButton({super.key, required this.onTap});
-  final VoidCallback onTap;
+  const _SaveButton({super.key, required this.onTap, this.isLoading = false});
+
+  final Future<void> Function()? onTap;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.save_rounded, size: 16, color: Colors.white),
-      label: const Text(
-        'Lưu hồ sơ',
-        style: TextStyle(
+      onPressed: onTap == null ? null : () => onTap!(),
+      icon: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+      label: Text(
+        isLoading ? 'Đang lưu...' : 'Lưu hồ sơ',
+        style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w600,
           fontSize: 14,
@@ -878,6 +1053,8 @@ class _SaveButton extends StatelessWidget {
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.brandRed,
+        disabledBackgroundColor: AppColors.brandRed,
+        disabledForegroundColor: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 20),

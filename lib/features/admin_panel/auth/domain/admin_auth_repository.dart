@@ -233,8 +233,49 @@ class AdminAuthRepository {
     } on FirebaseAuthException catch (e) {
       throw AdminAuthException(_mapAuthError(e));
     } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        // Avatar has already been updated in Firebase Auth.
+        // Do not block UX when Firestore profile sync is denied by rules.
+        return;
+      }
+
       try {
         await user.updatePhotoURL(previousPhotoUrl);
+      } catch (_) {
+        // Keep original error as the source of truth.
+      }
+      throw AdminAuthException(_mapFirestoreError(e));
+    }
+  }
+
+  Future<void> updateCurrentAdminDisplayName({
+    required String displayName,
+  }) async {
+    final normalizedDisplayName = displayName.trim();
+    if (normalizedDisplayName.isEmpty) {
+      throw const AdminAuthException('Tên hiển thị không được để trống.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AdminAuthException(
+        'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    final previousDisplayName = user.displayName;
+
+    try {
+      await user.updateDisplayName(normalizedDisplayName);
+      await _usersRef.doc(user.uid).set({
+        'displayName': normalizedDisplayName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseAuthException catch (e) {
+      throw AdminAuthException(_mapAuthError(e));
+    } on FirebaseException catch (e) {
+      try {
+        await user.updateDisplayName(previousDisplayName);
       } catch (_) {
         // Keep original error as the source of truth.
       }

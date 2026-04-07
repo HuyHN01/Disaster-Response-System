@@ -51,12 +51,15 @@ class AdminUserProfile {
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data() ?? <String, dynamic>{};
+    final resolvedPhotoUrl =
+        _asTrimmedString(data['photoURL']) ??
+        _asTrimmedString(data['photoUrl']);
 
     return AdminUserProfile(
       uid: (data['uid'] as String?) ?? doc.id,
       email: (data['email'] as String?) ?? '',
       displayName: (data['displayName'] as String?) ?? '',
-      photoURL: data['photoURL'] as String?,
+      photoURL: resolvedPhotoUrl,
       role: _asInt(data['role'], UserRoles.user),
       status: _asInt(data['status'], UserStatuses.pending),
       createdAt: _asDateTime(data['createdAt']),
@@ -77,5 +80,12 @@ class AdminUserProfile {
     if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
     return null;
+  }
+
+  static String? _asTrimmedString(dynamic value) {
+    if (value is! String) return null;
+    final normalized = value.trim();
+    if (normalized.isEmpty) return null;
+    return normalized;
   }
 }
