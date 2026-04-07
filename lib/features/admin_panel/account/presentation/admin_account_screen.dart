@@ -611,14 +611,14 @@ class _ProfileCardError extends StatelessWidget {
 // =============================================================================
 // CHANGE PASSWORD CARD
 // =============================================================================
-class _ChangePasswordCard extends StatefulWidget {
+class _ChangePasswordCard extends ConsumerStatefulWidget {
   const _ChangePasswordCard();
 
   @override
-  State<_ChangePasswordCard> createState() => _ChangePasswordCardState();
+  ConsumerState<_ChangePasswordCard> createState() => _ChangePasswordCardState();
 }
 
-class _ChangePasswordCardState extends State<_ChangePasswordCard> {
+class _ChangePasswordCardState extends ConsumerState<_ChangePasswordCard> {
   final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -626,6 +626,7 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
   bool _obscureCurrent = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+  bool _isUpdating = false;
   String? _errorMsg;
 
   @override
@@ -636,28 +637,65 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
     super.dispose();
   }
 
-  void _onUpdate() {
+  Future<void> _onUpdate() async {
+    if (_isUpdating) return;
+
     setState(() => _errorMsg = null);
-    if (_newCtrl.text != _confirmCtrl.text) {
+
+    final currentPassword = _currentCtrl.text;
+    final newPassword = _newCtrl.text;
+    final confirmPassword = _confirmCtrl.text;
+
+    if (currentPassword.trim().isEmpty) {
+      setState(() => _errorMsg = 'Vui lòng nhập mật khẩu hiện tại.');
+      return;
+    }
+
+    if (newPassword != confirmPassword) {
       setState(() => _errorMsg = 'Mật khẩu mới và xác nhận không khớp.');
       return;
     }
-    if (_newCtrl.text.length < 8) {
+    if (newPassword.length < 8) {
       setState(() => _errorMsg = 'Mật khẩu mới phải có ít nhất 8 ký tự.');
       return;
     }
-    // TODO: call auth service
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Mật khẩu đã được cập nhật!'),
-        backgroundColor: const Color(0xFF16A34A),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-    _currentCtrl.clear();
-    _newCtrl.clear();
-    _confirmCtrl.clear();
+
+    setState(() => _isUpdating = true);
+
+    try {
+      await ref.read(adminAuthRepositoryProvider).changeCurrentAdminPassword(
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+          );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Mật khẩu đã được cập nhật thành công!'),
+          backgroundColor: const Color(0xFF16A34A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+
+      _currentCtrl.clear();
+      _newCtrl.clear();
+      _confirmCtrl.clear();
+      setState(() {
+        _errorMsg = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = e is AdminAuthException
+            ? e.message
+            : 'Không thể đổi mật khẩu. Vui lòng thử lại.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+      }
+    }
   }
 
   @override
@@ -676,6 +714,9 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
             controller: _currentCtrl,
             hintText: '••••••••••••',
             obscureText: _obscureCurrent,
+            onChanged: (_) {
+              if (_errorMsg != null) setState(() => _errorMsg = null);
+            },
             suffixIcon: _EyeToggle(
               obscure: _obscureCurrent,
               onToggle: () =>
@@ -697,6 +738,11 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                         controller: _newCtrl,
                         hintText: '••••••••',
                         obscureText: _obscureNew,
+                        onChanged: (_) {
+                          setState(() {
+                            if (_errorMsg != null) _errorMsg = null;
+                          });
+                        },
                         suffixIcon: _EyeToggle(
                           obscure: _obscureNew,
                           onToggle: () =>
@@ -711,6 +757,9 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                         controller: _confirmCtrl,
                         hintText: '••••••••',
                         obscureText: _obscureConfirm,
+                        onChanged: (_) {
+                          if (_errorMsg != null) setState(() => _errorMsg = null);
+                        },
                         suffixIcon: _EyeToggle(
                           obscure: _obscureConfirm,
                           onToggle: () => setState(
@@ -729,6 +778,11 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                     controller: _newCtrl,
                     hintText: '••••••••',
                     obscureText: _obscureNew,
+                    onChanged: (_) {
+                      setState(() {
+                        if (_errorMsg != null) _errorMsg = null;
+                      });
+                    },
                     suffixIcon: _EyeToggle(
                       obscure: _obscureNew,
                       onToggle: () =>
@@ -741,6 +795,9 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
                     controller: _confirmCtrl,
                     hintText: '••••••••',
                     obscureText: _obscureConfirm,
+                    onChanged: (_) {
+                      if (_errorMsg != null) setState(() => _errorMsg = null);
+                    },
                     suffixIcon: _EyeToggle(
                       obscure: _obscureConfirm,
                       onToggle: () =>
@@ -797,18 +854,20 @@ class _ChangePasswordCardState extends State<_ChangePasswordCard> {
             width: double.infinity,
             height: 46,
             child: ElevatedButton(
-              onPressed: _onUpdate,
+              onPressed: _isUpdating ? null : _onUpdate,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.brandRed,
+                disabledBackgroundColor: AppColors.brandRed,
+                disabledForegroundColor: Colors.white,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: const Text(
-                'CẬP NHẬT MẬT KHẨU',
-                style: TextStyle(
+              child: Text(
+                _isUpdating ? 'ĐANG CẬP NHẬT...' : 'CẬP NHẬT MẬT KHẨU',
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.1,

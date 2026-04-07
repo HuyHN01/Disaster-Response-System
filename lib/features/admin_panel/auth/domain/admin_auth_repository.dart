@@ -277,6 +277,64 @@ class AdminAuthRepository {
     }
   }
 
+  Future<void> changeCurrentAdminPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final normalizedCurrent = currentPassword.trim();
+    final normalizedNew = newPassword.trim();
+
+    if (normalizedCurrent.isEmpty) {
+      throw const AdminAuthException('Vui lòng nhập mật khẩu hiện tại.');
+    }
+    if (normalizedNew.isEmpty) {
+      throw const AdminAuthException('Vui lòng nhập mật khẩu mới.');
+    }
+    if (normalizedNew.length < 8) {
+      throw const AdminAuthException('Mật khẩu mới phải có ít nhất 8 ký tự.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AdminAuthException(
+        'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    final email = (user.email ?? '').trim();
+    if (email.isEmpty) {
+      throw const AdminAuthException(
+        'Không thể xác thực tài khoản hiện tại. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: normalizedCurrent,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(normalizedNew);
+
+      await _usersRef.doc(user.uid).set({
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw const AdminAuthException('Mật khẩu hiện tại không chính xác.');
+      }
+      if (e.code == 'requires-recent-login') {
+        throw const AdminAuthException(
+          'Phiên xác thực không còn mới. Vui lòng đăng nhập lại rồi thử đổi mật khẩu.',
+        );
+      }
+      throw AdminAuthException(_mapAuthError(e));
+    } on FirebaseException catch (e) {
+      throw AdminAuthException(_mapFirestoreError(e));
+    }
+  }
+
   Future<DownloadedAvatarData> fetchAvatarFromUrl({required String url}) async {
     final normalizedUrl = url.trim();
     if (normalizedUrl.isEmpty) {
