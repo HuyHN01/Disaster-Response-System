@@ -15,10 +15,8 @@ import 'dart:typed_data';
 
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 // ─── Borrow AppColors from the existing dashboard file ───────────────────────
@@ -1134,40 +1132,21 @@ class _AvatarUploadDialogState extends ConsumerState<AvatarUploadDialog> {
     });
 
     try {
-      final response = await http
-          .get(uri, headers: {'Accept': 'image/*'})
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw AdminAuthException(
-          'Không thể tải ảnh từ URL (HTTP ${response.statusCode}).',
-        );
-      }
-
-      final bytes = response.bodyBytes;
-      if (bytes.isEmpty) {
-        throw const AdminAuthException('Dữ liệu ảnh từ URL đang rỗng.');
-      }
-      if (bytes.length > _maxFileSizeBytes) {
-        throw const AdminAuthException('Kích thước ảnh vượt quá 5MB.');
-      }
-
-      final contentType = _resolveContentTypeFromUrl(
-        uri: uri,
-        responseContentType: response.headers['content-type'],
-      );
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: rawUrl)
+          .timeout(const Duration(seconds: 30));
 
       if (!mounted) return;
       setState(() {
         _method = UploadMethod.url;
-        _selectedImageBytes = bytes;
-        _selectedContentType = contentType;
+        _selectedImageBytes = downloaded.bytes;
+        _selectedContentType = downloaded.contentType;
         _currentStep = UploadStep.crop;
       });
-    } on http.ClientException catch (e) {
-      if (!mounted) return;
-      setState(() => _errorMessage = _toUserMessage(e));
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Avatar URL download error: $e');
       setState(() => _errorMessage = _toUserMessage(e));
     } finally {
       if (mounted) {
@@ -1196,60 +1175,9 @@ class _AvatarUploadDialogState extends ConsumerState<AvatarUploadDialog> {
     }
   }
 
-  String _extractExtensionFromPath(String path) {
-    final normalizedPath = path.trim().toLowerCase();
-    final lastDot = normalizedPath.lastIndexOf('.');
-    if (lastDot >= 0 && lastDot < normalizedPath.length - 1) {
-      return normalizedPath.substring(lastDot + 1);
-    }
-    return '';
-  }
-
-  String? _normalizeImageContentType(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final normalized = value.split(';').first.trim().toLowerCase();
-    if (normalized == 'image/jpg') return 'image/jpeg';
-    return normalized;
-  }
-
-  bool _isAllowedImageContentType(String contentType) {
-    return contentType == 'image/jpeg' ||
-        contentType == 'image/png' ||
-        contentType == 'image/webp';
-  }
-
-  String _resolveContentTypeFromUrl({
-    required Uri uri,
-    required String? responseContentType,
-  }) {
-    final normalizedType = _normalizeImageContentType(responseContentType);
-    if (normalizedType != null && _isAllowedImageContentType(normalizedType)) {
-      return normalizedType;
-    }
-
-    final extension = _extractExtensionFromPath(uri.path);
-    if (_allowedExtensions.contains(extension)) {
-      return _contentTypeFromExtension(extension);
-    }
-
-    throw const AdminAuthException(
-      'Định dạng ảnh từ URL không hỗ trợ. Vui lòng dùng JPG, JPEG, PNG hoặc WEBP.',
-    );
-  }
-
   String _toUserMessage(Object error) {
     if (error is TimeoutException) {
       return 'Hết thời gian tải ảnh từ URL. Vui lòng thử lại.';
-    }
-    if (error is http.ClientException) {
-      final raw = error.message.toLowerCase();
-      if (kIsWeb &&
-          (raw.contains('xmlhttprequest') ||
-              raw.contains('cors') ||
-              raw.contains('cross-origin'))) {
-        return 'Không thể tải ảnh từ website này do chặn CORS/hotlink trên trình duyệt. Vui lòng dùng URL ảnh từ nguồn khác hoặc tải file từ thiết bị.';
-      }
-      return 'Không thể kết nối tới URL ảnh. Vui lòng kiểm tra lại link hoặc mạng Internet.';
     }
     if (error is AdminAuthException) return error.message;
     return 'Đã có lỗi khi xử lý ảnh. Vui lòng thử lại.';

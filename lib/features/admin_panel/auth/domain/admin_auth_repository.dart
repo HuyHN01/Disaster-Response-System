@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,6 +18,13 @@ class AdminAuthException implements Exception {
   String toString() => message;
 }
 
+class DownloadedAvatarData {
+  final Uint8List bytes;
+  final String contentType;
+
+  const DownloadedAvatarData({required this.bytes, required this.contentType});
+}
+
 class AdminAuthRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
@@ -27,7 +37,8 @@ class AdminAuthRepository {
   }) : _auth = auth,
        _firestore = firestore,
        _functions =
-           functions ?? FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+           functions ??
+           FirebaseFunctions.instanceFor(region: 'asia-southeast1');
 
   CollectionReference<Map<String, dynamic>> get _usersRef {
     return _firestore.collection('users');
@@ -161,7 +172,9 @@ class AdminAuthRepository {
 
       final user = credential.user;
       if (user == null) {
-        throw const AdminAuthException('Không tìm thấy phiên đăng nhập hợp lệ.');
+        throw const AdminAuthException(
+          'Không tìm thấy phiên đăng nhập hợp lệ.',
+        );
       }
 
       final profile = await fetchUserProfile(user.uid);
@@ -204,7 +217,9 @@ class AdminAuthRepository {
 
     final user = _auth.currentUser;
     if (user == null) {
-      throw const AdminAuthException('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      throw const AdminAuthException(
+        'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      );
     }
 
     final previousPhotoUrl = user.photoURL;
@@ -224,6 +239,55 @@ class AdminAuthRepository {
         // Keep original error as the source of truth.
       }
       throw AdminAuthException(_mapFirestoreError(e));
+    }
+  }
+
+  Future<DownloadedAvatarData> fetchAvatarFromUrl({required String url}) async {
+    final normalizedUrl = url.trim();
+    if (normalizedUrl.isEmpty) {
+      throw const AdminAuthException('Vui lòng nhập URL ảnh.');
+    }
+
+    try {
+      final callable = _functions.httpsCallable('fetchAvatarFromUrl');
+      final result = await callable.call(<String, dynamic>{
+        'url': normalizedUrl,
+      });
+
+      final data = result.data;
+      if (data is! Map) {
+        throw const AdminAuthException('Dữ liệu ảnh trả về không hợp lệ.');
+      }
+
+      final base64Value = (data['bytesBase64'] as String?)?.trim() ?? '';
+      if (base64Value.isEmpty) {
+        throw const AdminAuthException(
+          'Không nhận được dữ liệu ảnh từ máy chủ.',
+        );
+      }
+
+      final contentTypeRaw = (data['contentType'] as String?)?.trim() ?? '';
+      final contentType = contentTypeRaw.isEmpty
+          ? 'image/jpeg'
+          : contentTypeRaw;
+
+      final imageBytes = base64Decode(base64Value);
+      if (imageBytes.isEmpty) {
+        throw const AdminAuthException('Dữ liệu ảnh từ máy chủ đang rỗng.');
+      }
+
+      return DownloadedAvatarData(bytes: imageBytes, contentType: contentType);
+    } on FirebaseFunctionsException catch (e) {
+      throw AdminAuthException(_mapCallableError(e));
+    } on FormatException {
+      throw const AdminAuthException(
+        'Không thể giải mã dữ liệu ảnh từ máy chủ.',
+      );
+    } catch (e) {
+      if (e is AdminAuthException) rethrow;
+      throw const AdminAuthException(
+        'Không thể tải ảnh từ URL. Vui lòng thử lại.',
+      );
     }
   }
 
@@ -273,37 +337,41 @@ class AdminAuthRepository {
     }
   }
 
-    String _mapCallableError(FirebaseFunctionsException error) {
-      switch (error.code) {
-        case 'invalid-argument':
-          return error.message ?? 'Dữ liệu không hợp lệ.';
-        case 'failed-precondition':
-          return error.message ?? 'Hệ thống đã có Super Admin. Đăng ký đã bị khóa.';
-        case 'already-exists':
-          return error.message ?? 'Email này đã được sử dụng.';
-        case 'permission-denied':
-          return error.message ?? 'Bạn không có quyền thực hiện thao tác này.';
-        case 'unauthenticated':
-          return error.message ?? 'Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.';
-        case 'unavailable':
-          return 'Cloud Functions chưa sẵn sàng hoặc chưa deploy. Vui lòng kiểm tra Firebase Functions và thử lại.';
-        case 'not-found':
-          return 'Không tìm thấy hàm backend registerInitialSuperAdmin. Hãy deploy Firebase Functions trước.';
-        default:
-          final rawMessage = error.message?.trim();
-          if (rawMessage != null && rawMessage.isNotEmpty) {
-            return rawMessage;
-          }
-          return 'Đã có lỗi backend (${error.code}). Vui lòng thử lại.';
-      }
+  String _mapCallableError(FirebaseFunctionsException error) {
+    switch (error.code) {
+      case 'invalid-argument':
+        return error.message ?? 'Dữ liệu không hợp lệ.';
+      case 'failed-precondition':
+        return error.message ?? 'Không thỏa điều kiện để thực thi thao tác.';
+      case 'already-exists':
+        return error.message ?? 'Email này đã được sử dụng.';
+      case 'permission-denied':
+        return error.message ?? 'Bạn không có quyền thực hiện thao tác này.';
+      case 'unauthenticated':
+        return error.message ??
+            'Phiên làm việc không hợp lệ. Vui lòng đăng nhập lại.';
+      case 'deadline-exceeded':
+        return error.message ??
+            'Yêu cầu xử lý quá thời gian. Vui lòng thử lại.';
+      case 'unavailable':
+        return 'Cloud Functions chưa sẵn sàng hoặc chưa deploy. Vui lòng kiểm tra Firebase Functions và thử lại.';
+      case 'not-found':
+        return 'Không tìm thấy hàm backend cần thiết. Hãy deploy Firebase Functions trước.';
+      default:
+        final rawMessage = error.message?.trim();
+        if (rawMessage != null && rawMessage.isNotEmpty) {
+          return rawMessage;
+        }
+        return 'Đã có lỗi backend (${error.code}). Vui lòng thử lại.';
     }
+  }
 }
 
 final adminAuthRepositoryProvider = Provider<AdminAuthRepository>((ref) {
   return AdminAuthRepository(
     auth: FirebaseAuth.instance,
     firestore: FirebaseFirestore.instance,
-      functions: FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
+    functions: FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
   );
 });
 

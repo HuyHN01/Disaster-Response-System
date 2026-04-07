@@ -81,6 +81,42 @@ function mapToHttpsError(error, fallbackMessage) {
   }
 }
 
+function inferImageContentType(rawUrl, headerValue) {
+  const normalizedHeader = String(headerValue || "")
+    .split(";")
+    .shift()
+    .trim()
+    .toLowerCase();
+
+  if (normalizedHeader === "image/jpg") {
+    return "image/jpeg";
+  }
+
+  const allowedFromHeader = ["image/jpeg", "image/png", "image/webp"];
+  if (allowedFromHeader.includes(normalizedHeader)) {
+    return normalizedHeader;
+  }
+
+  const pathname = (() => {
+    try {
+      return new URL(rawUrl).pathname.toLowerCase();
+    } catch (_) {
+      return "";
+    }
+  })();
+
+  if (pathname.endsWith(".png")) return "image/png";
+  if (pathname.endsWith(".webp")) return "image/webp";
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  throw new HttpsError(
+    "invalid-argument",
+    "Định dạng ảnh từ URL không hỗ trợ. Vui lòng dùng JPG, JPEG, PNG hoặc WEBP.",
+  );
+}
+
 async function getUserProfile(uid) {
   const snap = await db.collection(USERS_COLLECTION).doc(uid).get();
   if (!snap.exists) {
@@ -300,6 +336,92 @@ exports.createManagedUser = onCall(async (request) => {
     }
 
     throw mapToHttpsError(error, "Không thể tạo tài khoản mới.");
+  }
+});
+
+exports.fetchAvatarFromUrl = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Bạn cần đăng nhập để thực hiện thao tác này.");
+  }
+
+  const data = request.data || {};
+  const rawUrl = assertRequiredString(data.url, "URL ảnh");
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch (_) {
+    throw new HttpsError("invalid-argument", "URL không hợp lệ.");
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new HttpsError("invalid-argument", "URL phải bắt đầu bằng http:// hoặc https://");
+  }
+
+  const maxBytes = 5 * 1024 * 1024;
+  const timeoutMs = 20000;
+
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(parsedUrl.toString(), {
+      method: "GET",
+      redirect: "follow",
+      signal: abortController.signal,
+      headers: {
+        Accept: "image/*",
+        "User-Agent": "disaster-response-avatar-fetcher/1.0",
+      },
+    });
+
+    if (!response.ok) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Không thể tải ảnh từ URL (HTTP ${response.status}).`,
+      );
+    }
+
+    const contentType = inferImageContentType(
+      parsedUrl.toString(),
+      response.headers.get("content-type"),
+    );
+
+    const contentLengthHeader = Number.parseInt(response.headers.get("content-length") || "", 10);
+    if (Number.isFinite(contentLengthHeader) && contentLengthHeader > maxBytes) {
+      throw new HttpsError("invalid-argument", "Kích thước ảnh vượt quá 5MB.");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const imageBuffer = Buffer.from(arrayBuffer);
+
+    if (!imageBuffer.length) {
+      throw new HttpsError("invalid-argument", "Dữ liệu ảnh từ URL đang rỗng.");
+    }
+    if (imageBuffer.length > maxBytes) {
+      throw new HttpsError("invalid-argument", "Kích thước ảnh vượt quá 5MB.");
+    }
+
+    return {
+      contentType,
+      bytesBase64: imageBuffer.toString("base64"),
+      sizeBytes: imageBuffer.length,
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    if (error?.name === "AbortError") {
+      throw new HttpsError("deadline-exceeded", "Hết thời gian tải ảnh từ URL. Vui lòng thử lại.");
+    }
+
+    throw new HttpsError(
+      "internal",
+      "Không thể tải ảnh từ URL trên máy chủ. Vui lòng thử lại.",
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
 });
 
