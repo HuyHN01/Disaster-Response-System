@@ -51,11 +51,20 @@ abstract final class RouteNames {
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
   static const String adminDashboard = '/admin';
 
+  /// Admin login screen.
+  static const String adminLogin = '/admin/login';
+
+  /// Admin first-time registration screen.
+  static const String adminRegister = '/admin/register';
+
   /// Admin SOS map ([AdminMapScreen]) — rendered inside the admin ShellRoute.
   static const String adminMap = '/admin/map';
 
   /// Admin rescue stations management ([AdminRescueStationsScreen]).
   static const String adminRescueStations = '/admin/rescue-stations';
+
+  /// Admin personal account management ([AdminAccountScreen]).
+  static const String adminAccount = '/admin/account';
 
   /// Admin event detail ([AdminEventDetailScreen]).
   /// Requires a [paramEventId] path parameter and a [DisasterEvent] via `extra`.
@@ -79,6 +88,7 @@ abstract final class RouteNames {
   static const String segNewsDetail = ':postId';
   static const String segAdminMap = 'map';
   static const String segAdminRescueStations = 'rescue-stations';
+  static const String segAdminAccount = 'account';
   static const String segAdminEventDetail = 'events/:eventId';
   static const String segAdminPostCreate = 'posts/new';
   static const String segAdminPostEdit = 'posts/:postId/edit';
@@ -101,9 +111,12 @@ abstract final class RouteNames {
   static const String nameNewsDetail = 'news-detail';
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
+  static const String nameAdminLogin = 'admin-login';
+  static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';
   static const String nameAdminMap = 'admin-map';
   static const String nameAdminRescueStations = 'admin-rescue-stations';
+  static const String nameAdminAccount = 'admin-account';
   static const String nameAdminEventDetail = 'admin-event-detail';
   static const String nameAdminPostCreate = 'admin-post-create';
   static const String nameAdminPostEdit = 'admin-post-edit';

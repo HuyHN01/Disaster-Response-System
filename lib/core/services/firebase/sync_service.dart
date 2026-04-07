@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:drift/drift.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // =============================================================================
@@ -18,6 +19,7 @@ class _Collections {
   static const String locations = 'locations';
   static const String disasterEvents = 'disaster_events';
   static const String rescueStations = 'rescue_stations';
+  static const String users = 'users';
 }
 
 // =============================================================================
@@ -55,6 +57,7 @@ class FirebaseSyncService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _rescueStationsSubscription;
+  StreamSubscription<dynamic>? _usersSubscription;
 
   FirebaseSyncService({
     required AppDatabase db,
@@ -203,10 +206,71 @@ class FirebaseSyncService {
     _rescueStationsSubscription = null;
   }
 
+  /// Opens a realtime Firestore listener on `users`.
+  ///
+  /// This keeps local account metadata aligned for offline reads.
+  void listenToUsers({
+    void Function(User user)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _usersSubscription?.cancel();
+
+    final currentUser = fb_auth.FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      _log('Bỏ lắng nghe users: chưa có phiên đăng nhập.');
+      return;
+    }
+
+    final docRef = _firestore.collection(_Collections.users).doc(currentUser.uid);
+
+    _usersSubscription = docRef.snapshots().listen(
+      (snapshot) async {
+        try {
+          if (!snapshot.exists) {
+            await (_db.delete(_db.users)
+                  ..where((u) => u.id.equals(currentUser.uid)))
+                .go();
+            return;
+          }
+
+          final data = snapshot.data();
+          if (data == null) return;
+
+          final incoming = _firestoreToUserCompanion(
+            docId: snapshot.id,
+            data: data,
+          );
+
+          await _db.into(_db.users).insertOnConflictUpdate(incoming);
+
+          if (onUpsert != null) {
+            final inserted = await (_db.select(
+              _db.users,
+            )..where((u) => u.id.equals(snapshot.id))).getSingleOrNull();
+            if (inserted != null) onUpsert(inserted);
+          }
+        } catch (e, st) {
+          _log('Lỗi xử lý user ${snapshot.id}: $e\n$st');
+        }
+      },
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe users: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToUsers() async {
+    await _usersSubscription?.cancel();
+    _usersSubscription = null;
+  }
+
   /// Convenience method: call once at app start to wire up both directions.
   Future<SyncResult> startSync() async {
     listenToAdminEvents();
     listenToRescueStations();
+    listenToUsers();
 
     final sosResult = await syncPendingSOS();
     final stationResult = await syncPendingRescueStations();
@@ -222,6 +286,7 @@ class FirebaseSyncService {
   Future<void> dispose() async {
     await stopListeningToAdminEvents();
     await stopListeningToRescueStations();
+    await stopListeningToUsers();
   }
 
   // ---------------------------------------------------------------------------
@@ -365,6 +430,40 @@ class FirebaseSyncService {
         }
       } catch (e, st) {
         _log('Lỗi xử lý rescue_station ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
+  Future<void> _handleUsersSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(User user)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await (_db.delete(_db.users)..where((u) => u.id.equals(change.doc.id)))
+              .go();
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incoming = _firestoreToUserCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        await _db.into(_db.users).insertOnConflictUpdate(incoming);
+
+        if (onUpsert != null) {
+          final inserted = await (_db.select(
+            _db.users,
+          )..where((u) => u.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onUpsert(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý user ${change.doc.id}: $e\n$st');
       }
     }
   }
@@ -513,6 +612,37 @@ class FirebaseSyncService {
     );
   }
 
+  UsersCompanion _firestoreToUserCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final uid = ((data['uid'] as String?)?.trim().isNotEmpty ?? false)
+        ? (data['uid'] as String).trim()
+        : docId;
+
+    final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+    final updatedAt = _asDateTime(data['updatedAt']) ?? createdAt;
+    final lastLoginAt = _asDateTime(data['lastLoginAt']);
+    final resolvedPhotoUrl =
+        (data['photoUrl'] as String?)?.trim() ??
+        (data['photoURL'] as String?)?.trim();
+
+    return UsersCompanion.insert(
+      id: uid,
+      uid: uid,
+      email: ((data['email'] as String?) ?? '').trim(),
+      displayName: ((data['displayName'] as String?) ?? '').trim(),
+      photoUrl: Value(resolvedPhotoUrl),
+      role: _asInt(data['role'], 3),
+      status: _asInt(data['status'], 2),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      createdBy: Value((data['createdBy'] as String?)?.trim()),
+      lastLoginAt: Value(lastLoginAt),
+      mfaEnabled: Value((data['mfaEnabled'] as bool?) ?? false),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // PRIVATE — Utilities
   // ---------------------------------------------------------------------------
@@ -524,6 +654,21 @@ class FirebaseSyncService {
     } catch (_) {
       return false;
     }
+  }
+
+  DateTime? _asDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  int _asInt(dynamic value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String && value.trim().isNotEmpty) {
+      return int.tryParse(value.trim()) ?? fallback;
+    }
+    return fallback;
   }
 
   void _log(String message) {

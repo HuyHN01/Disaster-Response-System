@@ -1,7 +1,6 @@
 import 'package:disaster_response_app/core/routes/app_router.dart';
 import 'package:disaster_response_app/core/services/firebase/fcm_service.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
-import 'package:disaster_response_app/features/admin_panel/auth/presentation/admin_login_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -9,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -27,11 +26,11 @@ void main() async {
 
   // Load environment variables
   await dotenv.load(fileName: ".env");
-  final SUPABASE_URL = dotenv.get('SUPABASE_URL');
-  final SUPABASE_ANON_KEY = dotenv.get('SUPABASE_ANON_KEY');
+  final supabaseUrl = dotenv.get('SUPABASE_URL');
+  final supabaseAnonKey = dotenv.get('SUPABASE_ANON_KEY');
 
   // TODO: Initialize Supabase
-  await Supabase.initialize(url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY);
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
   // TODO: Initialize Drift Database
 
@@ -56,22 +55,19 @@ class OmniDisasterApp extends ConsumerWidget {
     syncService.listenToRescueStations(
       onUpsert: (_) => ref.invalidate(rescueStationControllerProvider),
     );
+    syncService.listenToUsers();
 
-    return MaterialApp(
+    return MaterialApp.router(
+      routerConfig: router,
+      localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
+      supportedLocales: FlutterQuillLocalizations.supportedLocales,
       title: 'Hệ thống Ứng phó Thiên tai',
-      home: AdminLoginScreen(),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.redAccent,
+        textTheme: GoogleFonts.interTextTheme(),
+      ),
     );
-    // return MaterialApp.router(
-    //   routerConfig: router,
-    //   localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
-    //   supportedLocales: FlutterQuillLocalizations.supportedLocales,
-    //   title: 'Hệ thống Ứng phó Thiên tai',
-    //   debugShowCheckedModeBanner: false,
-    //   theme: ThemeData(
-    //     useMaterial3: true,
-    //     colorSchemeSeed: Colors.redAccent,
-    //     textTheme: GoogleFonts.interTextTheme(),
-    //   ),
-    // );
   }
 }

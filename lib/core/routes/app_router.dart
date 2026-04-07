@@ -1,11 +1,19 @@
 // lib/core/routes/app_router.dart
 
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/features/admin_panel/account/presentation/admin_account_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/presentation/admin_login_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/presentation/admin_register_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_event_detail_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_layout.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_map_screen.dart';
@@ -66,6 +74,11 @@ import 'route_names.dart';
 abstract final class AppRouter {
   AppRouter._();
 
+  static final AdminAuthRepository _adminAuthRepository = AdminAuthRepository(
+    auth: FirebaseAuth.instance,
+    firestore: FirebaseFirestore.instance,
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   // Public factory
   // ─────────────────────────────────────────────────────────────────────────
@@ -96,9 +109,14 @@ abstract final class AppRouter {
   static GoRouter _webRouter() => GoRouter(
     initialLocation: RouteNames.adminDashboard,
     debugLogDiagnostics: !kReleaseMode,
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+    redirect: _globalRedirect,
     errorBuilder: _errorPage,
     routes: [
       _rootRedirect(to: RouteNames.adminDashboard),
+      ..._adminAuthRoutes(),
       ..._adminShellRoutes(),
       ..._adminDetailRoutes(),
       ..._citizenRoutes(),
@@ -109,10 +127,15 @@ abstract final class AppRouter {
   static GoRouter _mobileRouter() => GoRouter(
     initialLocation: RouteNames.home,
     debugLogDiagnostics: !kReleaseMode,
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+    redirect: _globalRedirect,
     errorBuilder: _errorPage,
     routes: [
       _rootRedirect(to: RouteNames.home),
       ..._citizenRoutes(),
+      ..._adminAuthRoutes(),
       ..._adminShellRoutes(),
       ..._adminDetailRoutes(),
     ],
@@ -122,9 +145,14 @@ abstract final class AppRouter {
   static GoRouter _desktopRouter() => GoRouter(
     initialLocation: RouteNames.adminDashboard,
     debugLogDiagnostics: !kReleaseMode,
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+    redirect: _globalRedirect,
     errorBuilder: _errorPage,
     routes: [
       _rootRedirect(to: RouteNames.adminDashboard),
+      ..._adminAuthRoutes(),
       ..._adminShellRoutes(),
       ..._adminDetailRoutes(),
       ..._citizenRoutes(),
@@ -134,6 +162,19 @@ abstract final class AppRouter {
   // ─────────────────────────────────────────────────────────────────────────
   // Admin route definitions
   // ─────────────────────────────────────────────────────────────────────────
+
+  static List<RouteBase> _adminAuthRoutes() => [
+    GoRoute(
+      path: RouteNames.adminLogin,
+      name: RouteNames.nameAdminLogin,
+      builder: (context, state) => const AdminLoginScreen(),
+    ),
+    GoRoute(
+      path: RouteNames.adminRegister,
+      name: RouteNames.nameAdminRegister,
+      builder: (context, state) => const AdminRegisterScreen(),
+    ),
+  ];
 
   // ─────────────────────────────────────────────────────────────────────────
   // Admin ShellRoute — pages rendered INSIDE the sidebar layout
@@ -163,6 +204,11 @@ abstract final class AppRouter {
           path: RouteNames.adminRescueStations,
           name: RouteNames.nameAdminRescueStations,
           builder: (context, state) => const AdminRescueStationsScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.adminAccount,
+          name: RouteNames.nameAdminAccount,
+          builder: (context, state) => const AdminAccountScreen(),
         ),
       ],
     ),
@@ -269,6 +315,47 @@ abstract final class AppRouter {
   static GoRoute _rootRedirect({required String to}) =>
       GoRoute(path: RouteNames.root, redirect: (_, __) => to);
 
+  static Future<String?> _globalRedirect(
+    BuildContext context,
+    GoRouterState state,
+  ) async {
+    final path = state.matchedLocation;
+    final isAdminPath = path.startsWith('/admin');
+    if (!isAdminPath) return null;
+
+    final isLoginRoute = path == RouteNames.adminLogin;
+    final isRegisterRoute = path == RouteNames.adminRegister;
+
+    bool registrationOpen;
+    try {
+      registrationOpen = await _adminAuthRepository.isInitialRegistrationOpen();
+    } catch (_) {
+      registrationOpen = false;
+    }
+
+    if (registrationOpen) {
+      return isRegisterRoute ? null : RouteNames.adminRegister;
+    }
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      return isLoginRoute ? null : RouteNames.adminLogin;
+    }
+
+    final profile = await _adminAuthRepository.fetchUserProfile(currentUser.uid);
+    if (profile == null || !profile.canAccessAdminPortal) {
+      await _adminAuthRepository.signOut();
+      return RouteNames.adminLogin;
+    }
+
+    if (isLoginRoute || isRegisterRoute) {
+      return RouteNames.adminDashboard;
+    }
+
+    return null;
+  }
+
   /// Fallback page rendered when no matching route is found.
   static Widget _errorPage(BuildContext context, GoRouterState state) {
     return Scaffold(
@@ -310,5 +397,19 @@ abstract final class AppRouter {
         ),
       ),
     );
+  }
+}
+
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _subscription;
+
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }

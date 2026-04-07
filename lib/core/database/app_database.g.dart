@@ -17,48 +17,139 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _fullNameMeta = const VerificationMeta(
-    'fullName',
-  );
+  static const VerificationMeta _uidMeta = const VerificationMeta('uid');
   @override
-  late final GeneratedColumn<String> fullName = GeneratedColumn<String>(
-    'full_name',
+  late final GeneratedColumn<String> uid = GeneratedColumn<String>(
+    'uid',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+    'email',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayNameMeta = const VerificationMeta(
+    'displayName',
+  );
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+    'display_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _photoUrlMeta = const VerificationMeta(
+    'photoUrl',
+  );
+  @override
+  late final GeneratedColumn<String> photoUrl = GeneratedColumn<String>(
+    'photo_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _roleMeta = const VerificationMeta('role');
   @override
-  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+  late final GeneratedColumn<int> role = GeneratedColumn<int>(
     'role',
     aliasedName,
     false,
-    type: DriftSqlType.string,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _phoneMeta = const VerificationMeta('phone');
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
-  late final GeneratedColumn<String> phone = GeneratedColumn<String>(
-    'phone',
+  late final GeneratedColumn<int> status = GeneratedColumn<int>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdByMeta = const VerificationMeta(
+    'createdBy',
+  );
+  @override
+  late final GeneratedColumn<String> createdBy = GeneratedColumn<String>(
+    'created_by',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _avatarUrlMeta = const VerificationMeta(
-    'avatarUrl',
+  static const VerificationMeta _lastLoginAtMeta = const VerificationMeta(
+    'lastLoginAt',
   );
   @override
-  late final GeneratedColumn<String> avatarUrl = GeneratedColumn<String>(
-    'avatar_url',
+  late final GeneratedColumn<DateTime> lastLoginAt = GeneratedColumn<DateTime>(
+    'last_login_at',
     aliasedName,
     true,
-    type: DriftSqlType.string,
+    type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mfaEnabledMeta = const VerificationMeta(
+    'mfaEnabled',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, fullName, role, phone, avatarUrl];
+  late final GeneratedColumn<bool> mfaEnabled = GeneratedColumn<bool>(
+    'mfa_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("mfa_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    uid,
+    email,
+    displayName,
+    photoUrl,
+    role,
+    status,
+    createdAt,
+    updatedAt,
+    createdBy,
+    lastLoginAt,
+    mfaEnabled,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -76,13 +167,38 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     } else if (isInserting) {
       context.missing(_idMeta);
     }
-    if (data.containsKey('full_name')) {
+    if (data.containsKey('uid')) {
       context.handle(
-        _fullNameMeta,
-        fullName.isAcceptableOrUnknown(data['full_name']!, _fullNameMeta),
+        _uidMeta,
+        uid.isAcceptableOrUnknown(data['uid']!, _uidMeta),
       );
     } else if (isInserting) {
-      context.missing(_fullNameMeta);
+      context.missing(_uidMeta);
+    }
+    if (data.containsKey('email')) {
+      context.handle(
+        _emailMeta,
+        email.isAcceptableOrUnknown(data['email']!, _emailMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_emailMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+        _displayNameMeta,
+        displayName.isAcceptableOrUnknown(
+          data['display_name']!,
+          _displayNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('photo_url')) {
+      context.handle(
+        _photoUrlMeta,
+        photoUrl.isAcceptableOrUnknown(data['photo_url']!, _photoUrlMeta),
+      );
     }
     if (data.containsKey('role')) {
       context.handle(
@@ -92,16 +208,49 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     } else if (isInserting) {
       context.missing(_roleMeta);
     }
-    if (data.containsKey('phone')) {
+    if (data.containsKey('status')) {
       context.handle(
-        _phoneMeta,
-        phone.isAcceptableOrUnknown(data['phone']!, _phoneMeta),
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('created_by')) {
+      context.handle(
+        _createdByMeta,
+        createdBy.isAcceptableOrUnknown(data['created_by']!, _createdByMeta),
       );
     }
-    if (data.containsKey('avatar_url')) {
+    if (data.containsKey('last_login_at')) {
       context.handle(
-        _avatarUrlMeta,
-        avatarUrl.isAcceptableOrUnknown(data['avatar_url']!, _avatarUrlMeta),
+        _lastLoginAtMeta,
+        lastLoginAt.isAcceptableOrUnknown(
+          data['last_login_at']!,
+          _lastLoginAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('mfa_enabled')) {
+      context.handle(
+        _mfaEnabledMeta,
+        mfaEnabled.isAcceptableOrUnknown(data['mfa_enabled']!, _mfaEnabledMeta),
       );
     }
     return context;
@@ -117,22 +266,50 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      fullName: attachedDatabase.typeMapping.read(
+      uid: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}full_name'],
+        data['${effectivePrefix}uid'],
       )!,
-      role: attachedDatabase.typeMapping.read(
+      email: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
+        data['${effectivePrefix}email'],
+      )!,
+      displayName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}display_name'],
+      )!,
+      photoUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}photo_url'],
+      ),
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
         data['${effectivePrefix}role'],
       )!,
-      phone: attachedDatabase.typeMapping.read(
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}status'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      createdBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}phone'],
+        data['${effectivePrefix}created_by'],
       ),
-      avatarUrl: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}avatar_url'],
+      lastLoginAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_login_at'],
       ),
+      mfaEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}mfa_enabled'],
+      )!,
     );
   }
 
@@ -144,43 +321,75 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
 
 class User extends DataClass implements Insertable<User> {
   final String id;
-  final String fullName;
-  final String role;
-  final String? phone;
-  final String? avatarUrl;
+  final String uid;
+  final String email;
+  final String displayName;
+  final String? photoUrl;
+  final int role;
+  final int status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? createdBy;
+  final DateTime? lastLoginAt;
+  final bool mfaEnabled;
   const User({
     required this.id,
-    required this.fullName,
+    required this.uid,
+    required this.email,
+    required this.displayName,
+    this.photoUrl,
     required this.role,
-    this.phone,
-    this.avatarUrl,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.createdBy,
+    this.lastLoginAt,
+    required this.mfaEnabled,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['full_name'] = Variable<String>(fullName);
-    map['role'] = Variable<String>(role);
-    if (!nullToAbsent || phone != null) {
-      map['phone'] = Variable<String>(phone);
+    map['uid'] = Variable<String>(uid);
+    map['email'] = Variable<String>(email);
+    map['display_name'] = Variable<String>(displayName);
+    if (!nullToAbsent || photoUrl != null) {
+      map['photo_url'] = Variable<String>(photoUrl);
     }
-    if (!nullToAbsent || avatarUrl != null) {
-      map['avatar_url'] = Variable<String>(avatarUrl);
+    map['role'] = Variable<int>(role);
+    map['status'] = Variable<int>(status);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || createdBy != null) {
+      map['created_by'] = Variable<String>(createdBy);
     }
+    if (!nullToAbsent || lastLoginAt != null) {
+      map['last_login_at'] = Variable<DateTime>(lastLoginAt);
+    }
+    map['mfa_enabled'] = Variable<bool>(mfaEnabled);
     return map;
   }
 
   UsersCompanion toCompanion(bool nullToAbsent) {
     return UsersCompanion(
       id: Value(id),
-      fullName: Value(fullName),
+      uid: Value(uid),
+      email: Value(email),
+      displayName: Value(displayName),
+      photoUrl: photoUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(photoUrl),
       role: Value(role),
-      phone: phone == null && nullToAbsent
+      status: Value(status),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      createdBy: createdBy == null && nullToAbsent
           ? const Value.absent()
-          : Value(phone),
-      avatarUrl: avatarUrl == null && nullToAbsent
+          : Value(createdBy),
+      lastLoginAt: lastLoginAt == null && nullToAbsent
           ? const Value.absent()
-          : Value(avatarUrl),
+          : Value(lastLoginAt),
+      mfaEnabled: Value(mfaEnabled),
     );
   }
 
@@ -191,10 +400,17 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return User(
       id: serializer.fromJson<String>(json['id']),
-      fullName: serializer.fromJson<String>(json['fullName']),
-      role: serializer.fromJson<String>(json['role']),
-      phone: serializer.fromJson<String?>(json['phone']),
-      avatarUrl: serializer.fromJson<String?>(json['avatarUrl']),
+      uid: serializer.fromJson<String>(json['uid']),
+      email: serializer.fromJson<String>(json['email']),
+      displayName: serializer.fromJson<String>(json['displayName']),
+      photoUrl: serializer.fromJson<String?>(json['photoUrl']),
+      role: serializer.fromJson<int>(json['role']),
+      status: serializer.fromJson<int>(json['status']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      createdBy: serializer.fromJson<String?>(json['createdBy']),
+      lastLoginAt: serializer.fromJson<DateTime?>(json['lastLoginAt']),
+      mfaEnabled: serializer.fromJson<bool>(json['mfaEnabled']),
     );
   }
   @override
@@ -202,33 +418,67 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'fullName': serializer.toJson<String>(fullName),
-      'role': serializer.toJson<String>(role),
-      'phone': serializer.toJson<String?>(phone),
-      'avatarUrl': serializer.toJson<String?>(avatarUrl),
+      'uid': serializer.toJson<String>(uid),
+      'email': serializer.toJson<String>(email),
+      'displayName': serializer.toJson<String>(displayName),
+      'photoUrl': serializer.toJson<String?>(photoUrl),
+      'role': serializer.toJson<int>(role),
+      'status': serializer.toJson<int>(status),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'createdBy': serializer.toJson<String?>(createdBy),
+      'lastLoginAt': serializer.toJson<DateTime?>(lastLoginAt),
+      'mfaEnabled': serializer.toJson<bool>(mfaEnabled),
     };
   }
 
   User copyWith({
     String? id,
-    String? fullName,
-    String? role,
-    Value<String?> phone = const Value.absent(),
-    Value<String?> avatarUrl = const Value.absent(),
+    String? uid,
+    String? email,
+    String? displayName,
+    Value<String?> photoUrl = const Value.absent(),
+    int? role,
+    int? status,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<String?> createdBy = const Value.absent(),
+    Value<DateTime?> lastLoginAt = const Value.absent(),
+    bool? mfaEnabled,
   }) => User(
     id: id ?? this.id,
-    fullName: fullName ?? this.fullName,
+    uid: uid ?? this.uid,
+    email: email ?? this.email,
+    displayName: displayName ?? this.displayName,
+    photoUrl: photoUrl.present ? photoUrl.value : this.photoUrl,
     role: role ?? this.role,
-    phone: phone.present ? phone.value : this.phone,
-    avatarUrl: avatarUrl.present ? avatarUrl.value : this.avatarUrl,
+    status: status ?? this.status,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    createdBy: createdBy.present ? createdBy.value : this.createdBy,
+    lastLoginAt: lastLoginAt.present ? lastLoginAt.value : this.lastLoginAt,
+    mfaEnabled: mfaEnabled ?? this.mfaEnabled,
   );
   User copyWithCompanion(UsersCompanion data) {
     return User(
       id: data.id.present ? data.id.value : this.id,
-      fullName: data.fullName.present ? data.fullName.value : this.fullName,
+      uid: data.uid.present ? data.uid.value : this.uid,
+      email: data.email.present ? data.email.value : this.email,
+      displayName: data.displayName.present
+          ? data.displayName.value
+          : this.displayName,
+      photoUrl: data.photoUrl.present ? data.photoUrl.value : this.photoUrl,
       role: data.role.present ? data.role.value : this.role,
-      phone: data.phone.present ? data.phone.value : this.phone,
-      avatarUrl: data.avatarUrl.present ? data.avatarUrl.value : this.avatarUrl,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      createdBy: data.createdBy.present ? data.createdBy.value : this.createdBy,
+      lastLoginAt: data.lastLoginAt.present
+          ? data.lastLoginAt.value
+          : this.lastLoginAt,
+      mfaEnabled: data.mfaEnabled.present
+          ? data.mfaEnabled.value
+          : this.mfaEnabled,
     );
   }
 
@@ -236,84 +486,165 @@ class User extends DataClass implements Insertable<User> {
   String toString() {
     return (StringBuffer('User(')
           ..write('id: $id, ')
-          ..write('fullName: $fullName, ')
+          ..write('uid: $uid, ')
+          ..write('email: $email, ')
+          ..write('displayName: $displayName, ')
+          ..write('photoUrl: $photoUrl, ')
           ..write('role: $role, ')
-          ..write('phone: $phone, ')
-          ..write('avatarUrl: $avatarUrl')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('lastLoginAt: $lastLoginAt, ')
+          ..write('mfaEnabled: $mfaEnabled')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, fullName, role, phone, avatarUrl);
+  int get hashCode => Object.hash(
+    id,
+    uid,
+    email,
+    displayName,
+    photoUrl,
+    role,
+    status,
+    createdAt,
+    updatedAt,
+    createdBy,
+    lastLoginAt,
+    mfaEnabled,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is User &&
           other.id == this.id &&
-          other.fullName == this.fullName &&
+          other.uid == this.uid &&
+          other.email == this.email &&
+          other.displayName == this.displayName &&
+          other.photoUrl == this.photoUrl &&
           other.role == this.role &&
-          other.phone == this.phone &&
-          other.avatarUrl == this.avatarUrl);
+          other.status == this.status &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.createdBy == this.createdBy &&
+          other.lastLoginAt == this.lastLoginAt &&
+          other.mfaEnabled == this.mfaEnabled);
 }
 
 class UsersCompanion extends UpdateCompanion<User> {
   final Value<String> id;
-  final Value<String> fullName;
-  final Value<String> role;
-  final Value<String?> phone;
-  final Value<String?> avatarUrl;
+  final Value<String> uid;
+  final Value<String> email;
+  final Value<String> displayName;
+  final Value<String?> photoUrl;
+  final Value<int> role;
+  final Value<int> status;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<String?> createdBy;
+  final Value<DateTime?> lastLoginAt;
+  final Value<bool> mfaEnabled;
   final Value<int> rowid;
   const UsersCompanion({
     this.id = const Value.absent(),
-    this.fullName = const Value.absent(),
+    this.uid = const Value.absent(),
+    this.email = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.photoUrl = const Value.absent(),
     this.role = const Value.absent(),
-    this.phone = const Value.absent(),
-    this.avatarUrl = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.createdBy = const Value.absent(),
+    this.lastLoginAt = const Value.absent(),
+    this.mfaEnabled = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   UsersCompanion.insert({
     required String id,
-    required String fullName,
-    required String role,
-    this.phone = const Value.absent(),
-    this.avatarUrl = const Value.absent(),
+    required String uid,
+    required String email,
+    required String displayName,
+    this.photoUrl = const Value.absent(),
+    required int role,
+    required int status,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.createdBy = const Value.absent(),
+    this.lastLoginAt = const Value.absent(),
+    this.mfaEnabled = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       fullName = Value(fullName),
-       role = Value(role);
+       uid = Value(uid),
+       email = Value(email),
+       displayName = Value(displayName),
+       role = Value(role),
+       status = Value(status),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<User> custom({
     Expression<String>? id,
-    Expression<String>? fullName,
-    Expression<String>? role,
-    Expression<String>? phone,
-    Expression<String>? avatarUrl,
+    Expression<String>? uid,
+    Expression<String>? email,
+    Expression<String>? displayName,
+    Expression<String>? photoUrl,
+    Expression<int>? role,
+    Expression<int>? status,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? createdBy,
+    Expression<DateTime>? lastLoginAt,
+    Expression<bool>? mfaEnabled,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (fullName != null) 'full_name': fullName,
+      if (uid != null) 'uid': uid,
+      if (email != null) 'email': email,
+      if (displayName != null) 'display_name': displayName,
+      if (photoUrl != null) 'photo_url': photoUrl,
       if (role != null) 'role': role,
-      if (phone != null) 'phone': phone,
-      if (avatarUrl != null) 'avatar_url': avatarUrl,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (createdBy != null) 'created_by': createdBy,
+      if (lastLoginAt != null) 'last_login_at': lastLoginAt,
+      if (mfaEnabled != null) 'mfa_enabled': mfaEnabled,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   UsersCompanion copyWith({
     Value<String>? id,
-    Value<String>? fullName,
-    Value<String>? role,
-    Value<String?>? phone,
-    Value<String?>? avatarUrl,
+    Value<String>? uid,
+    Value<String>? email,
+    Value<String>? displayName,
+    Value<String?>? photoUrl,
+    Value<int>? role,
+    Value<int>? status,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<String?>? createdBy,
+    Value<DateTime?>? lastLoginAt,
+    Value<bool>? mfaEnabled,
     Value<int>? rowid,
   }) {
     return UsersCompanion(
       id: id ?? this.id,
-      fullName: fullName ?? this.fullName,
+      uid: uid ?? this.uid,
+      email: email ?? this.email,
+      displayName: displayName ?? this.displayName,
+      photoUrl: photoUrl ?? this.photoUrl,
       role: role ?? this.role,
-      phone: phone ?? this.phone,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      createdBy: createdBy ?? this.createdBy,
+      lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      mfaEnabled: mfaEnabled ?? this.mfaEnabled,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -324,17 +655,38 @@ class UsersCompanion extends UpdateCompanion<User> {
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
-    if (fullName.present) {
-      map['full_name'] = Variable<String>(fullName.value);
+    if (uid.present) {
+      map['uid'] = Variable<String>(uid.value);
+    }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (photoUrl.present) {
+      map['photo_url'] = Variable<String>(photoUrl.value);
     }
     if (role.present) {
-      map['role'] = Variable<String>(role.value);
+      map['role'] = Variable<int>(role.value);
     }
-    if (phone.present) {
-      map['phone'] = Variable<String>(phone.value);
+    if (status.present) {
+      map['status'] = Variable<int>(status.value);
     }
-    if (avatarUrl.present) {
-      map['avatar_url'] = Variable<String>(avatarUrl.value);
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (createdBy.present) {
+      map['created_by'] = Variable<String>(createdBy.value);
+    }
+    if (lastLoginAt.present) {
+      map['last_login_at'] = Variable<DateTime>(lastLoginAt.value);
+    }
+    if (mfaEnabled.present) {
+      map['mfa_enabled'] = Variable<bool>(mfaEnabled.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -346,10 +698,17 @@ class UsersCompanion extends UpdateCompanion<User> {
   String toString() {
     return (StringBuffer('UsersCompanion(')
           ..write('id: $id, ')
-          ..write('fullName: $fullName, ')
+          ..write('uid: $uid, ')
+          ..write('email: $email, ')
+          ..write('displayName: $displayName, ')
+          ..write('photoUrl: $photoUrl, ')
           ..write('role: $role, ')
-          ..write('phone: $phone, ')
-          ..write('avatarUrl: $avatarUrl, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('createdBy: $createdBy, ')
+          ..write('lastLoginAt: $lastLoginAt, ')
+          ..write('mfaEnabled: $mfaEnabled, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2956,19 +3315,33 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$UsersTableCreateCompanionBuilder =
     UsersCompanion Function({
       required String id,
-      required String fullName,
-      required String role,
-      Value<String?> phone,
-      Value<String?> avatarUrl,
+      required String uid,
+      required String email,
+      required String displayName,
+      Value<String?> photoUrl,
+      required int role,
+      required int status,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<String?> createdBy,
+      Value<DateTime?> lastLoginAt,
+      Value<bool> mfaEnabled,
       Value<int> rowid,
     });
 typedef $$UsersTableUpdateCompanionBuilder =
     UsersCompanion Function({
       Value<String> id,
-      Value<String> fullName,
-      Value<String> role,
-      Value<String?> phone,
-      Value<String?> avatarUrl,
+      Value<String> uid,
+      Value<String> email,
+      Value<String> displayName,
+      Value<String?> photoUrl,
+      Value<int> role,
+      Value<int> status,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<String?> createdBy,
+      Value<DateTime?> lastLoginAt,
+      Value<bool> mfaEnabled,
       Value<int> rowid,
     });
 
@@ -3009,23 +3382,58 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get fullName => $composableBuilder(
-    column: $table.fullName,
+  ColumnFilters<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get role => $composableBuilder(
+  ColumnFilters<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get photoUrl => $composableBuilder(
+    column: $table.photoUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get role => $composableBuilder(
     column: $table.role,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get phone => $composableBuilder(
-    column: $table.phone,
+  ColumnFilters<int> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get avatarUrl => $composableBuilder(
-    column: $table.avatarUrl,
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastLoginAt => $composableBuilder(
+    column: $table.lastLoginAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get mfaEnabled => $composableBuilder(
+    column: $table.mfaEnabled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3069,23 +3477,58 @@ class $$UsersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get fullName => $composableBuilder(
-    column: $table.fullName,
+  ColumnOrderings<String> get uid => $composableBuilder(
+    column: $table.uid,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get role => $composableBuilder(
+  ColumnOrderings<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get photoUrl => $composableBuilder(
+    column: $table.photoUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get role => $composableBuilder(
     column: $table.role,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get phone => $composableBuilder(
-    column: $table.phone,
+  ColumnOrderings<int> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get avatarUrl => $composableBuilder(
-    column: $table.avatarUrl,
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get createdBy => $composableBuilder(
+    column: $table.createdBy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastLoginAt => $composableBuilder(
+    column: $table.lastLoginAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get mfaEnabled => $composableBuilder(
+    column: $table.mfaEnabled,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -3102,17 +3545,44 @@ class $$UsersTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get fullName =>
-      $composableBuilder(column: $table.fullName, builder: (column) => column);
+  GeneratedColumn<String> get uid =>
+      $composableBuilder(column: $table.uid, builder: (column) => column);
 
-  GeneratedColumn<String> get role =>
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get photoUrl =>
+      $composableBuilder(column: $table.photoUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get role =>
       $composableBuilder(column: $table.role, builder: (column) => column);
 
-  GeneratedColumn<String> get phone =>
-      $composableBuilder(column: $table.phone, builder: (column) => column);
+  GeneratedColumn<int> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 
-  GeneratedColumn<String> get avatarUrl =>
-      $composableBuilder(column: $table.avatarUrl, builder: (column) => column);
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get createdBy =>
+      $composableBuilder(column: $table.createdBy, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastLoginAt => $composableBuilder(
+    column: $table.lastLoginAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get mfaEnabled => $composableBuilder(
+    column: $table.mfaEnabled,
+    builder: (column) => column,
+  );
 
   Expression<T> postsRefs<T extends Object>(
     Expression<T> Function($$PostsTableAnnotationComposer a) f,
@@ -3169,33 +3639,61 @@ class $$UsersTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String> fullName = const Value.absent(),
-                Value<String> role = const Value.absent(),
-                Value<String?> phone = const Value.absent(),
-                Value<String?> avatarUrl = const Value.absent(),
+                Value<String> uid = const Value.absent(),
+                Value<String> email = const Value.absent(),
+                Value<String> displayName = const Value.absent(),
+                Value<String?> photoUrl = const Value.absent(),
+                Value<int> role = const Value.absent(),
+                Value<int> status = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> createdBy = const Value.absent(),
+                Value<DateTime?> lastLoginAt = const Value.absent(),
+                Value<bool> mfaEnabled = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion(
                 id: id,
-                fullName: fullName,
+                uid: uid,
+                email: email,
+                displayName: displayName,
+                photoUrl: photoUrl,
                 role: role,
-                phone: phone,
-                avatarUrl: avatarUrl,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                createdBy: createdBy,
+                lastLoginAt: lastLoginAt,
+                mfaEnabled: mfaEnabled,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
-                required String fullName,
-                required String role,
-                Value<String?> phone = const Value.absent(),
-                Value<String?> avatarUrl = const Value.absent(),
+                required String uid,
+                required String email,
+                required String displayName,
+                Value<String?> photoUrl = const Value.absent(),
+                required int role,
+                required int status,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<String?> createdBy = const Value.absent(),
+                Value<DateTime?> lastLoginAt = const Value.absent(),
+                Value<bool> mfaEnabled = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion.insert(
                 id: id,
-                fullName: fullName,
+                uid: uid,
+                email: email,
+                displayName: displayName,
+                photoUrl: photoUrl,
                 role: role,
-                phone: phone,
-                avatarUrl: avatarUrl,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                createdBy: createdBy,
+                lastLoginAt: lastLoginAt,
+                mfaEnabled: mfaEnabled,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

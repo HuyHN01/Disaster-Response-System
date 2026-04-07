@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function requesterProfileExists() {
+      return signedIn() && userProfile(request.auth.uid).exists();
+    }
+
+    function requesterRole() {
+      return requesterProfileExists() ? userProfile(request.auth.uid).data.role : -1;
+    }
+
+    function requesterStatus() {
+      return requesterProfileExists() ? userProfile(request.auth.uid).data.status : -1;
+    }
+
+    function isActiveAdmin() {
+      return requesterProfileExists() &&
+          requesterStatus() == 1 &&
+          (requesterRole() == 0 || requesterRole() == 1);
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function ownerUpdateIsSafe(uid) {
+      return request.resource.data.uid == uid &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.status == resource.data.status &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.mfaEnabled == resource.data.mfaEnabled &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'displayName',
+            'photoUrl',
+            'updatedAt',
+            'lastLoginAt'
+          ]);
+    }
+
+    function adminUpdateIsSafe(uid) {
+      return request.resource.data.uid == uid &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'email',
+            'displayName',
+            'photoUrl',
+            'role',
+            'status',
+            'updatedAt',
+            'createdBy',
+            'lastLoginAt',
+            'mfaEnabled'
+          ]);
+    }
+
+    match /_system/bootstrap_auth {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isActiveAdmin();
+      allow list: if isActiveAdmin();
+      allow create: if false;
+      allow delete: if false;
+      allow update: if (isOwner(uid) && ownerUpdateIsSafe(uid)) ||
+          (isActiveAdmin() && adminUpdateIsSafe(uid));
+    }
+
+    // Keep current app behavior for existing non-auth features.
+    match /disaster_events/{docId} {
+      allow read, write: if true;
+    }
+
+    match /posts/{docId} {
+      allow read, write: if true;
+    }
+
+    match /locations/{docId} {
+      allow read, write: if true;
+    }
+
+    match /rescue_stations/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

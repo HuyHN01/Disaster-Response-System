@@ -6,11 +6,20 @@ part 'app_database.g.dart';
 
 // ============ BẢNG USERS ============
 class Users extends Table {
+  // `id` is kept as the local PK to preserve existing FK references from Posts.
+  // It mirrors the same value as `uid` from Firebase Auth.
   TextColumn get id => text()();
-  TextColumn get fullName => text()();
-  TextColumn get role => text()();
-  TextColumn get phone => text().nullable()();
-  TextColumn get avatarUrl => text().nullable()();
+  TextColumn get uid => text().unique()();
+  TextColumn get email => text()();
+  TextColumn get displayName => text()();
+  TextColumn get photoUrl => text().nullable()();
+  IntColumn get role => integer()(); // 0=superadmin, 1=admin, 2=staff, 3=user
+  IntColumn get status => integer()(); // 0=inactive, 1=active, 2=pending, 3=banned
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  TextColumn get createdBy => text().nullable()();
+  DateTimeColumn get lastLoginAt => dateTime().nullable()();
+  BoolColumn get mfaEnabled => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -111,7 +120,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -119,6 +128,69 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(rescueStations);
+      }
+
+      if (from < 3) {
+        await customStatement('PRAGMA foreign_keys = OFF;');
+
+        await customStatement('''
+CREATE TABLE users_new (
+  id TEXT NOT NULL PRIMARY KEY,
+  uid TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  photo_url TEXT NULL,
+  role INTEGER NOT NULL,
+  status INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  created_by TEXT NULL,
+  last_login_at INTEGER NULL,
+  mfa_enabled INTEGER NOT NULL DEFAULT 0
+);
+''');
+
+  await customStatement('''
+INSERT INTO users_new (
+  id,
+  uid,
+  email,
+  display_name,
+  photo_url,
+  role,
+  status,
+  created_at,
+  updated_at,
+  created_by,
+  last_login_at,
+  mfa_enabled
+)
+SELECT
+  id,
+  id,
+  '',
+  COALESCE(full_name, ''),
+  avatar_url,
+  CASE
+    WHEN typeof(role) = 'integer' THEN role
+    WHEN trim(role) GLOB '[0-9]*' THEN CAST(role AS INTEGER)
+    WHEN lower(trim(role)) = 'superadmin' THEN 0
+    WHEN lower(trim(role)) = 'admin' THEN 1
+    WHEN lower(trim(role)) = 'staff' THEN 2
+    ELSE 3
+  END,
+  2,
+  CAST(strftime('%s','now') AS INTEGER),
+  CAST(strftime('%s','now') AS INTEGER),
+  NULL,
+  NULL,
+  0
+FROM users;
+''');
+
+  await customStatement('DROP TABLE users;');
+  await customStatement('ALTER TABLE users_new RENAME TO users;');
+  await customStatement('PRAGMA foreign_keys = ON;');
       }
     },
   );

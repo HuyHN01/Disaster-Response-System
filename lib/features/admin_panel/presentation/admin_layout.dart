@@ -94,6 +94,7 @@ class _AdminLayoutState extends State<AdminLayout> {
   int _selectedIndex(String location) {
     if (location.startsWith(RouteNames.adminMap)) return 1;
     if (location.startsWith(RouteNames.adminRescueStations)) return 2;
+    if (location.startsWith(RouteNames.adminAccount)) return -1;
     // Future branches: add cases here as new admin routes are registered.
     return 0; // default: dashboard
   }
@@ -265,59 +266,62 @@ class AdminSidebar extends StatelessWidget {
             const Divider(color: AppColors.border, height: 1),
 
             // ── 4. User footer ────────────────────────────────────────────
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCollapsed ? 0 : 16,
-                vertical: 14,
-              ),
-              child: Row(
-                mainAxisAlignment: isCollapsed
-                    ? MainAxisAlignment.center
-                    : MainAxisAlignment.start,
-                children: [
-                  const CircleAvatar(
-                    radius: 18,
-                    backgroundColor: AppColors.brandRed,
-                    child: Text(
-                      'AD',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+            InkWell(
+              onTap: () => context.go(RouteNames.adminAccount),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCollapsed ? 0 : 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  mainAxisAlignment: isCollapsed
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    const CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.brandRed,
+                      child: Text(
+                        'AD',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                  AnimatedSize(
-                    duration: kAdminSidebarDuration,
-                    curve: kAdminSidebarCurve,
-                    child: isCollapsed
-                        ? const SizedBox.shrink()
-                        : const Padding(
-                            padding: EdgeInsets.only(left: 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Quản trị viên',
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                    AnimatedSize(
+                      duration: kAdminSidebarDuration,
+                      curve: kAdminSidebarCurve,
+                      child: isCollapsed
+                          ? const SizedBox.shrink()
+                          : const Padding(
+                              padding: EdgeInsets.only(left: 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Quản trị viên',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  'admin@omnidisaster.org',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 11,
+                                  Text(
+                                    'admin@omnidisaster.org',
+                                    style: TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
