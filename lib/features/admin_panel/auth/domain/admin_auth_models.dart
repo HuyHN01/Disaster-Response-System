@@ -20,7 +20,7 @@ class AdminUserProfile {
   final String uid;
   final String email;
   final String displayName;
-  final String? photoURL;
+  final String? photoUrl;
   final int role;
   final int status;
   final DateTime? createdAt;
@@ -35,7 +35,7 @@ class AdminUserProfile {
     required this.displayName,
     required this.role,
     required this.status,
-    this.photoURL,
+    this.photoUrl,
     this.createdAt,
     this.updatedAt,
     this.createdBy,
@@ -59,7 +59,7 @@ class AdminUserProfile {
       uid: (data['uid'] as String?) ?? doc.id,
       email: (data['email'] as String?) ?? '',
       displayName: (data['displayName'] as String?) ?? '',
-      photoURL: resolvedPhotoUrl,
+      photoUrl: resolvedPhotoUrl,
       role: _asInt(data['role'], UserRoles.user),
       status: _asInt(data['status'], UserStatuses.pending),
       createdAt: _asDateTime(data['createdAt']),

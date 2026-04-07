@@ -193,7 +193,7 @@ exports.registerInitialSuperAdmin = onCall(async (request) => {
           uid: createdUser.uid,
           email,
           displayName,
-          photoURL: createdUser.photoURL || null,
+          photoUrl: createdUser.photoURL || null,
           role: UserRoles.SUPER_ADMIN,
           status: UserStatuses.ACTIVE,
           createdAt: now,
@@ -288,7 +288,8 @@ exports.createManagedUser = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Bạn không đủ quyền để tạo tài khoản quản trị cấp cao.");
   }
 
-  const photoURL = data.photoURL ? String(data.photoURL).trim() : null;
+  const rawPhotoUrl = data.photoUrl || data.photoURL;
+  const photoUrl = rawPhotoUrl ? String(rawPhotoUrl).trim() : null;
   const mfaEnabled = Boolean(data.mfaEnabled || false);
 
   let createdUser = null;
@@ -298,7 +299,7 @@ exports.createManagedUser = onCall(async (request) => {
       email,
       password,
       displayName,
-      photoURL,
+      photoURL: photoUrl,
       disabled: status !== UserStatuses.ACTIVE,
     });
 
@@ -308,7 +309,7 @@ exports.createManagedUser = onCall(async (request) => {
         uid: createdUser.uid,
         email,
         displayName,
-        photoURL,
+        photoUrl,
         role,
         status,
         createdAt: now,

@@ -290,7 +290,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
                     ),
                     child: _Avatar(
                       photoUrl:
-                          widget.profile?.photoURL ??
+                          widget.profile?.photoUrl ??
                           FirebaseAuth.instance.currentUser?.photoURL,
                     ),
                   ),

@@ -41,7 +41,7 @@ service cloud.firestore {
           request.resource.data.mfaEnabled == resource.data.mfaEnabled &&
           request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'displayName',
-            'photoURL',
+            'photoUrl',
             'updatedAt',
             'lastLoginAt'
           ]);
@@ -53,7 +53,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'email',
             'displayName',
-            'photoURL',
+            'photoUrl',
             'role',
             'status',
             'updatedAt',

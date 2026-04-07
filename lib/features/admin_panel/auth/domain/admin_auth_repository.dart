@@ -194,7 +194,7 @@ class AdminAuthRepository {
 
       await _usersRef.doc(user.uid).set({
         'displayName': user.displayName ?? profile.displayName,
-        'photoURL': user.photoURL ?? profile.photoURL,
+        'photoUrl': user.photoURL ?? profile.photoUrl,
         'lastLoginAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -227,18 +227,12 @@ class AdminAuthRepository {
     try {
       await user.updatePhotoURL(normalizedUrl);
       await _usersRef.doc(user.uid).set({
-        'photoURL': normalizedUrl,
+        'photoUrl': normalizedUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } on FirebaseAuthException catch (e) {
       throw AdminAuthException(_mapAuthError(e));
     } on FirebaseException catch (e) {
-      if (e.code == 'permission-denied') {
-        // Avatar has already been updated in Firebase Auth.
-        // Do not block UX when Firestore profile sync is denied by rules.
-        return;
-      }
-
       try {
         await user.updatePhotoURL(previousPhotoUrl);
       } catch (_) {
