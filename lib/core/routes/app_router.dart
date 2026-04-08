@@ -26,6 +26,8 @@ import 'package:disaster_response_app/features/citizen_news/presentation/citizen
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
 import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
 
 import 'route_names.dart';
 
@@ -134,7 +136,8 @@ abstract final class AppRouter {
     errorBuilder: _errorPage,
     routes: [
       _rootRedirect(to: RouteNames.home),
-      ..._citizenRoutes(),
+      ..._mobileShellRoutes(),
+      ..._mobileDetailRoutes(),
       ..._adminAuthRoutes(),
       ..._adminShellRoutes(),
       ..._adminDetailRoutes(),
@@ -257,10 +260,79 @@ abstract final class AppRouter {
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Mobile ShellRoute — pages rendered INSIDE the bottom nav layout
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Mobile shell route subtree (home + profile).
+  ///
+  /// Wrapped in a [ShellRoute] that injects [MobileLayout] (bottom navigation bar).
+  ///
+  /// Routes inside this shell get the bottom nav; navigating to detail routes
+  /// (e.g., [RouteNames.newsDetail]) shows the full screen content while keeping
+  /// the nav bar visible.
+  static List<RouteBase> _mobileShellRoutes() => [
+    ShellRoute(
+      builder: (context, state, child) => MobileLayout(child: child),
+      routes: [
+        GoRoute(
+          path: RouteNames.home,
+          name: RouteNames.nameHome,
+          builder: (context, state) => const MobileHomeScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.profile,
+          name: RouteNames.nameProfile,
+          builder: (context, state) => const MobileProfileScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.eventMap,
+          name: RouteNames.nameEventMap,
+          builder: (context, state) => const EventMapScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.aiChat,
+          name: RouteNames.nameAiChat,
+          builder: (context, state) => const AiChatScreen(),
+        ),
+      ],
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mobile detail routes — INSIDE the shell (with persistent bottom nav)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Mobile detail routes that render INSIDE the MobileLayout shell.
+  ///
+  /// These screens (CitizenNewsScreen, CitizenNewsDetailScreen) maintain
+  /// the persistent BottomNavigationBar for easy navigation back to main tabs.
+  static List<RouteBase> _mobileDetailRoutes() => [
+    GoRoute(
+      path: RouteNames.news,
+      name: RouteNames.nameNews,
+      builder: (context, state) => const CitizenNewsScreen(),
+      routes: [
+        GoRoute(
+          path: RouteNames.segNewsDetail,
+          name: RouteNames.nameNewsDetail,
+          builder: (context, state) {
+            final post = state.extra is CitizenNewsPost
+                ? state.extra as CitizenNewsPost
+                : null;
+            final postId = state.pathParameters[RouteNames.paramPostId];
+
+            return CitizenNewsDetailScreen(post: post, postId: postId);
+          },
+        ),
+      ],
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Citizen / Mobile route definitions
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Citizen-facing route subtree.
+  /// Citizen-facing route subtree (for web/desktop without mobile shell).
   ///
   /// ```
   /// /home           → MobileHomeScreen

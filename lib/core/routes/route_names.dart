@@ -46,6 +46,9 @@ abstract final class RouteNames {
   /// AI assistant chat ([AiChatScreen]).
   static const String aiChat = '/ai';
 
+  /// User mobile profile screen ([MobileProfileScreen]).
+  static const String profile = '/profile';
+
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -111,6 +114,7 @@ abstract final class RouteNames {
   static const String nameNewsDetail = 'news-detail';
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
+  static const String nameProfile = 'profile';
   static const String nameAdminLogin = 'admin-login';
   static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';
