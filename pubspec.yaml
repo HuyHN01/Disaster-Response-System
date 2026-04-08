@@ -66,6 +66,7 @@ dependencies:
   flutter_local_notifications: ^21.0.0
   flutter_polyline_points: ^3.1.0
   image: ^4.5.4
+  features: ^1.1.0-nullsafety
 
 dev_dependencies:
   flutter_test:
