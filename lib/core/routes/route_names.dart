@@ -49,6 +49,9 @@ abstract final class RouteNames {
   /// User mobile profile screen ([MobileProfileScreen]).
   static const String profile = '/profile';
 
+  /// Email input screen in the profile auth flow ([EmailInputScreen]).
+  static const String profileEmailInput = '/profile/email-input';
+
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -89,6 +92,7 @@ abstract final class RouteNames {
   // ─────────────────────────────────────────────────────────────────────────
 
   static const String segNewsDetail = ':postId';
+  static const String segProfileEmailInput = 'email-input';
   static const String segAdminMap = 'map';
   static const String segAdminRescueStations = 'rescue-stations';
   static const String segAdminAccount = 'account';
@@ -115,6 +119,7 @@ abstract final class RouteNames {
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
   static const String nameProfile = 'profile';
+  static const String nameProfileEmailInput = 'profile-email-input';
   static const String nameAdminLogin = 'admin-login';
   static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';

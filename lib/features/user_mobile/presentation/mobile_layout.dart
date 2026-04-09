@@ -59,24 +59,17 @@ class MobileLayout extends StatefulWidget {
 }
 
 class _MobileLayoutState extends State<MobileLayout> {
-  /// Checks if the current location is one of the main tabs.
+  /// Checks if the current location should show the bottom navigation bar.
+  ///
+  /// Only the tab roots themselves keep the nav visible. Any child route under
+  /// /profile (for example /profile/email-input or future OTP screens) hides it.
   bool _isMainTab(String location) {
-    final segments = location.split('/').where((s) => s.isNotEmpty).toList();
-    if (segments.isEmpty) return true;
-
-    final firstSegment = '/${segments.first}';
-    return firstSegment == RouteNames.home || firstSegment == RouteNames.profile;
+    return location == RouteNames.home || location == RouteNames.profile;
   }
 
   /// Derives the selected nav index from the current GoRouter location.
   int _selectedIndex(String location) {
-    // Get the first path segment
-    final segments = location.split('/').where((s) => s.isNotEmpty).toList();
-    if (segments.isEmpty) return 0;
-
-    final firstSegment = '/${segments.first}';
-
-    if (firstSegment == RouteNames.profile) return 1;
+    if (location == RouteNames.profile) return 1;
     // Default: Home (includes /home, /news, /map, /ai)
     return 0;
   }

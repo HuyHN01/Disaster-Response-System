@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:disaster_response_app/core/routes/route_names.dart';
+
 // =============================================================================
 // THEME TOKENS  (consistent with MobileHomeScreen & auth screens)
 // =============================================================================
@@ -29,78 +31,81 @@ class AuthGateScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _C.scaffold,
       body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top bar ──────────────────────────────────────────────────────
-            _TopBar(onBack: () => context.pop()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(flex: 2),
 
-            // ── Body ─────────────────────────────────────────────────────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Spacer(flex: 2),
+              // ── Illustration card ─────────────────────────────────────────
+              _IllustrationCard(),
 
-                    // ── Illustration card ─────────────────────────────────────
-                    _IllustrationCard(),
+              const SizedBox(height: 40),
 
-                    const SizedBox(height: 40),
-
-                    // ── Text block ────────────────────────────────────────────
-                    const Text(
-                      'Bạn chưa đăng nhập',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _C.textPrimary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Một số tính năng yêu cầu tài khoản để hoạt động.\nVui lòng đăng nhập để tiếp tục.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _C.textSecondary,
-                        fontSize: 14,
-                        height: 1.6,
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // ── CTA: Đăng nhập ────────────────────────────────────────
-                    _PrimaryButton(
-                      label: 'Đăng nhập bằng Email',
-                      icon: Icons.email_outlined,
-                      onPressed: () {
-                        // TODO: Navigate to EmailInputScreen
-                        // context.pushNamed(RouteNames.nameEmailInput);
-                      },
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // ── Secondary: Bỏ qua ─────────────────────────────────────
-                    _SecondaryButton(
-                      label: 'Bỏ qua, tiếp tục không đăng nhập',
-                      onPressed: () => context.pop(),
-                    ),
-
-                    const Spacer(flex: 3),
-
-                    // ── Bottom note ───────────────────────────────────────────
-                    _BottomNote(),
-
-                    const SizedBox(height: 20),
-                  ],
+              // ── Text block ─────────────────────────────────────────────────
+              const Text(
+                'Bạn chưa đăng nhập',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _C.textPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              const Text(
+                'Một số tính năng yêu cầu tài khoản để hoạt động.\nVui lòng đăng nhập để tiếp tục.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _C.textSecondary,
+                  fontSize: 14,
+                  height: 1.6,
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              // ── CTA: Đăng nhập bằng Email ──────────────────────────────────
+              _PrimaryButton(
+                label: 'Đăng nhập bằng Email',
+                icon: Icons.email_outlined,
+                onPressed: () => context.pushNamed(
+                  RouteNames.nameProfileEmailInput,
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // ── Secondary: Đăng nhập bằng Google ───────────────────────────
+              _SocialLoginButton(
+                label: 'Đăng nhập bằng Google',
+                icon: Icons.g_mobiledata,
+                onPressed: () {
+                  // TODO: Implement Google Sign-In
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // ── Secondary: Đăng nhập bằng Facebook ──────────────────────────
+              _SocialLoginButton(
+                label: 'Đăng nhập bằng Facebook',
+                icon: Icons.facebook,
+                onPressed: () {
+                  // TODO: Implement Facebook Sign-In
+                },
+              ),
+
+              const Spacer(flex: 3),
+
+              // ── Bottom note ────────────────────────────────────────────────
+              _BottomNote(),
+
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -108,63 +113,42 @@ class AuthGateScreen extends StatelessWidget {
 }
 
 // =============================================================================
-// TOP BAR
+// SOCIAL LOGIN BUTTON
 // =============================================================================
-class _TopBar extends StatelessWidget {
-  final VoidCallback onBack;
+class _SocialLoginButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
 
-  const _TopBar({required this.onBack});
+  const _SocialLoginButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
-      decoration: const BoxDecoration(
-        color: _C.cardBg,
-        border: Border(bottom: BorderSide(color: _C.border)),
-      ),
-      child: Row(
-        children: [
-          // Back button
-          InkWell(
-            onTap: onBack,
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: _C.textSecondary, size: 18),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: _C.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: _C.border, width: 1.5),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 18,
-                color: _C.textPrimary,
-              ),
-            ),
           ),
-
-          // Brand
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: _C.primary,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: const Icon(
-              Icons.warning_rounded,
-              color: Colors.white,
-              size: 16,
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'DisasterResponse',
-            style: TextStyle(
-              color: _C.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+          foregroundColor: _C.textSecondary,
+        ),
       ),
     );
   }
@@ -280,42 +264,6 @@ class _PrimaryButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// SECONDARY BUTTON
-// =============================================================================
-class _SecondaryButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
-
-  const _SecondaryButton({required this.label, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: _C.border, width: 1.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          foregroundColor: _C.textSecondary,
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: _C.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ),

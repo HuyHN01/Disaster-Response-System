@@ -21,13 +21,14 @@ import 'package:disaster_response_app/features/admin_panel/presentation/admin_po
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart';
 import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/auth_gate_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/email_input_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/domain/citizen_news_controller.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_detail_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
 import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
-import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
 
 import 'route_names.dart';
 
@@ -282,7 +283,14 @@ abstract final class AppRouter {
         GoRoute(
           path: RouteNames.profile,
           name: RouteNames.nameProfile,
-          builder: (context, state) => const MobileProfileScreen(),
+          builder: (context, state) => const AuthGateScreen(),
+          routes: [
+            GoRoute(
+              path: RouteNames.segProfileEmailInput,
+              name: RouteNames.nameProfileEmailInput,
+              builder: (context, state) => const EmailInputScreen(),
+            ),
+          ],
         ),
         GoRoute(
           path: RouteNames.eventMap,
