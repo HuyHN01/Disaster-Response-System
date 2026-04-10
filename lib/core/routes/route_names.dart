@@ -52,6 +52,9 @@ abstract final class RouteNames {
   /// Email input screen in the profile auth flow ([EmailInputScreen]).
   static const String profileEmailInput = '/profile/email-input';
 
+  /// OTP verification screen in the profile auth flow ([OtpVerificationScreen]).
+  static const String profileOtpVerification = '/profile/otp-verification';
+
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -93,6 +96,7 @@ abstract final class RouteNames {
 
   static const String segNewsDetail = ':postId';
   static const String segProfileEmailInput = 'email-input';
+  static const String segProfileOtpVerification = 'otp-verification';
   static const String segAdminMap = 'map';
   static const String segAdminRescueStations = 'rescue-stations';
   static const String segAdminAccount = 'account';
@@ -120,6 +124,7 @@ abstract final class RouteNames {
   static const String nameAiChat = 'ai-chat';
   static const String nameProfile = 'profile';
   static const String nameProfileEmailInput = 'profile-email-input';
+  static const String nameProfileOtpVerification = 'profile-otp-verification';
   static const String nameAdminLogin = 'admin-login';
   static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';

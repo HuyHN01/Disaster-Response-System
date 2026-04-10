@@ -23,12 +23,14 @@ import 'package:disaster_response_app/features/admin_panel/rescue_stations/prese
 import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
 import 'package:disaster_response_app/features/auth/presentation/auth_gate_screen.dart';
 import 'package:disaster_response_app/features/auth/presentation/email_input_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/otp_verification_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/domain/citizen_news_controller.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_detail_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
 import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
 
 import 'route_names.dart';
 
@@ -283,12 +285,33 @@ abstract final class AppRouter {
         GoRoute(
           path: RouteNames.profile,
           name: RouteNames.nameProfile,
-          builder: (context, state) => const AuthGateScreen(),
+          builder: (context, state) {
+            final currentUser = FirebaseAuth.instance.currentUser;
+            if (currentUser == null) {
+              return const AuthGateScreen();
+            }
+            return const MobileProfileScreen();
+          },
           routes: [
             GoRoute(
               path: RouteNames.segProfileEmailInput,
               name: RouteNames.nameProfileEmailInput,
               builder: (context, state) => const EmailInputScreen(),
+            ),
+            GoRoute(
+              path: RouteNames.segProfileOtpVerification,
+              name: RouteNames.nameProfileOtpVerification,
+              builder: (context, state) {
+                final email = state.extra is String
+                    ? (state.extra as String).trim()
+                    : '';
+
+                if (email.isEmpty) {
+                  return const EmailInputScreen();
+                }
+
+                return OtpVerificationScreen(email: email);
+              },
             ),
           ],
         ),
@@ -423,7 +446,9 @@ abstract final class AppRouter {
       return isLoginRoute ? null : RouteNames.adminLogin;
     }
 
-    final profile = await _adminAuthRepository.fetchUserProfile(currentUser.uid);
+    final profile = await _adminAuthRepository.fetchUserProfile(
+      currentUser.uid,
+    );
     if (profile == null || !profile.canAccessAdminPortal) {
       await _adminAuthRepository.signOut();
       return RouteNames.adminLogin;

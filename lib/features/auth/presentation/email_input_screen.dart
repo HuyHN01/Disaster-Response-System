@@ -1,47 +1,56 @@
 // lib/features/auth/presentation/email_input_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/auth/domain/email_otp_auth_repository.dart';
 
 // =============================================================================
 // SHARED AUTH THEME TOKENS  (consistent with MobileHomeScreen)
 // =============================================================================
 class _AuthColors {
-  static const Color scaffold       = Color(0xFFF5F7FA);
-  static const Color cardBg         = Color(0xFFFFFFFF);
+  static const Color scaffold = Color(0xFFF5F7FA);
+  static const Color cardBg = Color(0xFFFFFFFF);
 
-  static const Color primary        = Color(0xFFDC2626); // emergency red
-  static const Color primaryDark    = Color(0xFFB91C1C);
-  static const Color primaryLight   = Color(0xFFFEF2F2);
+  static const Color primary = Color(0xFFDC2626); // emergency red
+  static const Color primaryDark = Color(0xFFB91C1C);
+  static const Color primaryLight = Color(0xFFFEF2F2);
 
-  static const Color textPrimary    = Color(0xFF111827);
-  static const Color textSecondary  = Color(0xFF6B7280);
-  static const Color textMuted      = Color(0xFF9CA3AF);
+  static const Color textPrimary = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textMuted = Color(0xFF9CA3AF);
 
-  static const Color border         = Color(0xFFE5E7EB);
-  static const Color borderFocus    = Color(0xFFDC2626);
-  static const Color inputBg        = Color(0xFFF9FAFB);
-  static const Color errorColor     = Color(0xFFDC2626);
-  static const Color successColor   = Color(0xFF16A34A);
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color borderFocus = Color(0xFFDC2626);
+  static const Color inputBg = Color(0xFFF9FAFB);
+  static const Color errorColor = Color(0xFFDC2626);
+  static const Color successColor = Color(0xFF16A34A);
 }
 
 // =============================================================================
 // EMAIL INPUT SCREEN
 // =============================================================================
-class EmailInputScreen extends StatefulWidget {
+class EmailInputScreen extends ConsumerStatefulWidget {
   const EmailInputScreen({super.key});
 
   @override
-  State<EmailInputScreen> createState() => _EmailInputScreenState();
+  ConsumerState<EmailInputScreen> createState() => _EmailInputScreenState();
 }
 
-class _EmailInputScreenState extends State<EmailInputScreen> {
-  final _formKey        = GlobalKey<FormState>();
+class _EmailInputScreenState extends ConsumerState<EmailInputScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _emailFocus      = FocusNode();
+  final _emailFocus = FocusNode();
 
   bool _isLoading = false;
   String? _errorMessage;
+
+  String _readableError(Object error) {
+    if (error is EmailOtpAuthException) return error.message;
+    return 'Không thể gửi mã OTP. Vui lòng thử lại.';
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -63,25 +72,19 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() {
-      _isLoading    = true;
+      _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // TODO: Implement – call your auth service / API to send OTP
-      // e.g. await ref.read(authRepositoryProvider).sendOtp(_emailController.text.trim());
-
-      // Simulate network delay (remove in production)
-      await Future.delayed(const Duration(seconds: 1));
+      final email = _emailController.text.trim().toLowerCase();
+      await ref.read(emailOtpAuthRepositoryProvider).sendOtp(email: email);
 
       if (!mounted) return;
 
-      // TODO: Navigate to OTP screen, passing the email
-      // context.pushNamed(RouteNames.nameOtpVerification,
-      //   extra: _emailController.text.trim());
+      context.pushNamed(RouteNames.nameProfileOtpVerification, extra: email);
     } catch (e) {
-      // TODO: Map specific error types to user-friendly messages
-      setState(() => _errorMessage = 'Không thể gửi mã OTP. Vui lòng thử lại.');
+      setState(() => _errorMessage = _readableError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -204,7 +207,6 @@ class _EmailInputScreenState extends State<EmailInputScreen> {
 // Keep export from same file for convenience; move to own file if needed.
 // See otp_verification_screen.dart
 
-
 // =============================================================================
 // SHARED WIDGETS (reused in both screens)
 // =============================================================================
@@ -221,9 +223,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
       decoration: const BoxDecoration(
         color: _AuthColors.cardBg,
-        border: Border(
-          bottom: BorderSide(color: _AuthColors.border, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: _AuthColors.border, width: 1)),
       ),
       child: Row(
         children: [
@@ -295,10 +295,7 @@ class _HeroIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: iconColor.withOpacity(0.15),
-          width: 1.5,
-        ),
+        border: Border.all(color: iconColor.withOpacity(0.15), width: 1.5),
       ),
       child: Icon(icon, color: iconColor, size: 34),
     );
@@ -358,10 +355,7 @@ class _EmailTextField extends StatelessWidget {
         filled: true,
         fillColor: _AuthColors.inputBg,
         hintText: 'example@email.com',
-        hintStyle: const TextStyle(
-          color: _AuthColors.textMuted,
-          fontSize: 15,
-        ),
+        hintStyle: const TextStyle(color: _AuthColors.textMuted, fontSize: 15),
         prefixIcon: const Icon(
           Icons.email_outlined,
           color: _AuthColors.textSecondary,
@@ -381,18 +375,24 @@ class _EmailTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: _AuthColors.borderFocus, width: 1.5),
+          borderSide: const BorderSide(
+            color: _AuthColors.borderFocus,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: _AuthColors.errorColor, width: 1.5),
+          borderSide: const BorderSide(
+            color: _AuthColors.errorColor,
+            width: 1.5,
+          ),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: _AuthColors.errorColor, width: 1.5),
+          borderSide: const BorderSide(
+            color: _AuthColors.errorColor,
+            width: 1.5,
+          ),
         ),
         errorStyle: const TextStyle(
           color: _AuthColors.errorColor,
@@ -417,9 +417,7 @@ class _ErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: _AuthColors.primaryLight,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: _AuthColors.errorColor.withOpacity(0.3),
-        ),
+        border: Border.all(color: _AuthColors.errorColor.withOpacity(0.3)),
       ),
       child: Row(
         children: [

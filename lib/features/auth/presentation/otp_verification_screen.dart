@@ -3,69 +3,80 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/auth/domain/email_otp_auth_repository.dart';
 
 // =============================================================================
 // SHARED AUTH THEME TOKENS  (keep in shared auth_theme.dart if preferred)
 // =============================================================================
 class _AuthColors {
-  static const Color scaffold      = Color(0xFFF5F7FA);
-  static const Color cardBg        = Color(0xFFFFFFFF);
+  static const Color scaffold = Color(0xFFF5F7FA);
+  static const Color cardBg = Color(0xFFFFFFFF);
 
-  static const Color primary       = Color(0xFFDC2626);
-  static const Color primaryDark   = Color(0xFFB91C1C);
-  static const Color primaryLight  = Color(0xFFFEF2F2);
+  static const Color primary = Color(0xFFDC2626);
+  static const Color primaryDark = Color(0xFFB91C1C);
+  static const Color primaryLight = Color(0xFFFEF2F2);
 
-  static const Color textPrimary   = Color(0xFF111827);
+  static const Color textPrimary = Color(0xFF111827);
   static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textMuted     = Color(0xFF9CA3AF);
+  static const Color textMuted = Color(0xFF9CA3AF);
 
-  static const Color border        = Color(0xFFE5E7EB);
-  static const Color borderFocus   = Color(0xFFDC2626);
-  static const Color inputBg       = Color(0xFFF9FAFB);
-  static const Color errorColor    = Color(0xFFDC2626);
-  static const Color successColor  = Color(0xFF16A34A);
-  static const Color successLight  = Color(0xFFDCFCE7);
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color borderFocus = Color(0xFFDC2626);
+  static const Color inputBg = Color(0xFFF9FAFB);
+  static const Color errorColor = Color(0xFFDC2626);
+  static const Color successColor = Color(0xFF16A34A);
+  static const Color successLight = Color(0xFFDCFCE7);
 }
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-const int _kOtpLength        = 6;
+const int _kOtpLength = 6;
 const int _kResendCooldownSec = 60; // seconds before resend is allowed
 
 // =============================================================================
 // OTP VERIFICATION SCREEN
 // =============================================================================
-class OtpVerificationScreen extends StatefulWidget {
+class OtpVerificationScreen extends ConsumerStatefulWidget {
   /// The email that OTP was sent to. Pass via route extra / constructor.
   final String email;
 
-  const OtpVerificationScreen({
-    super.key,
-    required this.email,
-  });
+  const OtpVerificationScreen({super.key, required this.email});
 
   @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() =>
+      _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   // ── OTP field state ────────────────────────────────────────────────────────
-  final List<TextEditingController> _controllers =
-      List.generate(_kOtpLength, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes =
-      List.generate(_kOtpLength, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(
+    _kOtpLength,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(
+    _kOtpLength,
+    (_) => FocusNode(),
+  );
 
   // ── UI state ───────────────────────────────────────────────────────────────
-  bool _isVerifying   = false;
-  bool _isResending   = false;
+  bool _isVerifying = false;
+  bool _isResending = false;
   String? _errorMessage;
-  bool _isSuccess     = false;
+  bool _isSuccess = false;
 
   // ── Countdown state ────────────────────────────────────────────────────────
-  int _secondsLeft    = _kResendCooldownSec;
+  int _secondsLeft = _kResendCooldownSec;
   Timer? _countdownTimer;
+
+  String _readableError(Object error) {
+    if (error is EmailOtpAuthException) return error.message;
+    return 'Mã OTP không đúng hoặc đã hết hạn. Vui lòng thử lại.';
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -92,7 +103,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _secondsLeft = _kResendCooldownSec);
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       setState(() {
         if (_secondsLeft > 0) {
           _secondsLeft--;
@@ -108,8 +122,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   // ---------------------------------------------------------------------------
   // OTP input helpers
   // ---------------------------------------------------------------------------
-  String get _currentOtp =>
-      _controllers.map((c) => c.text).join();
+  String get _currentOtp => _controllers.map((c) => c.text).join();
 
   bool get _isOtpComplete => _currentOtp.length == _kOtpLength;
 
@@ -146,32 +159,28 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     _focusNodes.lastOrNull?.unfocus();
 
     setState(() {
-      _isVerifying  = true;
+      _isVerifying = true;
       _errorMessage = null;
     });
 
     try {
-      // TODO: Implement – call your auth service to verify OTP
-      // e.g. await ref.read(authRepositoryProvider)
-      //             .verifyOtp(email: widget.email, otp: _currentOtp);
-
-      // Simulate network delay (remove in production)
-      await Future.delayed(const Duration(seconds: 1));
+      await ref
+          .read(emailOtpAuthRepositoryProvider)
+          .verifyOtp(email: widget.email, otpCode: _currentOtp);
 
       if (!mounted) return;
 
       setState(() => _isSuccess = true);
 
-      // TODO: Navigate to the next screen after short success delay
-      // await Future.delayed(const Duration(milliseconds: 900));
-      // if (mounted) context.goNamed(RouteNames.nameHome);
-
+      await Future.delayed(const Duration(milliseconds: 900));
+      if (mounted) {
+        context.goNamed(RouteNames.nameProfile);
+      }
     } catch (e) {
-      // TODO: Map specific error types to user-friendly messages
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Mã OTP không đúng hoặc đã hết hạn. Vui lòng thử lại.';
-        _isSuccess    = false;
+        _errorMessage = _readableError(e);
+        _isSuccess = false;
         // Clear all fields and refocus first field
         for (final c in _controllers) c.clear();
         _focusNodes[0].requestFocus();
@@ -185,25 +194,23 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     if (!_canResend) return;
 
     setState(() {
-      _isResending  = true;
+      _isResending = true;
       _errorMessage = null;
-      _isSuccess    = false;
+      _isSuccess = false;
       for (final c in _controllers) c.clear();
     });
     _focusNodes[0].requestFocus();
 
     try {
-      // TODO: Implement – re-send OTP to widget.email
-      // e.g. await ref.read(authRepositoryProvider).sendOtp(widget.email);
-
-      await Future.delayed(const Duration(milliseconds: 800));
+      await ref
+          .read(emailOtpAuthRepositoryProvider)
+          .sendOtp(email: widget.email);
 
       if (!mounted) return;
       _startCountdown();
-
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = 'Không thể gửi lại mã. Vui lòng thử lại.');
+      setState(() => _errorMessage = _readableError(e));
     } finally {
       if (mounted) setState(() => _isResending = false);
     }
@@ -354,14 +361,14 @@ class _OtpInputRow extends StatelessWidget {
   });
 
   Color get _activeBorderColor {
-    if (hasError)   return _AuthColors.errorColor;
-    if (isSuccess)  return _AuthColors.successColor;
+    if (hasError) return _AuthColors.errorColor;
+    if (isSuccess) return _AuthColors.successColor;
     return _AuthColors.borderFocus;
   }
 
   Color get _filledBg {
-    if (hasError)   return _AuthColors.primaryLight;
-    if (isSuccess)  return _AuthColors.successLight;
+    if (hasError) return _AuthColors.primaryLight;
+    if (isSuccess) return _AuthColors.successLight;
     return _AuthColors.cardBg;
   }
 
@@ -422,8 +429,8 @@ class _OtpBox extends StatelessWidget {
               color: focusNode.hasFocus
                   ? activeBorderColor
                   : isFilled
-                      ? activeBorderColor.withOpacity(0.5)
-                      : _AuthColors.border,
+                  ? activeBorderColor.withOpacity(0.5)
+                  : _AuthColors.border,
               width: focusNode.hasFocus || isFilled ? 1.8 : 1.2,
             ),
             boxShadow: focusNode.hasFocus
@@ -588,10 +595,7 @@ class _ChangeEmailRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: RichText(
             text: const TextSpan(
-              style: TextStyle(
-                color: _AuthColors.textSecondary,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: _AuthColors.textSecondary, fontSize: 13),
               children: [
                 TextSpan(text: 'Nhập sai email? '),
                 TextSpan(
@@ -628,9 +632,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
       decoration: const BoxDecoration(
         color: _AuthColors.cardBg,
-        border: Border(
-          bottom: BorderSide(color: _AuthColors.border, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: _AuthColors.border, width: 1)),
       ),
       child: Row(
         children: [
@@ -698,10 +700,7 @@ class _HeroIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: iconColor.withOpacity(0.15),
-          width: 1.5,
-        ),
+        border: Border.all(color: iconColor.withOpacity(0.15), width: 1.5),
       ),
       child: Icon(icon, color: iconColor, size: 34),
     );
@@ -741,7 +740,9 @@ class _TitleBlock extends StatelessWidget {
             color: subtitleColor ?? _AuthColors.textSecondary,
             fontSize: 14,
             height: 1.55,
-            fontWeight: subtitleColor != null ? FontWeight.w600 : FontWeight.normal,
+            fontWeight: subtitleColor != null
+                ? FontWeight.w600
+                : FontWeight.normal,
           ),
         ),
       ],

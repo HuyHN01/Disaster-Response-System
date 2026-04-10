@@ -77,6 +77,11 @@ service cloud.firestore {
           (isActiveAdmin() && adminUpdateIsSafe(uid));
     }
 
+    // OTP records are backend-only; mobile clients must use Cloud Functions.
+    match /email_otp_records/{docId} {
+      allow read, write: if false;
+    }
+
     // Keep current app behavior for existing non-auth features.
     match /disaster_events/{docId} {
       allow read, write: if true;
