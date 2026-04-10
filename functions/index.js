@@ -21,9 +21,9 @@ const OTP_MAX_SENDS_PER_WINDOW = 3;
 const OTP_SEND_WINDOW_SECONDS = 10 * 60;
 const OTP_MAX_VERIFY_ATTEMPTS = 5;
 
-const BREVO_API_KEY = defineSecret("BREVO_API_KEY");
-const BREVO_SENDER_EMAIL = defineString("BREVO_SENDER_EMAIL");
-const BREVO_SENDER_NAME = defineString("BREVO_SENDER_NAME");
+const MAILTRAP_API_TOKEN = defineSecret("MAILTRAP_API_TOKEN");
+const MAILTRAP_SENDER_EMAIL = defineString("MAILTRAP_SENDER_EMAIL");
+const MAILTRAP_SENDER_NAME = defineString("MAILTRAP_SENDER_NAME");
 
 const UserRoles = Object.freeze({
   SUPER_ADMIN: 0,
@@ -100,47 +100,44 @@ async function getLatestOtpRecord(email) {
   return snap.docs[0];
 }
 
-function ensureBrevoConfig() {
-  const senderEmail = BREVO_SENDER_EMAIL.value();
+function ensureMailtrapConfig() {
+  const senderEmail = MAILTRAP_SENDER_EMAIL.value();
   if (!senderEmail) {
-    throw new HttpsError("failed-precondition", "Thiếu cấu hình BREVO_SENDER_EMAIL.");
+    throw new HttpsError("failed-precondition", "Thiếu cấu hình MAILTRAP_SENDER_EMAIL.");
   }
 
   return {
-    apiKey: BREVO_API_KEY.value(),
+    apiToken: MAILTRAP_API_TOKEN.value(),
     senderEmail,
-    senderName: BREVO_SENDER_NAME.value() || "Disaster Response",
+    senderName: MAILTRAP_SENDER_NAME.value() || "Disaster Response",
   };
 }
 
-async function sendOtpEmailViaBrevo({ toEmail, otpCode, expiresInSeconds }) {
-  const { apiKey, senderEmail, senderName } = ensureBrevoConfig();
+async function sendOtpEmailViaMailtrap({ toEmail, otpCode, expiresInSeconds }) {
+  const { apiToken, senderEmail, senderName } = ensureMailtrapConfig();
 
-  const htmlContent = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
-      <h2 style="margin-bottom: 8px;">Xác minh đăng nhập</h2>
-      <p>Mã OTP của bạn là:</p>
-      <div style="font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #DC2626; margin: 12px 0;">${otpCode}</div>
-      <p>Mã có hiệu lực trong <strong>${Math.floor(expiresInSeconds / 60)} phút</strong>.</p>
-      <p>Nếu bạn không thực hiện yêu cầu này, hãy bỏ qua email.</p>
-    </div>
-  `;
+  const textContent = [
+    "Xac minh dang nhap",
+    `Ma OTP cua ban la: ${otpCode}`,
+    `Ma co hieu luc trong ${Math.floor(expiresInSeconds / 60)} phut.`,
+    "Neu ban khong thuc hien yeu cau nay, hay bo qua email.",
+  ].join("\n");
 
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
     method: "POST",
     headers: {
-      Accept: "application/json",
+      Authorization: `Bearer ${apiToken}`,
       "Content-Type": "application/json",
-      "api-key": apiKey,
     },
     body: JSON.stringify({
-      sender: {
+      from: {
         email: senderEmail,
         name: senderName,
       },
       to: [{ email: toEmail }],
       subject: "Mã OTP đăng nhập Disaster Response",
-      htmlContent,
+      text: textContent,
+      category: "OTP Authentication",
     }),
   });
 
@@ -149,7 +146,7 @@ async function sendOtpEmailViaBrevo({ toEmail, otpCode, expiresInSeconds }) {
     const detail = rawBody ? ` (${rawBody.slice(0, 200)})` : "";
     throw new HttpsError(
       "unavailable",
-      `Không thể gửi email OTP qua Brevo (HTTP ${response.status})${detail}`,
+      `Không thể gửi email OTP qua Mailtrap (HTTP ${response.status})${detail}`,
     );
   }
 }
@@ -291,7 +288,7 @@ async function getUserProfile(uid) {
   return snap.data();
 }
 
-exports.sendOtp = onCall({ secrets: [BREVO_API_KEY] }, async (request) => {
+exports.sendOtp = onCall({ secrets: [MAILTRAP_API_TOKEN] }, async (request) => {
   const data = request.data || {};
   const email = assertEmail(data.email);
 
@@ -349,7 +346,7 @@ exports.sendOtp = onCall({ secrets: [BREVO_API_KEY] }, async (request) => {
   await otpRef.set(otpPayload);
 
   try {
-    await sendOtpEmailViaBrevo({ toEmail: email, otpCode, expiresInSeconds: OTP_TTL_SECONDS });
+    await sendOtpEmailViaMailtrap({ toEmail: email, otpCode, expiresInSeconds: OTP_TTL_SECONDS });
   } catch (error) {
     await otpRef.delete();
     throw mapToHttpsError(error, "Không thể gửi OTP qua email.");

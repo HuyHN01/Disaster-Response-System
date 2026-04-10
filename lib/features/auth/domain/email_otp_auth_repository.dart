@@ -78,6 +78,8 @@ class EmailOtpAuthRepository {
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {
+    final rawMessage = error.message?.trim();
+
     switch (error.code) {
       case 'invalid-argument':
         return error.message ?? 'Dữ liệu không hợp lệ.';
@@ -94,15 +96,48 @@ class EmailOtpAuthRepository {
         return error.message ??
             'Mã OTP không còn hiệu lực. Vui lòng gửi lại mã.';
       case 'unavailable':
-        return error.message ??
-            'Dịch vụ OTP tạm thời không khả dụng. Vui lòng thử lại sau.';
+        return _mapUnavailableError(rawMessage);
       default:
-        final rawMessage = error.message?.trim();
         if (rawMessage != null && rawMessage.isNotEmpty) {
           return rawMessage;
         }
         return 'Đã có lỗi backend (${error.code}). Vui lòng thử lại.';
     }
+  }
+
+  String _mapUnavailableError(String? rawMessage) {
+    if (rawMessage == null || rawMessage.isEmpty) {
+      return 'Dịch vụ OTP tạm thời không khả dụng. Vui lòng thử lại sau.';
+    }
+
+    final statusMatch = RegExp(r'HTTP\s+(\d{3})').firstMatch(rawMessage);
+    final statusCode = statusMatch?.group(1);
+
+    switch (statusCode) {
+      case '400':
+        return 'Mailtrap từ chối yêu cầu gửi mail (HTTP 400). Vui lòng kiểm tra cấu hình sender email/name.';
+      case '401':
+        return 'Mailtrap xác thực thất bại (HTTP 401). Vui lòng kiểm tra MAILTRAP_API_TOKEN.';
+      case '403':
+        return 'Mailtrap không cho phép gửi mail (HTTP 403). Kiểm tra quyền API token và sender đã xác minh.';
+      case '404':
+        return 'Không tìm thấy endpoint Mailtrap (HTTP 404). Vui lòng kiểm tra URL API.';
+      case '429':
+        return 'Mailtrap đang giới hạn tần suất gửi (HTTP 429). Vui lòng thử lại sau ít phút.';
+      case '500':
+      case '502':
+      case '503':
+      case '504':
+        return 'Mailtrap đang tạm lỗi máy chủ ($statusCode). Vui lòng thử lại sau.';
+      default:
+        break;
+    }
+
+    if (rawMessage.contains('Mailtrap')) {
+      return rawMessage;
+    }
+
+    return 'Không thể gửi OTP qua Mailtrap. Vui lòng thử lại.';
   }
 
   String _mapAuthError(FirebaseAuthException error) {
