@@ -303,11 +303,16 @@ abstract final class AppRouter {
           path: RouteNames.profile,
           name: RouteNames.nameProfile,
           builder: (context, state) {
-            final currentUser = FirebaseAuth.instance.currentUser;
-            if (currentUser == null) {
-              return const AuthGateScreen();
-            }
-            return const MobileProfileScreen();
+            return StreamBuilder(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              initialData: FirebaseAuth.instance.currentUser,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const AuthGateScreen();
+                }
+                return const MobileProfileScreen();
+              },
+            );
           },
           routes: [
             GoRoute(

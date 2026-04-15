@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -15,17 +16,20 @@ class EmailOtpAuthException implements Exception {
 class EmailOtpAuthRepository {
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
+  final FirebaseFirestore _firestore;
   final GoogleSignIn _googleSignIn;
   bool _isGoogleInitialized = false;
 
   EmailOtpAuthRepository({
     FirebaseFunctions? functions,
     FirebaseAuth? auth,
+    FirebaseFirestore? firestore,
     GoogleSignIn? googleSignIn,
   })
     : _functions =
           functions ?? FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
       _auth = auth ?? FirebaseAuth.instance,
+      _firestore = firestore ?? FirebaseFirestore.instance,
       _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
   Future<void> sendOtp({required String email}) async {
@@ -72,11 +76,21 @@ class EmailOtpAuthRepository {
         );
       }
 
-      return _auth.signInWithCustomToken(token);
+      final credential = await _auth.signInWithCustomToken(token);
+      final user = credential.user;
+      if (user == null) {
+        throw const EmailOtpAuthException(
+          'Không tìm thấy thông tin tài khoản sau khi đăng nhập.',
+        );
+      }
+      await _upsertUserProfile(user);
+      return credential;
     } on FirebaseFunctionsException catch (e) {
       throw EmailOtpAuthException(_mapCallableError(e));
     } on FirebaseAuthException catch (e) {
       throw EmailOtpAuthException(_mapAuthError(e));
+    } on FirebaseException catch (e) {
+      throw EmailOtpAuthException(_mapFirestoreError(e));
     } catch (e) {
       if (e is EmailOtpAuthException) rethrow;
       throw const EmailOtpAuthException(
@@ -98,11 +112,22 @@ class EmailOtpAuthRepository {
       }
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
-      return _auth.signInWithCredential(credential);
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user;
+      if (user == null) {
+        throw const EmailOtpAuthException(
+          'Không tìm thấy thông tin tài khoản sau khi đăng nhập Google.',
+        );
+      }
+
+      await _upsertUserProfile(user);
+      return userCredential;
     } on GoogleSignInException catch (e) {
       throw EmailOtpAuthException(_mapGoogleSignInError(e));
     } on FirebaseAuthException catch (e) {
       throw EmailOtpAuthException(_mapAuthError(e));
+    } on FirebaseException catch (e) {
+      throw EmailOtpAuthException(_mapFirestoreError(e));
     } catch (e) {
       if (e is EmailOtpAuthException) rethrow;
       throw const EmailOtpAuthException(
@@ -115,6 +140,49 @@ class EmailOtpAuthRepository {
     if (_isGoogleInitialized) return;
     await _googleSignIn.initialize();
     _isGoogleInitialized = true;
+  }
+
+  Future<void> _upsertUserProfile(User user) async {
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final snapshot = await docRef.get();
+    final now = FieldValue.serverTimestamp();
+    final normalizedEmail = (user.email ?? '').trim().toLowerCase();
+    final normalizedDisplayName = (user.displayName ?? '').trim();
+    final normalizedPhotoUrl = (user.photoURL ?? '').trim();
+    var hasMfa = false;
+    try {
+      final factors = await user.multiFactor.getEnrolledFactors();
+      hasMfa = factors.isNotEmpty;
+    } catch (_) {
+      hasMfa = false;
+    }
+
+    if (!snapshot.exists) {
+      final createPayload = <String, dynamic>{
+        'uid': user.uid,
+        'email': normalizedEmail,
+        'displayName': normalizedDisplayName,
+        'photoUrl': normalizedPhotoUrl,
+        'role': 3,
+        'status': 1,
+        'createdAt': now,
+        'updatedAt': now,
+        'createdBy': null,
+        'lastLoginAt': now,
+        'mfaEnabled': hasMfa,
+      };
+      await docRef.set(createPayload, SetOptions(merge: true));
+      return;
+    }
+
+    final updatePayload = <String, dynamic>{
+      'displayName': normalizedDisplayName,
+      'photoUrl': normalizedPhotoUrl,
+      'updatedAt': now,
+      'lastLoginAt': now,
+    };
+
+    await docRef.set(updatePayload, SetOptions(merge: true));
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {
@@ -193,6 +261,17 @@ class EmailOtpAuthRepository {
     }
   }
 
+  String _mapFirestoreError(FirebaseException error) {
+    switch (error.code) {
+      case 'permission-denied':
+        return 'Không có quyền cập nhật hồ sơ người dùng. Vui lòng liên hệ quản trị viên.';
+      case 'unavailable':
+        return 'Dịch vụ dữ liệu tạm thời không khả dụng. Vui lòng thử lại.';
+      default:
+        return error.message ?? 'Không thể đồng bộ hồ sơ người dùng.';
+    }
+  }
+
   String _mapGoogleSignInError(GoogleSignInException error) {
     switch (error.code) {
       case GoogleSignInExceptionCode.canceled:
@@ -219,6 +298,7 @@ final emailOtpAuthRepositoryProvider = Provider<EmailOtpAuthRepository>((ref) {
   return EmailOtpAuthRepository(
     functions: FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
     auth: FirebaseAuth.instance,
+    firestore: FirebaseFirestore.instance,
     googleSignIn: GoogleSignIn.instance,
   );
 });

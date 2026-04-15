@@ -93,7 +93,7 @@ class AppUser {
   final String uid;
   final String email;
   final String displayName;
-  final String? photoURL;
+  final String? photoUrl;
   final int role;
   final int status;
   final DateTime createdAt;
@@ -106,7 +106,7 @@ class AppUser {
     required this.uid,
     required this.email,
     required this.displayName,
-    this.photoURL,
+    this.photoUrl,
     required this.role,
     required this.status,
     required this.createdAt,
@@ -118,7 +118,7 @@ class AppUser {
 
   AppUser copyWith({
     String? displayName,
-    String? photoURL,
+    String? photoUrl,
     int? role,
     int? status,
     bool? mfaEnabled,
@@ -127,7 +127,7 @@ class AppUser {
         uid: uid,
         email: email,
         displayName: displayName ?? this.displayName,
-        photoURL: photoURL ?? this.photoURL,
+        photoUrl: photoUrl ?? this.photoUrl,
         role: role ?? this.role,
         status: status ?? this.status,
         createdAt: createdAt,

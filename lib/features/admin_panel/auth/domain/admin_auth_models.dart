@@ -51,9 +51,7 @@ class AdminUserProfile {
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data() ?? <String, dynamic>{};
-    final resolvedPhotoUrl =
-        _asTrimmedString(data['photoURL']) ??
-        _asTrimmedString(data['photoUrl']);
+    final resolvedPhotoUrl = _asTrimmedString(data['photoUrl']);
 
     return AdminUserProfile(
       uid: (data['uid'] as String?) ?? doc.id,

@@ -44,7 +44,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     final u = widget.existingUser;
     _displayNameCtrl = TextEditingController(text: u?.displayName ?? '');
     _emailCtrl = TextEditingController(text: u?.email ?? '');
-    _photoUrlCtrl = TextEditingController(text: u?.photoURL ?? '');
+    _photoUrlCtrl = TextEditingController(text: u?.photoUrl ?? '');
     _selectedRole = u?.role ?? 3;
     _selectedStatus = u?.status ?? 1;
     _mfaEnabled = u?.mfaEnabled ?? false;
