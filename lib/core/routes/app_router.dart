@@ -20,6 +20,9 @@ import 'package:disaster_response_app/features/admin_panel/presentation/admin_ma
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_post_editor_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_detail_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_management_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_models.dart';
 import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
 import 'package:disaster_response_app/features/auth/presentation/auth_gate_screen.dart';
 import 'package:disaster_response_app/features/auth/presentation/email_input_screen.dart';
@@ -212,6 +215,11 @@ abstract final class AppRouter {
           builder: (context, state) => const AdminRescueStationsScreen(),
         ),
         GoRoute(
+          path: RouteNames.adminUserManagement,
+          name: RouteNames.nameAdminUserManagement,
+          builder: (context, state) => const UserManagementScreen(),
+        ),
+        GoRoute(
           path: RouteNames.adminAccount,
           name: RouteNames.nameAdminAccount,
           builder: (context, state) => const AdminAccountScreen(),
@@ -227,7 +235,7 @@ abstract final class AppRouter {
   /// Admin detail/editor routes that render WITHOUT the sidebar shell.
   ///
   /// These screens have their own full-screen layouts ([AdminEventDetailScreen],
-  /// [AdminPostEditorScreen]) and must not be wrapped by [AdminLayout].
+  /// [AdminPostEditorScreen], [UserDetailScreen]) and must not be wrapped by [AdminLayout].
   static List<RouteBase> _adminDetailRoutes() => [
     GoRoute(
       path: RouteNames.adminEventDetail,
@@ -259,6 +267,15 @@ abstract final class AppRouter {
           },
         ),
       ],
+    ),
+    // ── User detail / edit ─────────────────────────────────────────────
+    GoRoute(
+      path: RouteNames.adminUserDetail,
+      name: RouteNames.nameAdminUserDetail,
+      builder: (context, state) {
+        final user = state.extra as AppUser?;
+        return UserDetailScreen(existingUser: user);
+      },
     ),
   ];
 
