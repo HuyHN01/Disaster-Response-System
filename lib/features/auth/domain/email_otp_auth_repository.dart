@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class EmailOtpAuthException implements Exception {
   final String message;
@@ -14,11 +15,18 @@ class EmailOtpAuthException implements Exception {
 class EmailOtpAuthRepository {
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
+  final GoogleSignIn _googleSignIn;
+  bool _isGoogleInitialized = false;
 
-  EmailOtpAuthRepository({FirebaseFunctions? functions, FirebaseAuth? auth})
+  EmailOtpAuthRepository({
+    FirebaseFunctions? functions,
+    FirebaseAuth? auth,
+    GoogleSignIn? googleSignIn,
+  })
     : _functions =
           functions ?? FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
-      _auth = auth ?? FirebaseAuth.instance;
+      _auth = auth ?? FirebaseAuth.instance,
+      _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
   Future<void> sendOtp({required String email}) async {
     final normalizedEmail = email.trim().toLowerCase();
@@ -75,6 +83,38 @@ class EmailOtpAuthRepository {
         'Xác thực OTP thất bại. Vui lòng thử lại.',
       );
     }
+  }
+
+  Future<UserCredential> signInWithGoogle() async {
+    try {
+      await _ensureGoogleInitialized();
+      final googleUser = await _googleSignIn.authenticate();
+      final idToken = googleUser.authentication.idToken;
+
+      if (idToken == null || idToken.isEmpty) {
+        throw const EmailOtpAuthException(
+          'Không nhận được ID token từ Google. Vui lòng thử lại.',
+        );
+      }
+
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      return _auth.signInWithCredential(credential);
+    } on GoogleSignInException catch (e) {
+      throw EmailOtpAuthException(_mapGoogleSignInError(e));
+    } on FirebaseAuthException catch (e) {
+      throw EmailOtpAuthException(_mapAuthError(e));
+    } catch (e) {
+      if (e is EmailOtpAuthException) rethrow;
+      throw const EmailOtpAuthException(
+        'Đăng nhập Google thất bại. Vui lòng thử lại.',
+      );
+    }
+  }
+
+  Future<void> _ensureGoogleInitialized() async {
+    if (_isGoogleInitialized) return;
+    await _googleSignIn.initialize();
+    _isGoogleInitialized = true;
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {
@@ -152,11 +192,33 @@ class EmailOtpAuthRepository {
         return error.message ?? 'Đăng nhập Firebase thất bại.';
     }
   }
+
+  String _mapGoogleSignInError(GoogleSignInException error) {
+    switch (error.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return 'Bạn đã hủy đăng nhập Google.';
+      case GoogleSignInExceptionCode.interrupted:
+        return 'Đăng nhập Google bị gián đoạn. Vui lòng thử lại.';
+      case GoogleSignInExceptionCode.clientConfigurationError:
+        return 'Cấu hình Google Sign-In chưa đúng. Vui lòng liên hệ quản trị viên.';
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        return 'Dịch vụ Google Sign-In chưa sẵn sàng trên thiết bị này.';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Không thể mở giao diện đăng nhập Google lúc này.';
+      case GoogleSignInExceptionCode.userMismatch:
+        return 'Tài khoản Google không khớp phiên đăng nhập hiện tại.';
+      case GoogleSignInExceptionCode.unknownError:
+        return error.description?.trim().isNotEmpty == true
+            ? error.description!.trim()
+            : 'Đăng nhập Google thất bại. Vui lòng thử lại.';
+    }
+  }
 }
 
 final emailOtpAuthRepositoryProvider = Provider<EmailOtpAuthRepository>((ref) {
   return EmailOtpAuthRepository(
     functions: FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
     auth: FirebaseAuth.instance,
+    googleSignIn: GoogleSignIn.instance,
   );
 });

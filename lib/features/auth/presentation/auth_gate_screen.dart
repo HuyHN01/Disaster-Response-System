@@ -1,9 +1,11 @@
 // lib/features/auth/presentation/auth_gate_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/auth/domain/email_otp_auth_repository.dart';
 
 // =============================================================================
 // THEME TOKENS  (consistent with MobileHomeScreen & auth screens)
@@ -23,8 +25,43 @@ class _C {
 // =============================================================================
 // AUTH GATE SCREEN
 // =============================================================================
-class AuthGateScreen extends StatelessWidget {
+class AuthGateScreen extends ConsumerStatefulWidget {
   const AuthGateScreen({super.key});
+
+  @override
+  ConsumerState<AuthGateScreen> createState() => _AuthGateScreenState();
+}
+
+class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
+  bool _isGoogleLoading = false;
+
+  Future<void> _onGoogleSignInPressed() async {
+    if (_isGoogleLoading) return;
+
+    setState(() => _isGoogleLoading = true);
+    try {
+      await ref.read(emailOtpAuthRepositoryProvider).signInWithGoogle();
+      if (!mounted) return;
+      GoRouter.of(context).refresh();
+      context.goNamed(RouteNames.nameProfile);
+    } on EmailOtpAuthException catch (e) {
+      if (!mounted) return;
+      _showSnackBar(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showSnackBar('Đăng nhập Google thất bại. Vui lòng thử lại.');
+    } finally {
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+      }
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,9 +119,8 @@ class AuthGateScreen extends StatelessWidget {
               _SocialLoginButton(
                 label: 'Đăng nhập bằng Google',
                 icon: Icons.g_mobiledata,
-                onPressed: () {
-                  // TODO: Implement Google Sign-In
-                },
+                isLoading: _isGoogleLoading,
+                onPressed: _onGoogleSignInPressed,
               ),
 
               const SizedBox(height: 12),
@@ -119,11 +155,13 @@ class _SocialLoginButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onPressed;
+  final bool isLoading;
 
   const _SocialLoginButton({
     required this.label,
     required this.icon,
     required this.onPressed,
+    this.isLoading = false,
   });
 
   @override
@@ -132,10 +170,19 @@ class _SocialLoginButton extends StatelessWidget {
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: _C.textSecondary, size: 18),
+        onPressed: isLoading ? null : onPressed,
+        icon: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _C.textSecondary,
+                ),
+              )
+            : Icon(icon, color: _C.textSecondary, size: 18),
         label: Text(
-          label,
+          isLoading ? 'Đang đăng nhập...' : label,
           style: const TextStyle(
             color: _C.textSecondary,
             fontSize: 14,
