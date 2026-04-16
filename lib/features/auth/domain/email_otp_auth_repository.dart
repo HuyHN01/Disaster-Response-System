@@ -136,6 +136,78 @@ class EmailOtpAuthRepository {
     }
   }
 
+  Future<void> updateCurrentUserAvatar({required String photoUrl}) async {
+    final normalizedUrl = photoUrl.trim();
+    if (normalizedUrl.isEmpty) {
+      throw const EmailOtpAuthException('URL ảnh đại diện không hợp lệ.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const EmailOtpAuthException(
+        'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    try {
+      await _upsertAvatarProfile(user: user, photoUrl: normalizedUrl);
+
+      // Firestore sync is the source of truth for profile rendering.
+      // Auth update is best-effort to avoid false failure after successful upload.
+      try {
+        await user.updatePhotoURL(normalizedUrl);
+        await user.reload();
+      } catch (_) {
+        // Ignore non-critical auth profile sync errors.
+      }
+    } on FirebaseException catch (e) {
+      throw EmailOtpAuthException(_mapFirestoreError(e));
+    }
+  }
+
+  Future<void> _upsertAvatarProfile({
+    required User user,
+    required String photoUrl,
+  }) async {
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final snapshot = await docRef.get();
+    final now = FieldValue.serverTimestamp();
+
+    if (snapshot.exists) {
+      await docRef.set({
+        'photoUrl': photoUrl,
+        'updatedAt': now,
+      }, SetOptions(merge: true));
+      return;
+    }
+
+    final normalizedEmail = (user.email ?? '').trim().toLowerCase();
+    final normalizedDisplayName = (user.displayName ?? '').trim();
+    var hasMfa = false;
+    try {
+      final factors = await user.multiFactor.getEnrolledFactors();
+      hasMfa = factors.isNotEmpty;
+    } catch (_) {
+      hasMfa = false;
+    }
+
+    final createPayload = <String, dynamic>{
+      'uid': user.uid,
+      'email': normalizedEmail,
+      'displayName': normalizedDisplayName,
+      'photoUrl': photoUrl,
+      'role': 3,
+      'status': 1,
+      'createdAt': now,
+      'updatedAt': now,
+      'createdBy': null,
+      'lastLoginAt': now,
+      'mfaEnabled': hasMfa,
+    };
+
+    await docRef.set(createPayload, SetOptions(merge: true));
+  }
+
   Future<void> _ensureGoogleInitialized() async {
     if (_isGoogleInitialized) return;
     await _googleSignIn.initialize();

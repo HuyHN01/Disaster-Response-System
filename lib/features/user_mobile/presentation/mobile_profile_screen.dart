@@ -1,10 +1,18 @@
 // lib/features/user_mobile/presentation/mobile_profile_screen.dart
 
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crop_your_image/crop_your_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+import 'package:disaster_response_app/core/services/firebase/firebase_avatar_storage_service.dart';
+import 'package:disaster_response_app/features/auth/domain/email_otp_auth_repository.dart';
 
 // =============================================================================
 // THEME TOKENS
@@ -58,27 +66,46 @@ class UserProfile {
 // =============================================================================
 // MOBILE PROFILE SCREEN
 // =============================================================================
-class MobileProfileScreen extends StatefulWidget {
+class MobileProfileScreen extends ConsumerStatefulWidget {
   /// Pass the current logged-in user profile.
   final UserProfile user;
 
   const MobileProfileScreen({super.key, required this.user});
 
   @override
-  State<MobileProfileScreen> createState() => _MobileProfileScreenState();
+  ConsumerState<MobileProfileScreen> createState() =>
+      _MobileProfileScreenState();
 }
 
-class _MobileProfileScreenState extends State<MobileProfileScreen> {
+class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
+  static const int _maxAvatarBytes = 5 * 1024 * 1024;
+  static const Set<String> _allowedExtensions = {
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  };
+
+  final ImagePicker _imagePicker = ImagePicker();
   late final TextEditingController _nameController;
   final FocusNode _nameFocus = FocusNode();
 
   bool _isEditingName = false;
   bool _isSavingName  = false;
+  bool _isUploadingAvatar = false;
   String? _displayNameOverride;
+  String? _photoUrlOverride;
+  Uint8List? _avatarPreviewBytes;
 
   String get _currentName => _nameController.text.trim();
   String get _resolvedDisplayName =>
       (_displayNameOverride ?? widget.user.displayName).trim();
+  String? get _resolvedPhotoUrl {
+    final overrideUrl = (_photoUrlOverride ?? '').trim();
+    if (overrideUrl.isNotEmpty) return overrideUrl;
+    final fromUser = (widget.user.photoUrl ?? '').trim();
+    return fromUser.isNotEmpty ? fromUser : null;
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -112,6 +139,11 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
 
     if (!_isEditingName && _nameController.text != _resolvedDisplayName) {
       _nameController.text = _resolvedDisplayName;
+    }
+
+    if (_photoUrlOverride != null && widget.user.photoUrl == _photoUrlOverride) {
+      _photoUrlOverride = null;
+      _avatarPreviewBytes = null;
     }
   }
 
@@ -183,13 +215,220 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    Navigator.pop(context);
-    _showSnackbar('Tính năng cập nhật ảnh đại diện sẽ được mở trong bản sau.');
+    await _pickAndCropAvatar(ImageSource.gallery);
   }
 
   Future<void> _pickFromCamera() async {
-    Navigator.pop(context);
-    _showSnackbar('Tính năng chụp ảnh đại diện sẽ được mở trong bản sau.');
+    await _pickAndCropAvatar(ImageSource.camera);
+  }
+
+  Future<void> _pickAndCropAvatar(ImageSource source) async {
+    if (_isUploadingAvatar) return;
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
+    try {
+      final selectedFile = await _imagePicker.pickImage(source: source);
+      if (!mounted || selectedFile == null) return;
+
+      final extension = _extractExtension(selectedFile.name);
+      if (!_allowedExtensions.contains(extension)) {
+        _showSnackbar(
+          'Định dạng ảnh không hỗ trợ. Vui lòng chọn JPG, JPEG, PNG hoặc WEBP.',
+        );
+        return;
+      }
+
+      final bytes = await selectedFile.readAsBytes();
+      if (!mounted) return;
+      if (bytes.length > _maxAvatarBytes) {
+        _showSnackbar('Kích thước ảnh vượt quá 5MB.');
+        return;
+      }
+
+      final croppedImage = await showDialog<Uint8List>(
+        context: context,
+        barrierDismissible: !_isUploadingAvatar,
+        builder: (_) => _AvatarCropDialog(imageBytes: bytes),
+      );
+
+      if (!mounted || croppedImage == null) return;
+
+      setState(() {
+        _isUploadingAvatar = true;
+        _avatarPreviewBytes = croppedImage;
+      });
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw const EmailOtpAuthException(
+          'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+        );
+      }
+
+      String uploadedUrl;
+      try {
+        uploadedUrl = await FirebaseAvatarStorageService.uploadAdminAvatar(
+          uid: user.uid,
+          imageBytes: croppedImage,
+          contentType: _contentTypeFromExtension(extension),
+        );
+      } on FirebaseException catch (e) {
+        throw EmailOtpAuthException(_mapStorageError(e));
+      } catch (_) {
+        throw const EmailOtpAuthException(
+          'Không thể tải ảnh lên Storage. Vui lòng thử lại.',
+        );
+      }
+
+      try {
+        await ref
+            .read(emailOtpAuthRepositoryProvider)
+            .updateCurrentUserAvatar(photoUrl: uploadedUrl);
+      } on EmailOtpAuthException catch (e) {
+        final fallbackOk = await _syncAvatarProfileFallback(uploadedUrl);
+        if (!fallbackOk) rethrow;
+      } catch (_) {
+        final fallbackOk = await _syncAvatarProfileFallback(uploadedUrl);
+        if (!fallbackOk) {
+          throw const EmailOtpAuthException(
+            'Ảnh đã tải lên nhưng đồng bộ hồ sơ thất bại. Vui lòng thử lại.',
+          );
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _photoUrlOverride = uploadedUrl);
+      _showSnackbar('Ảnh đại diện đã được cập nhật', isSuccess: true);
+    } catch (e) {
+      if (!mounted) return;
+      final message = _mapAvatarError(e);
+      setState(() {
+        _photoUrlOverride = null;
+        _avatarPreviewBytes = null;
+      });
+      _showSnackbar(message);
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+      }
+    }
+  }
+
+  String _extractExtension(String fileName) {
+    final normalized = fileName.trim().toLowerCase();
+    final dotIndex = normalized.lastIndexOf('.');
+    if (dotIndex < 0 || dotIndex == normalized.length - 1) {
+      return '';
+    }
+    return normalized.substring(dotIndex + 1);
+  }
+
+  String _contentTypeFromExtension(String extension) {
+    switch (extension) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  Future<bool> _syncAvatarProfileFallback(String photoUrl) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    final normalizedUrl = photoUrl.trim();
+    if (normalizedUrl.isEmpty) return false;
+
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final now = FieldValue.serverTimestamp();
+
+    try {
+      final snapshot = await docRef.get();
+
+      if (snapshot.exists) {
+        await docRef.set({
+          'photoUrl': normalizedUrl,
+          'updatedAt': now,
+        }, SetOptions(merge: true));
+      } else {
+        await docRef.set({
+          'uid': user.uid,
+          'email': (user.email ?? '').trim().toLowerCase(),
+          'displayName': (user.displayName ?? '').trim(),
+          'photoUrl': normalizedUrl,
+          'role': 3,
+          'status': 1,
+          'createdAt': now,
+          'updatedAt': now,
+          'createdBy': null,
+          'lastLoginAt': now,
+          'mfaEnabled': false,
+        }, SetOptions(merge: true));
+      }
+
+      try {
+        await user.updatePhotoURL(normalizedUrl);
+        await user.reload();
+      } catch (_) {
+        // Firestore profile is primary source for mobile profile UI.
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String _mapAvatarError(Object error) {
+    if (error is EmailOtpAuthException) {
+      return error.message;
+    }
+
+    if (error is ArgumentError) {
+      final message = error.message?.toString().trim() ?? '';
+      if (message.isNotEmpty) return message;
+    }
+
+    if (error is FirebaseException) {
+      switch (error.code) {
+        case 'permission-denied':
+          return 'Không có quyền truy cập ảnh đại diện. Vui lòng liên hệ quản trị viên.';
+        case 'unauthenticated':
+          return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        case 'network-request-failed':
+        case 'unavailable':
+          return 'Mạng không ổn định. Vui lòng thử lại.';
+        default:
+          final message = error.message?.trim() ?? '';
+          if (message.isNotEmpty) return message;
+      }
+    }
+
+    return 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại.';
+  }
+
+  String _mapStorageError(FirebaseException error) {
+    switch (error.code) {
+      case 'permission-denied':
+        return 'Không có quyền tải ảnh lên Storage. Vui lòng liên hệ quản trị viên.';
+      case 'unauthenticated':
+        return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+      case 'network-request-failed':
+      case 'unavailable':
+        return 'Không thể kết nối đến Storage. Vui lòng kiểm tra mạng.';
+      case 'canceled':
+        return 'Tải ảnh lên Storage đã bị huỷ.';
+      case 'unknown':
+        return 'Storage gặp lỗi không xác định. Vui lòng thử lại sau vài giây.';
+      default:
+        final message = error.message?.trim() ?? '';
+        if (message.isNotEmpty) return message;
+        return 'Không thể tải ảnh lên Storage. Vui lòng thử lại.';
+    }
   }
 
   Future<void> _onSignOut() async {
@@ -423,9 +662,14 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                   border: Border.all(color: _PC.border, width: 2),
                 ),
                 child: ClipOval(
-                  child: widget.user.photoUrl != null
+                  child: _avatarPreviewBytes != null
+                      ? Image.memory(
+                          _avatarPreviewBytes!,
+                          fit: BoxFit.cover,
+                        )
+                      : _resolvedPhotoUrl != null
                       ? Image.network(
-                          widget.user.photoUrl!,
+                          _resolvedPhotoUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) =>
                               _AvatarFallback(name: _resolvedDisplayName),
@@ -433,9 +677,24 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                       : _AvatarFallback(name: _resolvedDisplayName),
                 ),
               ),
+              if (_isUploadingAvatar)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.22),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                ),
               // Edit avatar button
               GestureDetector(
-                onTap: _onChangeAvatar,
+                onTap: _isUploadingAvatar ? null : _onChangeAvatar,
                 child: Container(
                   width: 30,
                   height: 30,
@@ -1317,6 +1576,155 @@ class _Divider extends StatelessWidget {
       indent: 68,
       endIndent: 0,
       color: _PC.border,
+    );
+  }
+}
+
+class _AvatarCropDialog extends StatefulWidget {
+  const _AvatarCropDialog({required this.imageBytes});
+
+  final Uint8List imageBytes;
+
+  @override
+  State<_AvatarCropDialog> createState() => _AvatarCropDialogState();
+}
+
+class _AvatarCropDialogState extends State<_AvatarCropDialog> {
+  final CropController _cropController = CropController();
+  bool _isCropping = false;
+  String? _errorMessage;
+
+  void _onCropConfirm() {
+    if (_isCropping) return;
+    setState(() {
+      _isCropping = true;
+      _errorMessage = null;
+    });
+    _cropController.cropCircle();
+  }
+
+  void _onCropped(CropResult result) {
+    switch (result) {
+      case CropSuccess(:final croppedImage):
+        if (!mounted) return;
+        Navigator.of(context).pop(croppedImage);
+      case CropFailure(:final cause):
+        if (!mounted) return;
+        setState(() {
+          _isCropping = false;
+          _errorMessage = 'Không thể cắt ảnh: $cause';
+        });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: _PC.cardBg,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cắt ảnh đại diện',
+                style: TextStyle(
+                  color: _PC.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 300,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: _PC.inputBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _PC.border),
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: Crop(
+                  image: widget.imageBytes,
+                  controller: _cropController,
+                  withCircleUi: true,
+                  interactive: true,
+                  fixCropRect: true,
+                  baseColor: _PC.inputBg,
+                  maskColor: Colors.black.withValues(alpha: 0.45),
+                  progressIndicator: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  onCropped: _onCropped,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Kéo để di chuyển ảnh. Chụm để phóng to hoặc thu nhỏ.',
+                style: TextStyle(
+                  color: _PC.textMuted,
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: _PC.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _isCropping
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Huỷ',
+                      style: TextStyle(color: _PC.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isCropping ? null : _onCropConfirm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _PC.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: _isCropping
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Xác nhận',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
