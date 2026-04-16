@@ -307,10 +307,24 @@ abstract final class AppRouter {
               stream: FirebaseAuth.instance.authStateChanges(),
               initialData: FirebaseAuth.instance.currentUser,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                final currentUser = FirebaseAuth.instance.currentUser;
+                if (currentUser == null) {
                   return const AuthGateScreen();
                 }
-                return const MobileProfileScreen();
+
+                return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser.uid)
+                      .snapshots(),
+                  builder: (context, userSnapshot) {
+                    final profile = _resolveMobileUserProfile(
+                      authUser: currentUser,
+                      snapshot: userSnapshot.data,
+                    );
+                    return MobileProfileScreen(user: profile);
+                  },
+                );
               },
             );
           },
@@ -524,6 +538,54 @@ abstract final class AppRouter {
         ),
       ),
     );
+  }
+
+  static UserProfile _resolveMobileUserProfile({
+    required dynamic authUser,
+    required DocumentSnapshot<Map<String, dynamic>>? snapshot,
+  }) {
+    final data = snapshot?.data() ?? const <String, dynamic>{};
+
+    final createdAt = _asDateTimeValue(data['createdAt']) ?? DateTime.now();
+    final lastLoginAt =
+        _asDateTimeValue(data['lastLoginAt']) ?? _asDateTimeValue(data['updatedAt']) ?? createdAt;
+
+    final email = ((data['email'] as String?) ?? authUser.email ?? '').trim();
+    final authDisplayName = (authUser.displayName as String?)?.trim() ?? '';
+    final displayNameFromDb = ((data['displayName'] as String?) ?? '').trim();
+    final displayName = displayNameFromDb.isNotEmpty
+        ? displayNameFromDb
+        : (authDisplayName.isNotEmpty ? authDisplayName : 'Người dùng');
+
+    final photoUrlFromDb = ((data['photoUrl'] as String?) ?? '').trim();
+    final authPhotoUrl = (authUser.photoURL as String?)?.trim() ?? '';
+    final resolvedPhoto = photoUrlFromDb.isNotEmpty
+        ? photoUrlFromDb
+        : (authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
+
+    return UserProfile(
+      uid: authUser.uid as String,
+      email: email,
+      displayName: displayName,
+      photoUrl: resolvedPhoto,
+      role: _asIntValue(data['role'], 3),
+      status: _asIntValue(data['status'], 1),
+      createdAt: createdAt,
+      lastLoginAt: lastLoginAt,
+      mfaEnabled: (data['mfaEnabled'] as bool?) ?? false,
+    );
+  }
+
+  static int _asIntValue(dynamic value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return fallback;
+  }
+
+  static DateTime? _asDateTimeValue(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
   }
 }
 

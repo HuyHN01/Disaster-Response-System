@@ -1,105 +1,1296 @@
 // lib/features/user_mobile/presentation/mobile_profile_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/intl.dart';
+
+// =============================================================================
+// THEME TOKENS
+// =============================================================================
+class _PC {
+  static const Color scaffold      = Color(0xFFF5F7FA);
+  static const Color cardBg        = Color(0xFFFFFFFF);
+  static const Color primary       = Color(0xFFDC2626);
+  static const Color primaryDark   = Color(0xFFB91C1C);
+  static const Color primaryLight  = Color(0xFFFEF2F2);
+  static const Color textPrimary   = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textMuted     = Color(0xFF9CA3AF);
+  static const Color border        = Color(0xFFE5E7EB);
+  static const Color inputBg       = Color(0xFFF9FAFB);
+  static const Color green         = Color(0xFF16A34A);
+  static const Color greenLight    = Color(0xFFDCFCE7);
+  static const Color amber         = Color(0xFFD97706);
+  static const Color amberLight    = Color(0xFFFFFBEB);
+  static const Color blue          = Color(0xFF2563EB);
+  static const Color blueLight     = Color(0xFFEFF6FF);
+}
+
+// =============================================================================
+// DATA MODEL  (map from your Firestore document)
+// =============================================================================
+class UserProfile {
+  final String uid;
+  final String email;
+  final String displayName;
+  final String? photoUrl;
+  final int role;         // 0=superadmin 1=admin 2=staff 3=user
+  final int status;       // 0=inactive 1=active 2=pending 3=banned
+  final DateTime createdAt;
+  final DateTime lastLoginAt;
+  final bool mfaEnabled;
+
+  const UserProfile({
+    required this.uid,
+    required this.email,
+    required this.displayName,
+    this.photoUrl,
+    required this.role,
+    required this.status,
+    required this.createdAt,
+    required this.lastLoginAt,
+    required this.mfaEnabled,
+  });
+}
 
 // =============================================================================
 // MOBILE PROFILE SCREEN
 // =============================================================================
-class MobileProfileScreen extends StatelessWidget {
-  const MobileProfileScreen({super.key});
+class MobileProfileScreen extends StatefulWidget {
+  /// Pass the current logged-in user profile.
+  final UserProfile user;
 
+  const MobileProfileScreen({super.key, required this.user});
+
+  @override
+  State<MobileProfileScreen> createState() => _MobileProfileScreenState();
+}
+
+class _MobileProfileScreenState extends State<MobileProfileScreen> {
+  late final TextEditingController _nameController;
+  final FocusNode _nameFocus = FocusNode();
+
+  bool _isEditingName = false;
+  bool _isSavingName  = false;
+
+  String get _currentName => _nameController.text.trim();
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.user.displayName);
+    _nameFocus.addListener(() {
+      if (!_nameFocus.hasFocus && _isEditingName) {
+        _cancelEditName();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _nameFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant MobileProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditingName &&
+        oldWidget.user.displayName != widget.user.displayName &&
+        _nameController.text != widget.user.displayName) {
+      _nameController.text = widget.user.displayName;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Logic placeholders
+  // ---------------------------------------------------------------------------
+  Future<void> _onSaveName() async {
+    if (_currentName.isEmpty || _currentName == widget.user.displayName) {
+      _cancelEditName();
+      return;
+    }
+    _nameFocus.unfocus();
+    setState(() => _isSavingName = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'no-current-user');
+      }
+
+      await user.updateDisplayName(_currentName);
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'displayName': _currentName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      setState(() => _isEditingName = false);
+      _showSnackbar('Tên hiển thị đã được cập nhật', isSuccess: true);
+    } catch (_) {
+      if (!mounted) return;
+      _showSnackbar('Không thể cập nhật. Vui lòng thử lại.');
+    } finally {
+      if (mounted) setState(() => _isSavingName = false);
+    }
+  }
+
+  void _cancelEditName() {
+    _nameFocus.unfocus();
+    setState(() {
+      _isEditingName = false;
+      _nameController.text = widget.user.displayName;
+    });
+  }
+
+  Future<void> _onChangeAvatar() async {
+    // Show bottom sheet picker
+    _showAvatarOptions();
+  }
+
+  Future<void> _pickFromGallery() async {
+    Navigator.pop(context);
+    _showSnackbar('Tính năng cập nhật ảnh đại diện sẽ được mở trong bản sau.');
+  }
+
+  Future<void> _pickFromCamera() async {
+    Navigator.pop(context);
+    _showSnackbar('Tính năng chụp ảnh đại diện sẽ được mở trong bản sau.');
+  }
+
+  Future<void> _onSignOut() async {
+    final confirmed = await _showConfirmDialog(
+      title: 'Đăng xuất',
+      message: 'Bạn có chắc muốn đăng xuất khỏi tài khoản này không?',
+      confirmLabel: 'Đăng xuất',
+      isDanger: true,
+    );
+    if (!confirmed) return;
+
+    try {
+      await GoogleSignIn.instance.signOut();
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      if (!mounted) return;
+      _showSnackbar('Không thể đăng xuất. Vui lòng thử lại.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI helpers
+  // ---------------------------------------------------------------------------
+  void _showSnackbar(String message, {bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isSuccess
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.error_outline_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isSuccess ? _PC.green : _PC.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<bool> _showConfirmDialog({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    bool isDanger = false,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+              ),
+            ),
+            content: Text(
+              message,
+              style: const TextStyle(
+                color: _PC.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text(
+                  'Huỷ',
+                  style: TextStyle(color: _PC.textSecondary),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(
+                  confirmLabel,
+                  style: TextStyle(
+                    color: isDanger ? _PC.primary : _PC.blue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _showAvatarOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AvatarOptionSheet(
+        onGallery: _pickFromGallery,
+        onCamera: _pickFromCamera,
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _PC.scaffold,
       body: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // ── Profile Header ────────────────────────────────────────────
+            // ── Header ───────────────────────────────────────────────────────
+            SliverToBoxAdapter(child: _buildHeader()),
+
+            // ── Avatar + Name section ─────────────────────────────────────
+            SliverToBoxAdapter(child: _buildAvatarCard()),
+
+            // ── Account info section ──────────────────────────────────────
             SliverToBoxAdapter(
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    bottom: BorderSide(color: Color(0xFFE5E7EB)),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Hồ sơ cá nhân',
-                      style: TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Quản lý thông tin và cài đặt tài khoản của bạn',
-                      style: TextStyle(
-                        color: const Color(0xFF6B7280),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
+              child: _SectionTitle(title: 'Thông tin tài khoản'),
+            ),
+            SliverToBoxAdapter(child: _buildInfoCard()),
+
+            // ── Security section ──────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: _SectionTitle(title: 'Bảo mật & Quyền riêng tư'),
+            ),
+            SliverToBoxAdapter(child: _buildSecurityCard()),
+
+            // ── Sign out ──────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _SignOutButton(onPressed: _onSignOut),
               ),
             ),
 
-            // ── Placeholder Content ────────────────────────────────────────
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(20),
+            // ── Bottom padding ────────────────────────────────────────────
+            const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section builders
+  // ---------------------------------------------------------------------------
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      decoration: const BoxDecoration(
+        color: _PC.cardBg,
+        border: Border(bottom: BorderSide(color: _PC.border)),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hồ sơ cá nhân',
+                  style: TextStyle(
+                    color: _PC.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Quản lý thông tin tài khoản của bạn',
+                  style: TextStyle(
+                    color: _PC.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Role badge
+          _RoleBadge(role: widget.user.role),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _PC.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Avatar ────────────────────────────────────────────────────────
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              // Avatar circle
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _PC.border, width: 2),
+                ),
+                child: ClipOval(
+                  child: widget.user.photoUrl != null
+                          ? Image.network(
+                              widget.user.photoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _AvatarFallback(name: widget.user.displayName),
+                            )
+                          : _AvatarFallback(name: widget.user.displayName),
+                ),
+              ),
+              // Edit avatar button
+              GestureDetector(
+                onTap: _onChangeAvatar,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: _PC.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _PC.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                      child: const Icon(
-                        Icons.person_outline_rounded,
-                        size: 40,
-                        color: Color(0xFF2563EB),
-                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Display name (editable) ────────────────────────────────────
+          _isEditingName
+              ? _NameEditField(
+                  controller: _nameController,
+                  focusNode: _nameFocus,
+                  isSaving: _isSavingName,
+                  onSave: _onSaveName,
+                  onCancel: _cancelEditName,
+                )
+              : _NameDisplayRow(
+                  name: widget.user.displayName,
+                  onEdit: () {
+                    setState(() => _isEditingName = true);
+                    Future.delayed(
+                      const Duration(milliseconds: 80),
+                      () => _nameFocus.requestFocus(),
+                    );
+                  },
+                ),
+
+          const SizedBox(height: 6),
+
+          // ── Status chip ───────────────────────────────────────────────
+          _StatusChip(status: widget.user.status),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    final dateFormat = DateFormat('dd/MM/yyyy • HH:mm');
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        color: _PC.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _InfoRow(
+            icon: Icons.email_outlined,
+            iconColor: _PC.blue,
+            iconBg: _PC.blueLight,
+            label: 'Email',
+            value: widget.user.email,
+            isReadOnly: true,
+            isFirst: true,
+          ),
+          _Divider(),
+          _InfoRow(
+            icon: Icons.calendar_today_outlined,
+            iconColor: _PC.textSecondary,
+            iconBg: const Color(0xFFF3F4F6),
+            label: 'Ngày tạo tài khoản',
+            value: dateFormat.format(widget.user.createdAt),
+          ),
+          _Divider(),
+          _InfoRow(
+            icon: Icons.access_time_rounded,
+            iconColor: _PC.textSecondary,
+            iconBg: const Color(0xFFF3F4F6),
+            label: 'Đăng nhập gần nhất',
+            value: dateFormat.format(widget.user.lastLoginAt),
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSecurityCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        color: _PC.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: _MfaRow(
+        enabled: widget.user.mfaEnabled,
+        onToggle: () {
+          // TODO: navigate to MFA setup flow or toggle MFA
+        },
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// NAME DISPLAY ROW
+// =============================================================================
+class _NameDisplayRow extends StatelessWidget {
+  final String name;
+  final VoidCallback onEdit;
+
+  const _NameDisplayRow({required this.name, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          name,
+          style: const TextStyle(
+            color: _PC.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: onEdit,
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: _PC.primaryLight,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.edit_rounded,
+              size: 14,
+              color: _PC.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// NAME EDIT FIELD
+// =============================================================================
+class _NameEditField extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isSaving;
+  final VoidCallback onSave;
+  final VoidCallback onCancel;
+
+  const _NameEditField({
+    required this.controller,
+    required this.focusNode,
+    required this.isSaving,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: 220,
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            textAlign: TextAlign.center,
+            maxLength: 50,
+            style: const TextStyle(
+              color: _PC.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: _PC.inputBg,
+              counterText: '',
+              hintText: 'Nhập tên hiển thị',
+              hintStyle: const TextStyle(color: _PC.textMuted, fontSize: 15),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: _PC.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: _PC.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide:
+                    const BorderSide(color: _PC.primary, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Cancel
+            OutlinedButton(
+              onPressed: isSaving ? null : onCancel,
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                side: const BorderSide(color: _PC.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+              child: const Text(
+                'Huỷ',
+                style: TextStyle(
+                  color: _PC.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Save
+            SizedBox(
+              height: 36,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_PC.primary, _PC.primaryDark],
+                  ),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: ElevatedButton(
+                  onPressed: isSaving ? null : onSave,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Chưa triển khai',
-                      style: TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tính năng hồ sơ cá nhân đang được phát triển.\nVui lòng quay lại sau.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: const Color(0xFF6B7280),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Lưu',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// AVATAR FALLBACK  (initials)
+// =============================================================================
+class _AvatarFallback extends StatelessWidget {
+  final String name;
+
+  const _AvatarFallback({required this.name});
+
+  String get _initials {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: _PC.primaryLight,
+      alignment: Alignment.center,
+      child: Text(
+        _initials,
+        style: const TextStyle(
+          color: _PC.primary,
+          fontSize: 30,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
       ),
+    );
+  }
+}
+
+// =============================================================================
+// ROLE BADGE
+// =============================================================================
+class _RoleBadge extends StatelessWidget {
+  final int role;
+
+  const _RoleBadge({required this.role});
+
+  _BadgeData get _data => switch (role) {
+        0 => _BadgeData('Super Admin', const Color(0xFF7C3AED), const Color(0xFFF5F3FF)),
+        1 => _BadgeData('Admin', _PC.primary, _PC.primaryLight),
+        2 => _BadgeData('Nhân viên', _PC.amber, _PC.amberLight),
+        _ => _BadgeData('Người dùng', _PC.blue, _PC.blueLight),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final d = _data;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: d.bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: d.color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: d.color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            d.label,
+            style: TextStyle(
+              color: d.color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeData {
+  final String label;
+  final Color color;
+  final Color bg;
+  const _BadgeData(this.label, this.color, this.bg);
+}
+
+// =============================================================================
+// STATUS CHIP
+// =============================================================================
+class _StatusChip extends StatelessWidget {
+  final int status;
+
+  const _StatusChip({required this.status});
+
+  _BadgeData get _data => switch (status) {
+        1 => _BadgeData('Tài khoản đang hoạt động', _PC.green, _PC.greenLight),
+        2 => _BadgeData('Đang chờ xác nhận', _PC.amber, _PC.amberLight),
+        3 => _BadgeData('Tài khoản bị khoá', _PC.primary, _PC.primaryLight),
+        _ => _BadgeData('Không hoạt động', _PC.textMuted, const Color(0xFFF3F4F6)),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final d = _data;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: d.bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            status == 1
+                ? Icons.check_circle_rounded
+                : status == 3
+                    ? Icons.block_rounded
+                    : Icons.hourglass_top_rounded,
+            size: 12,
+            color: d.color,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            d.data,
+            style: TextStyle(
+              color: d.color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension on _BadgeData {
+  // alias "label" as "data" for StatusChip clarity
+  String get data => label;
+}
+
+// =============================================================================
+// INFO ROW
+// =============================================================================
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final String value;
+  final bool isReadOnly;
+  final bool isFirst;
+  final bool isLast;
+
+  const _InfoRow({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.value,
+    this.isReadOnly = false,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? const Radius.circular(18) : Radius.zero,
+          bottom: isLast ? const Radius.circular(18) : Radius.zero,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 14),
+
+          // Label + Value
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: _PC.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: _PC.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Read-only lock badge
+          if (isReadOnly)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: _PC.inputBg,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: _PC.border),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_outline_rounded,
+                      size: 10, color: _PC.textMuted),
+                  SizedBox(width: 3),
+                  Text(
+                    'Cố định',
+                    style: TextStyle(
+                      color: _PC.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// MFA ROW
+// =============================================================================
+class _MfaRow extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onToggle;
+
+  const _MfaRow({required this.enabled, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: enabled ? _PC.greenLight : const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.verified_user_rounded,
+              color: enabled ? _PC.green : _PC.textMuted,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Xác thực hai lớp (MFA)',
+                  style: TextStyle(
+                    color: _PC.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  enabled ? 'Đã bật — tài khoản được bảo vệ' : 'Chưa bật — khuyến nghị bật',
+                  style: TextStyle(
+                    color: enabled ? _PC.green : _PC.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Toggle chip
+          GestureDetector(
+            onTap: onToggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: enabled ? _PC.greenLight : _PC.primaryLight,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: enabled
+                      ? _PC.green.withOpacity(0.3)
+                      : _PC.primary.withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                enabled ? 'Quản lý' : 'Bật ngay',
+                style: TextStyle(
+                  color: enabled ? _PC.green : _PC.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// SIGN OUT BUTTON
+// =============================================================================
+class _SignOutButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _SignOutButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(
+          Icons.logout_rounded,
+          size: 18,
+          color: _PC.primary,
+        ),
+        label: const Text(
+          'Đăng xuất',
+          style: TextStyle(
+            color: _PC.primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: _PC.primary.withOpacity(0.4), width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// AVATAR OPTION SHEET
+// =============================================================================
+class _AvatarOptionSheet extends StatelessWidget {
+  final VoidCallback onGallery;
+  final VoidCallback onCamera;
+
+  const _AvatarOptionSheet({
+    required this.onGallery,
+    required this.onCamera,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      decoration: BoxDecoration(
+        color: _PC.cardBg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: _PC.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          const Text(
+            'Thay đổi ảnh đại diện',
+            style: TextStyle(
+              color: _PC.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          _SheetOption(
+            icon: Icons.photo_library_rounded,
+            iconColor: _PC.blue,
+            iconBg: _PC.blueLight,
+            label: 'Chọn từ thư viện',
+            onTap: onGallery,
+            isFirst: true,
+          ),
+          _SheetDivider(),
+          _SheetOption(
+            icon: Icons.camera_alt_rounded,
+            iconColor: _PC.primary,
+            iconBg: _PC.primaryLight,
+            label: 'Chụp ảnh mới',
+            onTap: onCamera,
+            isLast: true,
+          ),
+
+          const SizedBox(height: 12),
+
+          // Cancel
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: _PC.inputBg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Huỷ',
+                style: TextStyle(
+                  color: _PC.textSecondary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetOption extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final VoidCallback onTap;
+  final bool isFirst;
+  final bool isLast;
+
+  const _SheetOption({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.onTap,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.vertical(
+        top: isFirst ? const Radius.circular(14) : Radius.zero,
+        bottom: isLast ? const Radius.circular(14) : Radius.zero,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: const TextStyle(
+                color: _PC.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _PC.textMuted,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      height: 1,
+      indent: 68,
+      endIndent: 0,
+      color: _PC.border,
+    );
+  }
+}
+
+// =============================================================================
+// SHARED HELPERS
+// =============================================================================
+class _SectionTitle extends StatelessWidget {
+  final String title;
+
+  const _SectionTitle({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: _PC.textPrimary,
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      height: 1,
+      indent: 68,
+      endIndent: 0,
+      color: _PC.border,
     );
   }
 }
