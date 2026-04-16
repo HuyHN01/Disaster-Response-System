@@ -74,8 +74,11 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
 
   bool _isEditingName = false;
   bool _isSavingName  = false;
+  String? _displayNameOverride;
 
   String get _currentName => _nameController.text.trim();
+  String get _resolvedDisplayName =>
+      (_displayNameOverride ?? widget.user.displayName).trim();
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -83,7 +86,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.user.displayName);
+    _nameController = TextEditingController(text: _resolvedDisplayName);
     _nameFocus.addListener(() {
       if (!_nameFocus.hasFocus && _isEditingName) {
         _cancelEditName();
@@ -101,23 +104,30 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
   @override
   void didUpdateWidget(covariant MobileProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_isEditingName &&
-        oldWidget.user.displayName != widget.user.displayName &&
-        _nameController.text != widget.user.displayName) {
-      _nameController.text = widget.user.displayName;
+    if (oldWidget.user.displayName != widget.user.displayName &&
+        _displayNameOverride != null &&
+        _displayNameOverride == widget.user.displayName) {
+      _displayNameOverride = null;
+    }
+
+    if (!_isEditingName && _nameController.text != _resolvedDisplayName) {
+      _nameController.text = _resolvedDisplayName;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Logic placeholders
+  // Actions
   // ---------------------------------------------------------------------------
   Future<void> _onSaveName() async {
-    if (_currentName.isEmpty || _currentName == widget.user.displayName) {
+    if (_currentName.isEmpty || _currentName == _resolvedDisplayName) {
       _cancelEditName();
       return;
     }
     _nameFocus.unfocus();
     setState(() => _isSavingName = true);
+
+    final newName = _currentName;
+    final previousName = _resolvedDisplayName;
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -125,18 +135,35 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
         throw FirebaseAuthException(code: 'no-current-user');
       }
 
-      await user.updateDisplayName(_currentName);
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'displayName': _currentName,
+        'displayName': newName,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      try {
+        await user.updateDisplayName(newName);
+        await user.reload();
+      } catch (_) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'displayName': previousName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        rethrow;
+      }
+
       if (!mounted) return;
-      setState(() => _isEditingName = false);
+      setState(() {
+        _displayNameOverride = newName;
+        _isEditingName = false;
+      });
+      _nameController.text = newName;
+      _nameController.selection = TextSelection.collapsed(
+        offset: _nameController.text.length,
+      );
       _showSnackbar('Tên hiển thị đã được cập nhật', isSuccess: true);
     } catch (_) {
       if (!mounted) return;
-      _showSnackbar('Không thể cập nhật. Vui lòng thử lại.');
+      _showSnackbar('Không thể cập nhật tên hiển thị. Vui lòng thử lại.');
     } finally {
       if (mounted) setState(() => _isSavingName = false);
     }
@@ -146,7 +173,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
     _nameFocus.unfocus();
     setState(() {
       _isEditingName = false;
-      _nameController.text = widget.user.displayName;
+      _nameController.text = _resolvedDisplayName;
     });
   }
 
@@ -397,13 +424,13 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                 ),
                 child: ClipOval(
                   child: widget.user.photoUrl != null
-                          ? Image.network(
-                              widget.user.photoUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  _AvatarFallback(name: widget.user.displayName),
-                            )
-                          : _AvatarFallback(name: widget.user.displayName),
+                      ? Image.network(
+                          widget.user.photoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _AvatarFallback(name: _resolvedDisplayName),
+                        )
+                      : _AvatarFallback(name: _resolvedDisplayName),
                 ),
               ),
               // Edit avatar button
@@ -446,7 +473,7 @@ class _MobileProfileScreenState extends State<MobileProfileScreen> {
                   onCancel: _cancelEditName,
                 )
               : _NameDisplayRow(
-                  name: widget.user.displayName,
+                  name: _resolvedDisplayName,
                   onEdit: () {
                     setState(() => _isEditingName = true);
                     Future.delayed(
@@ -633,8 +660,7 @@ class _NameEditField extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide:
-                    const BorderSide(color: _PC.primary, width: 1.5),
+                borderSide: const BorderSide(color: _PC.primary, width: 1.5),
               ),
             ),
           ),
@@ -643,7 +669,6 @@ class _NameEditField extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Cancel
             OutlinedButton(
               onPressed: isSaving ? null : onCancel,
               style: OutlinedButton.styleFrom(
@@ -664,7 +689,6 @@ class _NameEditField extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            // Save
             SizedBox(
               height: 36,
               child: DecoratedBox(
@@ -680,7 +704,9 @@ class _NameEditField extends StatelessWidget {
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 8),
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(9),
                     ),
