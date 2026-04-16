@@ -20,12 +20,20 @@ import 'package:disaster_response_app/features/admin_panel/presentation/admin_ma
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_post_editor_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/admin_rescue_stations_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_detail_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_management_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/presentation/user_models.dart';
 import 'package:disaster_response_app/features/ai_assistant/presentation/ai_chat_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/auth_gate_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/email_input_screen.dart';
+import 'package:disaster_response_app/features/auth/presentation/otp_verification_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/domain/citizen_news_controller.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_detail_screen.dart';
 import 'package:disaster_response_app/features/citizen_news/presentation/citizen_news_screen.dart';
 import 'package:disaster_response_app/features/event_map/presentation/event_map_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
 
 import 'route_names.dart';
 
@@ -134,7 +142,8 @@ abstract final class AppRouter {
     errorBuilder: _errorPage,
     routes: [
       _rootRedirect(to: RouteNames.home),
-      ..._citizenRoutes(),
+      ..._mobileShellRoutes(),
+      ..._mobileDetailRoutes(),
       ..._adminAuthRoutes(),
       ..._adminShellRoutes(),
       ..._adminDetailRoutes(),
@@ -206,6 +215,11 @@ abstract final class AppRouter {
           builder: (context, state) => const AdminRescueStationsScreen(),
         ),
         GoRoute(
+          path: RouteNames.adminUserManagement,
+          name: RouteNames.nameAdminUserManagement,
+          builder: (context, state) => const UserManagementScreen(),
+        ),
+        GoRoute(
           path: RouteNames.adminAccount,
           name: RouteNames.nameAdminAccount,
           builder: (context, state) => const AdminAccountScreen(),
@@ -221,7 +235,7 @@ abstract final class AppRouter {
   /// Admin detail/editor routes that render WITHOUT the sidebar shell.
   ///
   /// These screens have their own full-screen layouts ([AdminEventDetailScreen],
-  /// [AdminPostEditorScreen]) and must not be wrapped by [AdminLayout].
+  /// [AdminPostEditorScreen], [UserDetailScreen]) and must not be wrapped by [AdminLayout].
   static List<RouteBase> _adminDetailRoutes() => [
     GoRoute(
       path: RouteNames.adminEventDetail,
@@ -254,13 +268,138 @@ abstract final class AppRouter {
         ),
       ],
     ),
+    // ── User detail / edit ─────────────────────────────────────────────
+    GoRoute(
+      path: RouteNames.adminUserDetail,
+      name: RouteNames.nameAdminUserDetail,
+      builder: (context, state) {
+        final user = state.extra as AppUser?;
+        return UserDetailScreen(existingUser: user);
+      },
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mobile ShellRoute — pages rendered INSIDE the bottom nav layout
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Mobile shell route subtree (home + profile).
+  ///
+  /// Wrapped in a [ShellRoute] that injects [MobileLayout] (bottom navigation bar).
+  ///
+  /// Routes inside this shell get the bottom nav; navigating to detail routes
+  /// (e.g., [RouteNames.newsDetail]) shows the full screen content while keeping
+  /// the nav bar visible.
+  static List<RouteBase> _mobileShellRoutes() => [
+    ShellRoute(
+      builder: (context, state, child) => MobileLayout(child: child),
+      routes: [
+        GoRoute(
+          path: RouteNames.home,
+          name: RouteNames.nameHome,
+          builder: (context, state) => const MobileHomeScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.profile,
+          name: RouteNames.nameProfile,
+          builder: (context, state) {
+            return StreamBuilder(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              initialData: FirebaseAuth.instance.currentUser,
+              builder: (context, snapshot) {
+                final currentUser = FirebaseAuth.instance.currentUser;
+                if (currentUser == null) {
+                  return const AuthGateScreen();
+                }
+
+                return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser.uid)
+                      .snapshots(),
+                  builder: (context, userSnapshot) {
+                    final profile = _resolveMobileUserProfile(
+                      authUser: currentUser,
+                      snapshot: userSnapshot.data,
+                    );
+                    return MobileProfileScreen(user: profile);
+                  },
+                );
+              },
+            );
+          },
+          routes: [
+            GoRoute(
+              path: RouteNames.segProfileEmailInput,
+              name: RouteNames.nameProfileEmailInput,
+              builder: (context, state) => const EmailInputScreen(),
+            ),
+            GoRoute(
+              path: RouteNames.segProfileOtpVerification,
+              name: RouteNames.nameProfileOtpVerification,
+              builder: (context, state) {
+                final email = state.extra is String
+                    ? (state.extra as String).trim()
+                    : '';
+
+                if (email.isEmpty) {
+                  return const EmailInputScreen();
+                }
+
+                return OtpVerificationScreen(email: email);
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: RouteNames.eventMap,
+          name: RouteNames.nameEventMap,
+          builder: (context, state) => const EventMapScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.aiChat,
+          name: RouteNames.nameAiChat,
+          builder: (context, state) => const AiChatScreen(),
+        ),
+      ],
+    ),
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mobile detail routes — INSIDE the shell (with persistent bottom nav)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Mobile detail routes that render INSIDE the MobileLayout shell.
+  ///
+  /// These screens (CitizenNewsScreen, CitizenNewsDetailScreen) maintain
+  /// the persistent BottomNavigationBar for easy navigation back to main tabs.
+  static List<RouteBase> _mobileDetailRoutes() => [
+    GoRoute(
+      path: RouteNames.news,
+      name: RouteNames.nameNews,
+      builder: (context, state) => const CitizenNewsScreen(),
+      routes: [
+        GoRoute(
+          path: RouteNames.segNewsDetail,
+          name: RouteNames.nameNewsDetail,
+          builder: (context, state) {
+            final post = state.extra is CitizenNewsPost
+                ? state.extra as CitizenNewsPost
+                : null;
+            final postId = state.pathParameters[RouteNames.paramPostId];
+
+            return CitizenNewsDetailScreen(post: post, postId: postId);
+          },
+        ),
+      ],
+    ),
   ];
 
   // ─────────────────────────────────────────────────────────────────────────
   // Citizen / Mobile route definitions
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Citizen-facing route subtree.
+  /// Citizen-facing route subtree (for web/desktop without mobile shell).
   ///
   /// ```
   /// /home           → MobileHomeScreen
@@ -343,7 +482,9 @@ abstract final class AppRouter {
       return isLoginRoute ? null : RouteNames.adminLogin;
     }
 
-    final profile = await _adminAuthRepository.fetchUserProfile(currentUser.uid);
+    final profile = await _adminAuthRepository.fetchUserProfile(
+      currentUser.uid,
+    );
     if (profile == null || !profile.canAccessAdminPortal) {
       await _adminAuthRepository.signOut();
       return RouteNames.adminLogin;
@@ -397,6 +538,54 @@ abstract final class AppRouter {
         ),
       ),
     );
+  }
+
+  static UserProfile _resolveMobileUserProfile({
+    required dynamic authUser,
+    required DocumentSnapshot<Map<String, dynamic>>? snapshot,
+  }) {
+    final data = snapshot?.data() ?? const <String, dynamic>{};
+
+    final createdAt = _asDateTimeValue(data['createdAt']) ?? DateTime.now();
+    final lastLoginAt =
+        _asDateTimeValue(data['lastLoginAt']) ?? _asDateTimeValue(data['updatedAt']) ?? createdAt;
+
+    final email = ((data['email'] as String?) ?? authUser.email ?? '').trim();
+    final authDisplayName = (authUser.displayName as String?)?.trim() ?? '';
+    final displayNameFromDb = ((data['displayName'] as String?) ?? '').trim();
+    final displayName = displayNameFromDb.isNotEmpty
+        ? displayNameFromDb
+        : (authDisplayName.isNotEmpty ? authDisplayName : 'Người dùng');
+
+    final photoUrlFromDb = ((data['photoUrl'] as String?) ?? '').trim();
+    final authPhotoUrl = (authUser.photoURL as String?)?.trim() ?? '';
+    final resolvedPhoto = photoUrlFromDb.isNotEmpty
+        ? photoUrlFromDb
+        : (authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
+
+    return UserProfile(
+      uid: authUser.uid as String,
+      email: email,
+      displayName: displayName,
+      photoUrl: resolvedPhoto,
+      role: _asIntValue(data['role'], 3),
+      status: _asIntValue(data['status'], 1),
+      createdAt: createdAt,
+      lastLoginAt: lastLoginAt,
+      mfaEnabled: (data['mfaEnabled'] as bool?) ?? false,
+    );
+  }
+
+  static int _asIntValue(dynamic value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return fallback;
+  }
+
+  static DateTime? _asDateTimeValue(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
   }
 }
 

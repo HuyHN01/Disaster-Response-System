@@ -31,10 +31,25 @@ class FirebaseAvatarStorageService {
       SettableMetadata(contentType: preparedImage.contentType),
     );
 
-    final downloadUrl = await ref.getDownloadURL();
-    final version = DateTime.now().millisecondsSinceEpoch;
-    final separator = downloadUrl.contains('?') ? '&' : '?';
-    return '$downloadUrl${separator}v=$version';
+    try {
+      final downloadUrl = await ref.getDownloadURL();
+      final version = DateTime.now().millisecondsSinceEpoch;
+      final separator = downloadUrl.contains('?') ? '&' : '?';
+      return '$downloadUrl${separator}v=$version';
+    } on FirebaseException {
+      // Fallback: build URL from existing token in metadata if available.
+      final metadata = await ref.getMetadata();
+      final rawTokens =
+          metadata.customMetadata?['firebaseStorageDownloadTokens']?.trim() ?? '';
+      final token = rawTokens.split(',').first.trim();
+      if (token.isEmpty) rethrow;
+
+      final version = DateTime.now().millisecondsSinceEpoch;
+      final encodedPath = Uri.encodeComponent(ref.fullPath);
+      final baseUrl =
+          'https://firebasestorage.googleapis.com/v0/b/${ref.bucket}/o/$encodedPath';
+      return '$baseUrl?alt=media&token=$token&v=$version';
+    }
   }
 
   static _PreparedAvatarData _prepareAvatarForUpload({

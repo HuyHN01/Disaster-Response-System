@@ -1,7 +1,9 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret, defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 admin.initializeApp();
 
 const db = admin.firestore();
@@ -10,6 +12,18 @@ setGlobalOptions({ region: "asia-southeast1" });
 
 const USERS_COLLECTION = "users";
 const BOOTSTRAP_DOC_PATH = "_system/bootstrap_auth";
+const OTP_COLLECTION = "email_otp_records";
+
+const OTP_LENGTH = 6;
+const OTP_TTL_SECONDS = 120;
+const OTP_COOLDOWN_SECONDS = 60;
+const OTP_MAX_SENDS_PER_WINDOW = 3;
+const OTP_SEND_WINDOW_SECONDS = 10 * 60;
+const OTP_MAX_VERIFY_ATTEMPTS = 5;
+
+const MAILTRAP_API_TOKEN = defineSecret("MAILTRAP_API_TOKEN");
+const MAILTRAP_SENDER_EMAIL = defineString("MAILTRAP_SENDER_EMAIL");
+const MAILTRAP_SENDER_NAME = defineString("MAILTRAP_SENDER_NAME");
 
 const UserRoles = Object.freeze({
   SUPER_ADMIN: 0,
@@ -27,6 +41,154 @@ const UserStatuses = Object.freeze({
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function assertEmail(email) {
+  const normalized = normalizeEmail(assertRequiredString(email, "Email"));
+  const emailRegex = /^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(normalized)) {
+    throw new HttpsError("invalid-argument", "Địa chỉ email không hợp lệ.");
+  }
+  return normalized;
+}
+
+function assertOtpCode(otpCode) {
+  const normalized = String(otpCode || "").trim();
+  if (!/^\d{6}$/.test(normalized)) {
+    throw new HttpsError("invalid-argument", "Mã OTP phải gồm đúng 6 chữ số.");
+  }
+  return normalized;
+}
+
+function maskEmail(email) {
+  const [localPart, domain] = String(email || "").split("@");
+  if (!localPart || !domain) return "***";
+
+  if (localPart.length <= 2) {
+    return `${localPart[0]}***@${domain}`;
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
+function generateOtpCode() {
+  const min = 10 ** (OTP_LENGTH - 1);
+  const max = (10 ** OTP_LENGTH) - 1;
+  return crypto.randomInt(min, max + 1).toString();
+}
+
+function hashOtpCode(otpCode) {
+  return crypto.createHash("sha256").update(otpCode).digest("hex");
+}
+
+function timingSafeHashEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""), "utf8");
+  const rightBuffer = Buffer.from(String(right || ""), "utf8");
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+async function getLatestOtpRecord(email) {
+  const snap = await db
+    .collection(OTP_COLLECTION)
+    .where("email", "==", email)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+  return snap.docs[0];
+}
+
+function ensureMailtrapConfig() {
+  const senderEmail = MAILTRAP_SENDER_EMAIL.value();
+  if (!senderEmail) {
+    throw new HttpsError("failed-precondition", "Thiếu cấu hình MAILTRAP_SENDER_EMAIL.");
+  }
+
+  return {
+    apiToken: MAILTRAP_API_TOKEN.value(),
+    senderEmail,
+    senderName: MAILTRAP_SENDER_NAME.value() || "Disaster Response",
+  };
+}
+
+async function sendOtpEmailViaMailtrap({ toEmail, otpCode, expiresInSeconds }) {
+  const { apiToken, senderEmail, senderName } = ensureMailtrapConfig();
+
+  const textContent = [
+    "Xac minh dang nhap",
+    `Ma OTP cua ban la: ${otpCode}`,
+    `Ma co hieu luc trong ${Math.floor(expiresInSeconds / 60)} phut.`,
+    "Neu ban khong thuc hien yeu cau nay, hay bo qua email.",
+  ].join("\n");
+
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: {
+        email: senderEmail,
+        name: senderName,
+      },
+      to: [{ email: toEmail }],
+      subject: "Mã OTP đăng nhập Disaster Response",
+      text: textContent,
+      category: "OTP Authentication",
+    }),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text();
+    const detail = rawBody ? ` (${rawBody.slice(0, 200)})` : "";
+    throw new HttpsError(
+      "unavailable",
+      `Không thể gửi email OTP qua Mailtrap (HTTP ${response.status})${detail}`,
+    );
+  }
+}
+
+async function createOrGetCitizenUserByEmail(email) {
+  try {
+    return await admin.auth().getUserByEmail(email);
+  } catch (error) {
+    if (error?.code !== "auth/user-not-found") {
+      throw error;
+    }
+
+    const local = email.split("@")[0] || "citizen";
+    const displayName = local.slice(0, 40);
+
+    const userRecord = await admin.auth().createUser({
+      email,
+      emailVerified: true,
+      displayName,
+      disabled: false,
+    });
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection(USERS_COLLECTION).doc(userRecord.uid).set(
+      {
+        uid: userRecord.uid,
+        email,
+        displayName,
+        photoUrl: null,
+        role: UserRoles.USER,
+        status: UserStatuses.ACTIVE,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: "otp-email-auth",
+        lastLoginAt: now,
+        mfaEnabled: false,
+      },
+      { merge: true },
+    );
+
+    return userRecord;
+  }
 }
 
 function assertRequiredString(value, fieldName) {
@@ -125,6 +287,157 @@ async function getUserProfile(uid) {
 
   return snap.data();
 }
+
+exports.sendOtp = onCall({ secrets: [MAILTRAP_API_TOKEN] }, async (request) => {
+  const data = request.data || {};
+  const email = assertEmail(data.email);
+
+  const latestOtpDoc = await getLatestOtpRecord(email);
+  if (latestOtpDoc) {
+    const latestOtp = latestOtpDoc.data();
+    const createdAt = latestOtp.createdAt?.toDate?.();
+    const elapsedSeconds = createdAt
+      ? Math.floor((Date.now() - createdAt.getTime()) / 1000)
+      : Number.POSITIVE_INFINITY;
+
+    if (elapsedSeconds < OTP_COOLDOWN_SECONDS) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `Vui lòng đợi ${OTP_COOLDOWN_SECONDS - elapsedSeconds} giây trước khi gửi lại mã.`,
+      );
+    }
+  }
+
+  const windowStart = admin.firestore.Timestamp.fromMillis(
+    Date.now() - (OTP_SEND_WINDOW_SECONDS * 1000),
+  );
+
+  const recentCountSnap = await db
+    .collection(OTP_COLLECTION)
+    .where("email", "==", email)
+    .where("createdAt", ">=", windowStart)
+    .count()
+    .get();
+
+  const recentAttempts = recentCountSnap.data().count || 0;
+  if (recentAttempts >= OTP_MAX_SENDS_PER_WINDOW) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Bạn đã yêu cầu mã OTP quá nhiều lần. Vui lòng thử lại sau ít phút.",
+    );
+  }
+
+  const otpCode = generateOtpCode();
+  const otpHash = hashOtpCode(otpCode);
+  const now = Date.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(now + (OTP_TTL_SECONDS * 1000));
+
+  const otpRef = db.collection(OTP_COLLECTION).doc();
+  const otpPayload = {
+    email,
+    otpHash,
+    expiresAt,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    consumedAt: null,
+    attemptCount: 0,
+    maxAttempts: OTP_MAX_VERIFY_ATTEMPTS,
+  };
+
+  await otpRef.set(otpPayload);
+
+  try {
+    await sendOtpEmailViaMailtrap({ toEmail: email, otpCode, expiresInSeconds: OTP_TTL_SECONDS });
+  } catch (error) {
+    await otpRef.delete();
+    throw mapToHttpsError(error, "Không thể gửi OTP qua email.");
+  }
+
+  return {
+    success: true,
+    email: maskEmail(email),
+    expiresInSec: OTP_TTL_SECONDS,
+    resendAfterSec: OTP_COOLDOWN_SECONDS,
+  };
+});
+
+exports.verifyOtp = onCall(async (request) => {
+  const data = request.data || {};
+  const email = assertEmail(data.email);
+  const otpCode = assertOtpCode(data.otpCode);
+
+  const latestOtpDoc = await getLatestOtpRecord(email);
+  if (!latestOtpDoc) {
+    throw new HttpsError("not-found", "Không tìm thấy mã OTP. Vui lòng yêu cầu gửi mã mới.");
+  }
+
+  const nowMs = Date.now();
+  const otpInputHash = hashOtpCode(otpCode);
+
+  await db.runTransaction(async (transaction) => {
+    const freshDoc = await transaction.get(latestOtpDoc.ref);
+    if (!freshDoc.exists) {
+      throw new HttpsError("not-found", "Không tìm thấy mã OTP. Vui lòng yêu cầu gửi mã mới.");
+    }
+
+    const otp = freshDoc.data();
+
+    const expiresAtMs = otp.expiresAt?.toMillis?.();
+    if (!expiresAtMs || nowMs > expiresAtMs) {
+      throw new HttpsError("deadline-exceeded", "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.");
+    }
+
+    if (otp.consumedAt) {
+      throw new HttpsError("failed-precondition", "Mã OTP đã được sử dụng. Vui lòng yêu cầu mã mới.");
+    }
+
+    const attempts = Number(otp.attemptCount || 0);
+    const maxAttempts = Number(otp.maxAttempts || OTP_MAX_VERIFY_ATTEMPTS);
+    if (attempts >= maxAttempts) {
+      throw new HttpsError("resource-exhausted", "Bạn đã nhập sai OTP quá số lần cho phép.");
+    }
+
+    const matched = timingSafeHashEquals(otp.otpHash, otpInputHash);
+    if (!matched) {
+      transaction.update(freshDoc.ref, {
+        attemptCount: attempts + 1,
+      });
+      throw new HttpsError("permission-denied", "Mã OTP không đúng. Vui lòng thử lại.");
+    }
+
+    transaction.update(freshDoc.ref, {
+      consumedAt: admin.firestore.FieldValue.serverTimestamp(),
+      verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+
+  let userRecord;
+  try {
+    userRecord = await createOrGetCitizenUserByEmail(email);
+  } catch (error) {
+    throw mapToHttpsError(error, "Không thể khởi tạo tài khoản người dùng.");
+  }
+
+  await db.collection(USERS_COLLECTION).doc(userRecord.uid).set(
+    {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: UserStatuses.ACTIVE,
+      role: UserRoles.USER,
+    },
+    { merge: true },
+  );
+
+  const customToken = await admin.auth().createCustomToken(userRecord.uid, {
+    role: UserRoles.USER,
+    authProvider: "email_otp",
+  });
+
+  return {
+    success: true,
+    customToken,
+    uid: userRecord.uid,
+  };
+});
 
 exports.registerInitialSuperAdmin = onCall(async (request) => {
   const data = request.data || {};

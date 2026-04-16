@@ -623,9 +623,7 @@ class FirebaseSyncService {
     final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
     final updatedAt = _asDateTime(data['updatedAt']) ?? createdAt;
     final lastLoginAt = _asDateTime(data['lastLoginAt']);
-    final resolvedPhotoUrl =
-        (data['photoUrl'] as String?)?.trim() ??
-        (data['photoURL'] as String?)?.trim();
+    final resolvedPhotoUrl = (data['photoUrl'] as String?)?.trim();
 
     return UsersCompanion.insert(
       id: uid,

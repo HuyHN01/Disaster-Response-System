@@ -21,6 +21,7 @@
 
 import 'dart:ui';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -252,11 +253,17 @@ class FCMService {
   Future<void> _subscribeTopics() async {
     try {
       // Topic chính: tất cả cảnh báo thiên tai
-      await _messaging.subscribeToTopic('disaster_alerts');
+      await _messaging
+          .subscribeToTopic('disaster_alerts')
+          .timeout(const Duration(seconds: 8));
       debugPrint('[FCMService] Đã subscribe topic: disaster_alerts');
 
       // Có thể subscribe thêm topic theo tỉnh/khu vực nếu cần:
       // await _messaging.subscribeToTopic('region_danang');
+    } on TimeoutException {
+      debugPrint(
+        '[FCMService] Subscribe topic timeout (bỏ qua để không chặn app)',
+      );
     } catch (e) {
       debugPrint('[FCMService] Lỗi subscribe topic: $e');
     }

@@ -10,7 +10,8 @@ service cloud.firestore {
     }
 
     function requesterProfileExists() {
-      return signedIn() && userProfile(request.auth.uid).exists();
+      return signedIn() &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function requesterRole() {
@@ -47,6 +48,30 @@ service cloud.firestore {
           ]);
     }
 
+    function ownerCreateIsSafe(uid) {
+      return request.resource.data.uid == uid &&
+          request.resource.data.role == 3 &&
+          request.resource.data.status == 1 &&
+          request.resource.data.createdBy == null &&
+          request.resource.data.mfaEnabled is bool &&
+          request.resource.data.email is string &&
+          request.resource.data.displayName is string &&
+          request.resource.data.photoUrl is string &&
+          request.resource.data.keys().hasOnly([
+            'uid',
+            'email',
+            'displayName',
+            'photoUrl',
+            'role',
+            'status',
+            'createdAt',
+            'updatedAt',
+            'createdBy',
+            'lastLoginAt',
+            'mfaEnabled'
+          ]);
+    }
+
     function adminUpdateIsSafe(uid) {
       return request.resource.data.uid == uid &&
           request.resource.data.createdAt == resource.data.createdAt &&
@@ -71,10 +96,15 @@ service cloud.firestore {
     match /users/{uid} {
       allow get: if isOwner(uid) || isActiveAdmin();
       allow list: if isActiveAdmin();
-      allow create: if false;
+      allow create: if isOwner(uid) && ownerCreateIsSafe(uid);
       allow delete: if false;
       allow update: if (isOwner(uid) && ownerUpdateIsSafe(uid)) ||
           (isActiveAdmin() && adminUpdateIsSafe(uid));
+    }
+
+    // OTP records are backend-only; mobile clients must use Cloud Functions.
+    match /email_otp_records/{docId} {
+      allow read, write: if false;
     }
 
     // Keep current app behavior for existing non-auth features.

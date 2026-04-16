@@ -185,10 +185,6 @@ class MobileHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-
-      // ── Floating Emergency FAB ─────────────────────────────────────────────
-      floatingActionButton: _EmergencyFAB(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

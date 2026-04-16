@@ -70,9 +70,8 @@ const List<_AdminNavDestination> _kNavDestinations = [
   ),
   _AdminNavDestination(
     icon: Icons.people_rounded,
-    label: 'Người dùng',
-    route: RouteNames.adminDashboard, // placeholder — future route
-    enabled: false,
+    label: 'Quản lý người dùng',
+    route: RouteNames.adminUserManagement,
   ),
 ];
 
@@ -97,6 +96,7 @@ class _AdminLayoutState extends State<AdminLayout> {
   int _selectedIndex(String location) {
     if (location.startsWith(RouteNames.adminMap)) return 1;
     if (location.startsWith(RouteNames.adminRescueStations)) return 2;
+    if (location.startsWith(RouteNames.adminUserManagement)) return 4;
     if (location.startsWith(RouteNames.adminAccount)) return -1;
     // Future branches: add cases here as new admin routes are registered.
     return 0; // default: dashboard

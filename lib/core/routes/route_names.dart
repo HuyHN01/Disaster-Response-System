@@ -46,6 +46,15 @@ abstract final class RouteNames {
   /// AI assistant chat ([AiChatScreen]).
   static const String aiChat = '/ai';
 
+  /// User mobile profile screen ([MobileProfileScreen]).
+  static const String profile = '/profile';
+
+  /// Email input screen in the profile auth flow ([EmailInputScreen]).
+  static const String profileEmailInput = '/profile/email-input';
+
+  /// OTP verification screen in the profile auth flow ([OtpVerificationScreen]).
+  static const String profileOtpVerification = '/profile/otp-verification';
+
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -62,6 +71,13 @@ abstract final class RouteNames {
 
   /// Admin rescue stations management ([AdminRescueStationsScreen]).
   static const String adminRescueStations = '/admin/rescue-stations';
+
+  /// Admin user management ([UserManagementScreen]).
+  static const String adminUserManagement = '/admin/users';
+
+  /// Admin user detail / edit ([UserDetailScreen]).
+  /// Requires a [paramUserId] path parameter and an [AppUser] via `extra`.
+  static const String adminUserDetail = '/admin/users/:userId';
 
   /// Admin personal account management ([AdminAccountScreen]).
   static const String adminAccount = '/admin/account';
@@ -86,8 +102,12 @@ abstract final class RouteNames {
   // ─────────────────────────────────────────────────────────────────────────
 
   static const String segNewsDetail = ':postId';
+  static const String segProfileEmailInput = 'email-input';
+  static const String segProfileOtpVerification = 'otp-verification';
   static const String segAdminMap = 'map';
   static const String segAdminRescueStations = 'rescue-stations';
+  static const String segAdminUserManagement = 'users';
+  static const String segAdminUserDetail = ':userId';
   static const String segAdminAccount = 'account';
   static const String segAdminEventDetail = 'events/:eventId';
   static const String segAdminPostCreate = 'posts/new';
@@ -100,6 +120,7 @@ abstract final class RouteNames {
 
   static const String paramPostId = 'postId';
   static const String paramEventId = 'eventId';
+  static const String paramUserId = 'userId';
 
   // ─────────────────────────────────────────────────────────────────────────
   // 4. Named route identifiers
@@ -111,11 +132,16 @@ abstract final class RouteNames {
   static const String nameNewsDetail = 'news-detail';
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
+  static const String nameProfile = 'profile';
+  static const String nameProfileEmailInput = 'profile-email-input';
+  static const String nameProfileOtpVerification = 'profile-otp-verification';
   static const String nameAdminLogin = 'admin-login';
   static const String nameAdminRegister = 'admin-register';
   static const String nameAdminDashboard = 'admin-dashboard';
   static const String nameAdminMap = 'admin-map';
   static const String nameAdminRescueStations = 'admin-rescue-stations';
+  static const String nameAdminUserManagement = 'admin-user-management';
+  static const String nameAdminUserDetail = 'admin-user-detail';
   static const String nameAdminAccount = 'admin-account';
   static const String nameAdminEventDetail = 'admin-event-detail';
   static const String nameAdminPostCreate = 'admin-post-create';
