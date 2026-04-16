@@ -34,18 +34,18 @@ class UserManagementController extends AsyncNotifier<List<AppUser>> {
   Future<void> createUser({
     required String email,
     required String displayName,
-    required String? photoUrl,
     required int role,
-    required int status,
     required bool mfaEnabled,
+    required String password,
+    String? loginUrl,
   }) async {
     await _repository.createUser(
       email: email,
       displayName: displayName,
-      photoUrl: photoUrl,
       role: role,
-      status: status,
       mfaEnabled: mfaEnabled,
+      password: password,
+      loginUrl: loginUrl,
     );
 
     await refreshUsers();
@@ -55,7 +55,6 @@ class UserManagementController extends AsyncNotifier<List<AppUser>> {
     required String uid,
     required String email,
     required String displayName,
-    required String? photoUrl,
     required int role,
     required int status,
     required bool mfaEnabled,
@@ -64,7 +63,6 @@ class UserManagementController extends AsyncNotifier<List<AppUser>> {
       uid: uid,
       email: email,
       displayName: displayName,
-      photoUrl: photoUrl,
       role: role,
       status: status,
       mfaEnabled: mfaEnabled,

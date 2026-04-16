@@ -185,6 +185,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     final role = widget.profile?.role;
     if (role == UserRoles.superAdmin) return 'Vai trò: Quản trị viên cấp cao';
     if (role == UserRoles.admin) return 'Vai trò: Quản trị viên';
+    if (role == UserRoles.staff) return 'Vai trò: Nhân viên';
     return 'Vai trò: Chưa xác định';
   }
 

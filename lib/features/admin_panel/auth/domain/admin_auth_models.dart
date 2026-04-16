@@ -6,7 +6,8 @@ class UserRoles {
   static const int staff = 2;
   static const int user = 3;
 
-  static bool isAdminRole(int role) => role == superAdmin || role == admin;
+  static bool isAdminRole(int role) =>
+      role == superAdmin || role == admin || role == staff;
 }
 
 class UserStatuses {

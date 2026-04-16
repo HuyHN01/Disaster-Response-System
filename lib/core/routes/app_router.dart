@@ -485,13 +485,19 @@ abstract final class AppRouter {
     final profile = await _adminAuthRepository.fetchUserProfile(
       currentUser.uid,
     );
+
+    // Keep login/register routes stable while sign-in flow is still activating
+    // a newly created managed account (PENDING -> ACTIVE).
+    if (isLoginRoute || isRegisterRoute) {
+      if (profile != null && profile.canAccessAdminPortal) {
+        return RouteNames.adminDashboard;
+      }
+      return null;
+    }
+
     if (profile == null || !profile.canAccessAdminPortal) {
       await _adminAuthRepository.signOut();
       return RouteNames.adminLogin;
-    }
-
-    if (isLoginRoute || isRegisterRoute) {
-      return RouteNames.adminDashboard;
     }
 
     return null;
@@ -548,7 +554,9 @@ abstract final class AppRouter {
 
     final createdAt = _asDateTimeValue(data['createdAt']) ?? DateTime.now();
     final lastLoginAt =
-        _asDateTimeValue(data['lastLoginAt']) ?? _asDateTimeValue(data['updatedAt']) ?? createdAt;
+        _asDateTimeValue(data['lastLoginAt']) ??
+        _asDateTimeValue(data['updatedAt']) ??
+        createdAt;
 
     final email = ((data['email'] as String?) ?? authUser.email ?? '').trim();
     final authDisplayName = (authUser.displayName as String?)?.trim() ?? '';

@@ -24,6 +24,7 @@ const OTP_MAX_VERIFY_ATTEMPTS = 5;
 const MAILTRAP_API_TOKEN = defineSecret("MAILTRAP_API_TOKEN");
 const MAILTRAP_SENDER_EMAIL = defineString("MAILTRAP_SENDER_EMAIL");
 const MAILTRAP_SENDER_NAME = defineString("MAILTRAP_SENDER_NAME");
+const ADMIN_PORTAL_LOGIN_URL = defineString("ADMIN_PORTAL_LOGIN_URL");
 
 const UserRoles = Object.freeze({
   SUPER_ADMIN: 0,
@@ -189,6 +190,77 @@ async function sendPasswordResetEmailViaMailtrap({ toEmail, resetLink }) {
   }
 }
 
+function resolveAdminLoginUrl(rawLoginUrl) {
+  const fromRequest = String(rawLoginUrl || "").trim();
+  if (fromRequest.startsWith("http://") || fromRequest.startsWith("https://")) {
+    return fromRequest;
+  }
+
+  const fromConfig = String(ADMIN_PORTAL_LOGIN_URL.value() || "").trim();
+  if (fromConfig.startsWith("http://") || fromConfig.startsWith("https://")) {
+    return fromConfig;
+  }
+
+  return "https://disaster-response-app-7a864.web.app/admin/login";
+}
+
+async function sendManagedInviteEmailViaMailtrap({
+  toEmail,
+  displayName,
+  role,
+  temporaryPassword,
+  loginUrl,
+}) {
+  const { apiToken, senderEmail, senderName } = ensureMailtrapConfig();
+
+  const roleLabel = role === UserRoles.SUPER_ADMIN
+    ? "Super Admin"
+    : role === UserRoles.ADMIN
+      ? "Admin"
+      : "Staff";
+
+  const textContent = [
+    `Xin chao ${displayName},`,
+    "",
+    "Ban duoc moi tham gia he thong quan tri Disaster Response.",
+    `Vai tro: ${roleLabel}`,
+    `Email dang nhap: ${toEmail}`,
+    `Mat khau tam thoi: ${temporaryPassword}`,
+    "Trang thai tai khoan ban dau: Cho duyet (PENDING).",
+    "",
+    `Dang nhap tai day: ${loginUrl}`,
+    "Sau lan dang nhap thanh cong dau tien, tai khoan se duoc kich hoat.",
+    "Vui long doi mat khau ngay sau khi dang nhap.",
+  ].join("\n");
+
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: {
+        email: senderEmail,
+        name: senderName,
+      },
+      to: [{ email: toEmail }],
+      subject: "[Invite] Tài khoản quản trị Disaster Response",
+      text: textContent,
+      category: "Managed User Invite",
+    }),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text();
+    const detail = rawBody ? ` (${rawBody.slice(0, 200)})` : "";
+    throw new HttpsError(
+      "unavailable",
+      `Không thể gửi email mời tài khoản (HTTP ${response.status})${detail}`,
+    );
+  }
+}
+
 async function createOrGetCitizenUserByEmail(email) {
   try {
     return await admin.auth().getUserByEmail(email);
@@ -245,6 +317,27 @@ function assertPassword(password, confirmPassword) {
   if (password !== confirmPassword) {
     throw new HttpsError("invalid-argument", "Mật khẩu xác nhận không khớp.");
   }
+}
+
+function assertStrongPassword(password) {
+  const normalized = String(password || "").trim();
+  if (normalized.length < 10) {
+    throw new HttpsError("invalid-argument", "Mật khẩu phải có ít nhất 10 ký tự.");
+  }
+
+  const hasUpper = /[A-Z]/.test(normalized);
+  const hasLower = /[a-z]/.test(normalized);
+  const hasDigit = /\d/.test(normalized);
+  const hasSpecial = /[^A-Za-z0-9]/.test(normalized);
+
+  if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Mật khẩu cần có chữ hoa, chữ thường, số và ký tự đặc biệt.",
+    );
+  }
+
+  return normalized;
 }
 
 function parseAllowedInt(value, allowedValues, fallback, fieldName) {
@@ -338,6 +431,17 @@ function normalizeOptionalPhotoUrl(rawValue) {
   if (rawValue == null) return null;
   const normalized = String(rawValue).trim();
   return normalized || null;
+}
+
+function isValidHttpUrl(value) {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
 }
 
 function generateManagedPassword(length = 16) {
@@ -666,85 +770,142 @@ exports.registerInitialSuperAdmin = onCall(async (request) => {
   }
 });
 
-exports.createManagedUser = onCall(async (request) => {
-  const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
+exports.createManagedUser = onCall(
+  { secrets: [MAILTRAP_API_TOKEN] },
+  async (request) => {
+    const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
 
-  const data = request.data || {};
-  const displayName = assertRequiredString(data.displayName, "Tên hiển thị");
-  const email = assertEmail(data.email);
-  const providedPassword = String(data.password || "").trim();
-  const password = providedPassword || generateManagedPassword();
-  const role = parseAllowedInt(
-    data.role,
-    [UserRoles.SUPER_ADMIN, UserRoles.ADMIN, UserRoles.STAFF, UserRoles.USER],
-    UserRoles.USER,
-    "Vai trò",
-  );
-  const status = parseAllowedInt(
-    data.status,
-    [UserStatuses.INACTIVE, UserStatuses.ACTIVE, UserStatuses.PENDING, UserStatuses.BANNED],
-    UserStatuses.PENDING,
-    "Trạng thái",
-  );
-
-  if (providedPassword && providedPassword.length < 8) {
-    throw new HttpsError("invalid-argument", "Mật khẩu phải có ít nhất 8 ký tự.");
-  }
-
-  if (callerRole === UserRoles.ADMIN && isPrivilegedRole(role)) {
-    throw new HttpsError("permission-denied", "Bạn không đủ quyền để tạo tài khoản quản trị cấp cao.");
-  }
-
-  const photoUrl = normalizeOptionalPhotoUrl(data.photoUrl ?? data.photoURL);
-  const mfaEnabled = typeof data.mfaEnabled === "boolean" ? data.mfaEnabled : false;
-
-  let createdUser = null;
-
-  try {
-    createdUser = await admin.auth().createUser({
-      email,
-      password,
-      displayName,
-      photoURL: photoUrl,
-      disabled: status !== UserStatuses.ACTIVE,
-    });
-
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    await db.collection(USERS_COLLECTION).doc(createdUser.uid).set(
-      {
-        uid: createdUser.uid,
-        email,
-        displayName,
-        photoUrl,
-        role,
-        status,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: callerUid,
-        lastLoginAt: null,
-        mfaEnabled,
-      },
-      { merge: true },
-    );
-
-    return {
-      uid: createdUser.uid,
-      email,
-      role,
-      status,
-      generatedPassword: providedPassword ? null : password,
-    };
-  } catch (error) {
-    if (createdUser?.uid) {
-      try {
-        await admin.auth().deleteUser(createdUser.uid);
-      } catch (rollbackError) {
-        console.error("Rollback deleteUser failed:", rollbackError);
-      }
+    if (callerRole !== UserRoles.SUPER_ADMIN) {
+      throw new HttpsError(
+        "permission-denied",
+        "Chỉ Super Admin mới có quyền tạo tài khoản quản trị đặc biệt.",
+      );
     }
 
-    throw mapToHttpsError(error, "Không thể tạo tài khoản mới.");
+    const data = request.data || {};
+    const displayName = assertRequiredString(data.displayName, "Tên hiển thị");
+    const email = assertEmail(data.email);
+    const password = assertStrongPassword(
+      assertRequiredString(data.password, "Mật khẩu"),
+    );
+    const role = parseAllowedInt(
+      data.role,
+      [UserRoles.SUPER_ADMIN, UserRoles.ADMIN, UserRoles.STAFF],
+      UserRoles.STAFF,
+      "Vai trò",
+    );
+    const status = UserStatuses.PENDING;
+    const mfaEnabled = typeof data.mfaEnabled === "boolean" ? data.mfaEnabled : false;
+    const loginUrl = resolveAdminLoginUrl(data.loginUrl);
+
+    let createdUser = null;
+
+    try {
+      const createPayload = {
+        email,
+        password,
+        displayName,
+        disabled: false,
+      };
+
+      createdUser = await admin.auth().createUser(createPayload);
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      await db.collection(USERS_COLLECTION).doc(createdUser.uid).set(
+        {
+          uid: createdUser.uid,
+          email,
+          displayName,
+          photoUrl: null,
+          role,
+          status,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: callerUid,
+          lastLoginAt: null,
+          mfaEnabled,
+        },
+        { merge: true },
+      );
+
+      await sendManagedInviteEmailViaMailtrap({
+        toEmail: email,
+        displayName,
+        role,
+        temporaryPassword: password,
+        loginUrl,
+      });
+
+      return {
+        uid: createdUser.uid,
+        email,
+        role,
+        status,
+        inviteSent: true,
+      };
+    } catch (error) {
+      if (createdUser?.uid) {
+        try {
+          await db.collection(USERS_COLLECTION).doc(createdUser.uid).delete();
+        } catch (rollbackDocError) {
+          console.error("Rollback delete user doc failed:", rollbackDocError);
+        }
+
+        try {
+          await admin.auth().deleteUser(createdUser.uid);
+        } catch (rollbackAuthError) {
+          console.error("Rollback delete auth user failed:", rollbackAuthError);
+        }
+      }
+
+      throw mapToHttpsError(error, "Không thể tạo tài khoản quản trị đặc biệt.");
+    }
+  },
+);
+
+exports.activateManagedUserOnFirstLogin = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Bạn cần đăng nhập để thực hiện thao tác này.");
   }
+
+  const uid = request.auth.uid;
+  const profile = await getUserProfile(uid);
+
+  if (!profile) {
+    throw new HttpsError("not-found", "Không tìm thấy hồ sơ tài khoản quản trị.");
+  }
+
+  const role = Number(profile.role ?? UserRoles.USER);
+  const status = Number(profile.status ?? UserStatuses.INACTIVE);
+
+  if (role !== UserRoles.SUPER_ADMIN && role !== UserRoles.ADMIN && role !== UserRoles.STAFF) {
+    throw new HttpsError("permission-denied", "Tài khoản không thuộc nhóm quản trị đặc biệt.");
+  }
+
+  if (status === UserStatuses.BANNED || status === UserStatuses.INACTIVE) {
+    throw new HttpsError(
+      "permission-denied",
+      "Tài khoản đang bị vô hiệu hóa hoặc cấm. Vui lòng liên hệ Super Admin.",
+    );
+  }
+
+  const shouldActivate = status === UserStatuses.PENDING;
+
+  await db.collection(USERS_COLLECTION).doc(uid).set(
+    {
+      uid,
+      status: shouldActivate ? UserStatuses.ACTIVE : status,
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return {
+    uid,
+    activated: shouldActivate,
+    status: shouldActivate ? UserStatuses.ACTIVE : status,
+  };
 });
 
 exports.updateManagedUser = onCall(async (request) => {
@@ -795,31 +956,24 @@ exports.updateManagedUser = onCall(async (request) => {
   const fallbackEmail = String(targetProfile.email || "").trim();
   const email = data.email == null ? assertEmail(fallbackEmail) : assertEmail(data.email);
 
-  const hasPhotoInput =
-    Object.prototype.hasOwnProperty.call(data, "photoUrl") ||
-    Object.prototype.hasOwnProperty.call(data, "photoURL");
-  const photoUrl = hasPhotoInput
-    ? normalizeOptionalPhotoUrl(data.photoUrl ?? data.photoURL)
-    : normalizeOptionalPhotoUrl(targetProfile.photoUrl);
-
   const mfaEnabled = typeof data.mfaEnabled === "boolean"
     ? data.mfaEnabled
     : Boolean(targetProfile.mfaEnabled || false);
 
   try {
-    await admin.auth().updateUser(targetUid, {
+    const updatePayload = {
       email,
       displayName,
-      photoURL: photoUrl,
       disabled: nextStatus !== UserStatuses.ACTIVE,
-    });
+    };
+
+    await admin.auth().updateUser(targetUid, updatePayload);
 
     await db.collection(USERS_COLLECTION).doc(targetUid).set(
       {
         uid: targetUid,
         email,
         displayName,
-        photoUrl,
         role: nextRole,
         status: nextStatus,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),

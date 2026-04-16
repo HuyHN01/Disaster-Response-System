@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 
 import '../domain/user_management_controller.dart';
 import '../domain/user_management_exception.dart';
+import 'password_generator_dialog.dart';
 import 'user_models.dart';
 
 // =============================================================================
@@ -27,14 +28,16 @@ class UserDetailScreen extends ConsumerStatefulWidget {
 
 class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   bool get _isEditing => widget.existingUser != null;
+  bool get _isSpecialCreateRole => !_isEditing && _selectedRole != 3;
 
   // ── Form controllers ────────────────────────────────────────────────────────
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _emailCtrl;
-  late final TextEditingController _photoUrlCtrl;
+  late final TextEditingController _passwordCtrl;
   late int _selectedRole;
   late int _selectedStatus;
   late bool _mfaEnabled;
+  bool _obscurePassword = true;
 
   bool _saving = false;
   bool _resettingPassword = false;
@@ -49,9 +52,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     final u = widget.existingUser;
     _displayNameCtrl = TextEditingController(text: u?.displayName ?? '');
     _emailCtrl = TextEditingController(text: u?.email ?? '');
-    _photoUrlCtrl = TextEditingController(text: u?.photoUrl ?? '');
-    _selectedRole = u?.role ?? 3;
-    _selectedStatus = u?.status ?? 1;
+    _passwordCtrl = TextEditingController();
+    _selectedRole = u?.role ?? 2;
+    _selectedStatus = u?.status ?? 2;
     _mfaEnabled = u?.mfaEnabled ?? false;
   }
 
@@ -59,7 +62,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
   void dispose() {
     _displayNameCtrl.dispose();
     _emailCtrl.dispose();
-    _photoUrlCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
@@ -82,19 +85,29 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           uid: existing.uid,
           email: _emailCtrl.text,
           displayName: _displayNameCtrl.text,
-          photoUrl: _photoUrlCtrl.text,
           role: _selectedRole,
           status: _selectedStatus,
           mfaEnabled: _mfaEnabled,
         );
       } else {
+        if (_selectedRole == 3) {
+          throw const UserManagementException(
+            'Role Người dùng thường (3) phải tự đăng ký qua OTP hoặc Google.',
+          );
+        }
+
+        final passwordError = _validateStrongPassword(_passwordCtrl.text);
+        if (passwordError != null) {
+          throw UserManagementException(passwordError);
+        }
+
         await controller.createUser(
           email: _emailCtrl.text,
           displayName: _displayNameCtrl.text,
-          photoUrl: _photoUrlCtrl.text,
           role: _selectedRole,
-          status: _selectedStatus,
           mfaEnabled: _mfaEnabled,
+          password: _passwordCtrl.text,
+          loginUrl: _resolveAdminLoginUrl(),
         );
       }
 
@@ -199,6 +212,44 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
       return raw.substring('Exception: '.length).trim();
     }
     return raw.isEmpty ? 'Đã xảy ra lỗi. Vui lòng thử lại.' : raw;
+  }
+
+  String? _validateStrongPassword(String rawPassword) {
+    final password = rawPassword.trim();
+    if (password.isEmpty) {
+      return 'Vui lòng nhập mật khẩu cho tài khoản đặc biệt.';
+    }
+    if (password.length < 10) {
+      return 'Mật khẩu phải có ít nhất 10 ký tự.';
+    }
+
+    final hasUpper = RegExp(r'[A-Z]').hasMatch(password);
+    final hasLower = RegExp(r'[a-z]').hasMatch(password);
+    final hasDigit = RegExp(r'\d').hasMatch(password);
+    final hasSpecial = RegExp(r'[^A-Za-z0-9]').hasMatch(password);
+
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      return 'Mật khẩu cần có chữ hoa, chữ thường, số và ký tự đặc biệt.';
+    }
+    return null;
+  }
+
+  String? _resolveAdminLoginUrl() {
+    final uri = Uri.base;
+    if (uri.scheme != 'http' && uri.scheme != 'https') {
+      return null;
+    }
+    return '${uri.scheme}://${uri.authority}/admin/login';
+  }
+
+  Future<void> _openPasswordGenerator() async {
+    final generated = await showPasswordGeneratorDialog(context);
+    if (generated == null || generated.trim().isEmpty) return;
+
+    setState(() {
+      _passwordCtrl.text = generated;
+      _obscurePassword = false;
+    });
   }
 
   void _showSnack(String message, {required Color color}) {
@@ -323,16 +374,96 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                             },
                           ),
                         ),
-                        const _FormDivider(),
-
-                        _FormRow(
-                          label: 'Ảnh đại diện (URL)',
-                          child: _StyledTextField(
-                            controller: _photoUrlCtrl,
-                            hint: 'https://example.com/avatar.jpg',
-                            keyboardType: TextInputType.url,
+                        if (_isSpecialCreateRole) ...[
+                          const _FormDivider(),
+                          _FormRow(
+                            label: 'Mật khẩu đăng nhập',
+                            required: true,
+                            helper:
+                                'Bắt buộc cho tài khoản role 0/1/2. Sẽ gửi trong email mời.',
+                            child: TextFormField(
+                              controller: _passwordCtrl,
+                              obscureText: _obscurePassword,
+                              validator: (value) =>
+                                  _validateStrongPassword(value ?? ''),
+                              style: const TextStyle(
+                                color: UC.textPrimary,
+                                fontSize: 13.5,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Nhập hoặc tạo tự động mật khẩu mạnh',
+                                hintStyle: const TextStyle(
+                                  color: UC.textMuted,
+                                  fontSize: 13.5,
+                                ),
+                                filled: true,
+                                fillColor: UC.inputBg,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 11,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(9),
+                                  borderSide: const BorderSide(
+                                    color: UC.border,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(9),
+                                  borderSide: const BorderSide(
+                                    color: UC.border,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(9),
+                                  borderSide: const BorderSide(
+                                    color: UC.focusBorder,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(9),
+                                  borderSide: const BorderSide(
+                                    color: UC.brandRed,
+                                  ),
+                                ),
+                                suffixIcon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Tạo mật khẩu tự động',
+                                      onPressed: _openPasswordGenerator,
+                                      icon: const Icon(
+                                        Icons.auto_awesome_rounded,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: _obscurePassword
+                                          ? 'Hiện mật khẩu'
+                                          : 'Ẩn mật khẩu',
+                                      onPressed: () {
+                                        setState(() {
+                                          _obscurePassword = !_obscurePassword;
+                                        });
+                                      },
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_off_rounded
+                                            : Icons.visibility_rounded,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minHeight: 40,
+                                  minWidth: 92,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -352,8 +483,9 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                           helper: 'Xác định quyền truy cập của người dùng',
                           child: _RoleDropdown(
                             value: _selectedRole,
+                            includeCitizenRole: _isEditing,
                             onChanged: (v) =>
-                                setState(() => _selectedRole = v ?? 3),
+                                setState(() => _selectedRole = v ?? 2),
                           ),
                         ),
                         const _FormDivider(),
@@ -361,10 +493,15 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                         _FormRow(
                           label: 'Trạng thái tài khoản',
                           required: true,
+                          helper: _isEditing
+                              ? null
+                              : 'Tài khoản do Super Admin tạo luôn bắt đầu ở trạng thái Chờ duyệt.',
                           child: _StatusDropdown(
-                            value: _selectedStatus,
-                            onChanged: (v) =>
-                                setState(() => _selectedStatus = v ?? 1),
+                            value: _isEditing ? _selectedStatus : 2,
+                            onChanged: _isEditing
+                                ? (v) =>
+                                      setState(() => _selectedStatus = v ?? 1)
+                                : null,
                           ),
                         ),
                         const _FormDivider(),
@@ -829,12 +966,20 @@ class _StyledTextField extends StatelessWidget {
 
 class _RoleDropdown extends StatelessWidget {
   final int value;
+  final bool includeCitizenRole;
   final ValueChanged<int?> onChanged;
-  const _RoleDropdown({required this.value, required this.onChanged});
+  const _RoleDropdown({
+    required this.value,
+    required this.onChanged,
+    this.includeCitizenRole = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final role = UserRole.fromValue(value);
+    final roles = UserRole.values
+        .where((r) => includeCitizenRole || r != UserRole.user)
+        .toList();
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
@@ -852,7 +997,7 @@ class _RoleDropdown extends StatelessWidget {
             size: 18,
             color: UC.textSecondary,
           ),
-          selectedItemBuilder: (_) => UserRole.values
+          selectedItemBuilder: (_) => roles
               .map(
                 (r) => Row(
                   children: [
@@ -885,7 +1030,7 @@ class _RoleDropdown extends StatelessWidget {
                 ),
               )
               .toList(),
-          items: UserRole.values
+          items: roles
               .map(
                 (r) => DropdownMenuItem(
                   value: r.value,
@@ -928,7 +1073,7 @@ class _RoleDropdown extends StatelessWidget {
 
 class _StatusDropdown extends StatelessWidget {
   final int value;
-  final ValueChanged<int?> onChanged;
+  final ValueChanged<int?>? onChanged;
   const _StatusDropdown({required this.value, required this.onChanged});
 
   @override

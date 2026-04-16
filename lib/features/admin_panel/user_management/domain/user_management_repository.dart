@@ -34,14 +34,15 @@ class UserManagementRepository {
   Future<void> createUser({
     required String email,
     required String displayName,
-    required String? photoUrl,
     required int role,
-    required int status,
     required bool mfaEnabled,
+    required String password,
+    String? loginUrl,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedDisplayName = displayName.trim();
-    final normalizedPhotoUrl = _normalizeOptionalString(photoUrl);
+    final normalizedPassword = password.trim();
+    final normalizedLoginUrl = _normalizeOptionalString(loginUrl);
 
     if (normalizedEmail.isEmpty) {
       throw const UserManagementException('Vui lòng nhập email.');
@@ -49,15 +50,25 @@ class UserManagementRepository {
     if (normalizedDisplayName.isEmpty) {
       throw const UserManagementException('Vui lòng nhập tên hiển thị.');
     }
+    if (role == 3) {
+      throw const UserManagementException(
+        'Tài khoản người dùng thường (Role 3) phải tự đăng ký qua OTP hoặc Google.',
+      );
+    }
+
+    final passwordError = _validateStrongPassword(normalizedPassword);
+    if (passwordError != null) {
+      throw UserManagementException(passwordError);
+    }
 
     try {
       final callable = _functions.httpsCallable('createManagedUser');
       await callable.call(<String, dynamic>{
         'email': normalizedEmail,
         'displayName': normalizedDisplayName,
-        'photoUrl': normalizedPhotoUrl,
         'role': role,
-        'status': status,
+        'password': normalizedPassword,
+        'loginUrl': normalizedLoginUrl,
         'mfaEnabled': mfaEnabled,
       });
     } on FirebaseFunctionsException catch (error) {
@@ -71,7 +82,6 @@ class UserManagementRepository {
     required String uid,
     required String email,
     required String displayName,
-    required String? photoUrl,
     required int role,
     required int status,
     required bool mfaEnabled,
@@ -79,7 +89,6 @@ class UserManagementRepository {
     final normalizedUid = uid.trim();
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedDisplayName = displayName.trim();
-    final normalizedPhotoUrl = _normalizeOptionalString(photoUrl);
 
     if (normalizedUid.isEmpty) {
       throw const UserManagementException('Thiếu UID người dùng cần cập nhật.');
@@ -97,7 +106,6 @@ class UserManagementRepository {
         'uid': normalizedUid,
         'email': normalizedEmail,
         'displayName': normalizedDisplayName,
-        'photoUrl': normalizedPhotoUrl,
         'role': role,
         'status': status,
         'mfaEnabled': mfaEnabled,
@@ -205,6 +213,26 @@ class UserManagementRepository {
     final normalized = (value ?? '').trim();
     if (normalized.isEmpty) return null;
     return normalized;
+  }
+
+  String? _validateStrongPassword(String password) {
+    if (password.isEmpty) {
+      return 'Vui lòng nhập mật khẩu cho tài khoản đặc biệt.';
+    }
+    if (password.length < 10) {
+      return 'Mật khẩu phải có ít nhất 10 ký tự.';
+    }
+
+    final hasUpper = RegExp(r'[A-Z]').hasMatch(password);
+    final hasLower = RegExp(r'[a-z]').hasMatch(password);
+    final hasDigit = RegExp(r'\d').hasMatch(password);
+    final hasSpecial = RegExp(r'[^A-Za-z0-9]').hasMatch(password);
+
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      return 'Mật khẩu cần có chữ hoa, chữ thường, số và ký tự đặc biệt.';
+    }
+
+    return null;
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {
