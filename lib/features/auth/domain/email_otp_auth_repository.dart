@@ -214,6 +214,16 @@ class EmailOtpAuthRepository {
     _isGoogleInitialized = true;
   }
 
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {
+      // Google session may not exist for OTP users.
+    }
+    await _auth.signOut();
+    _isGoogleInitialized = false;
+  }
+
   Future<void> _upsertUserProfile(User user) async {
     final docRef = _firestore.collection('users').doc(user.uid);
     final snapshot = await docRef.get();

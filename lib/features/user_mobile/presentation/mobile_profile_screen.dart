@@ -1,5 +1,6 @@
 // lib/features/user_mobile/presentation/mobile_profile_screen.dart
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,11 +8,15 @@ import 'package:crop_your_image/crop_your_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:disaster_response_app/core/database/db_provider.dart';
+import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:disaster_response_app/core/services/firebase/firebase_avatar_storage_service.dart';
+import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/auth/domain/email_otp_auth_repository.dart';
 
 // =============================================================================
@@ -93,6 +98,8 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
   bool _isEditingName = false;
   bool _isSavingName  = false;
   bool _isUploadingAvatar = false;
+  bool _isSigningOut = false;
+  bool _isSignOutDialogVisible = false;
   String? _displayNameOverride;
   String? _photoUrlOverride;
   Uint8List? _avatarPreviewBytes;
@@ -432,6 +439,8 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
   }
 
   Future<void> _onSignOut() async {
+    if (_isSigningOut) return;
+
     final confirmed = await _showConfirmDialog(
       title: 'Đăng xuất',
       message: 'Bạn có chắc muốn đăng xuất khỏi tài khoản này không?',
@@ -440,13 +449,76 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
     );
     if (!confirmed) return;
 
+    setState(() => _isSigningOut = true);
+    _showSignOutLoadingDialog();
+
     try {
-      await GoogleSignIn.instance.signOut();
-      await FirebaseAuth.instance.signOut();
-    } catch (_) {
+      // Stop user stream sync first to avoid stale writes while logging out.
+      await ref.read(firebaseSyncServiceProvider).stopListeningToUsers();
+
+      // Remove local user-scoped cache before ending the session.
+      await ref.read(dbProvider).clearUserScopedData();
+
+      await ref.read(emailOtpAuthRepositoryProvider).signOut();
+
       if (!mounted) return;
-      _showSnackbar('Không thể đăng xuất. Vui lòng thử lại.');
+      context.go(RouteNames.profile);
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is EmailOtpAuthException
+          ? e.message
+          : 'Không thể đăng xuất. Vui lòng thử lại.';
+      _showSnackbar(message);
+    } finally {
+      _hideSignOutLoadingDialog();
+      if (mounted) {
+        setState(() => _isSigningOut = false);
+      }
     }
+  }
+
+  void _showSignOutLoadingDialog() {
+    if (!mounted || _isSignOutDialogVisible) return;
+    _isSignOutDialogVisible = true;
+
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            content: const Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Đang đăng xuất...',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _PC.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ).whenComplete(() => _isSignOutDialogVisible = false),
+    );
+  }
+
+  void _hideSignOutLoadingDialog() {
+    if (!mounted || !_isSignOutDialogVisible) return;
+    Navigator.of(context, rootNavigator: true).pop();
   }
 
   // ---------------------------------------------------------------------------
@@ -577,7 +649,9 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: _SignOutButton(onPressed: _onSignOut),
+                child: _SignOutButton(
+                  onPressed: _isSigningOut ? null : () => _onSignOut(),
+                ),
               ),
             ),
 
@@ -1341,7 +1415,7 @@ class _MfaRow extends StatelessWidget {
 // SIGN OUT BUTTON
 // =============================================================================
 class _SignOutButton extends StatelessWidget {
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const _SignOutButton({required this.onPressed});
 

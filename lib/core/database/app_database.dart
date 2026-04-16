@@ -194,4 +194,17 @@ FROM users;
       }
     },
   );
+
+  /// Clears local data tied to the authenticated user/session.
+  ///
+  /// Order matters because of foreign keys:
+  /// attachments -> locations -> posts -> users.
+  Future<void> clearUserScopedData() async {
+    await transaction(() async {
+      await delete(attachments).go();
+      await delete(locations).go();
+      await delete(posts).go();
+      await delete(users).go();
+    });
+  }
 }
