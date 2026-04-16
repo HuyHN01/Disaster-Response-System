@@ -1012,8 +1012,8 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final start = ((currentPage - 1) * pageSize + 1).clamp(1, totalCount);
-    final end = (currentPage * pageSize).clamp(0, totalCount);
+    final start = totalCount == 0 ? 0 : ((currentPage - 1) * pageSize + 1).clamp(1, totalCount);
+    final end = totalCount == 0 ? 0 : (currentPage * pageSize).clamp(0, totalCount);
 
     return Padding(
       padding: const EdgeInsets.only(top: 14),
@@ -1145,6 +1145,8 @@ class _TableErrorState extends StatelessWidget {
           Expanded(
             child: Text(
               message,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: UC.brandRed,
                 fontSize: 12.5,
