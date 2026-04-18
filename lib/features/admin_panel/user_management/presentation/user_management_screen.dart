@@ -9,8 +9,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'dart:typed_data';
 
 import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 
 import '../domain/user_management_controller.dart';
 import 'user_models.dart';
@@ -823,6 +825,123 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedPhotoUrl = (user.photoUrl ?? '').trim();
+    final hasPhotoUrl = normalizedPhotoUrl.isNotEmpty;
+
+    if (hasPhotoUrl && _isDirectAvatarUrl(normalizedPhotoUrl)) {
+      return _AvatarFrame(
+        role: role,
+        child: Image.network(
+          normalizedPhotoUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _FetchedAvatarOrFallback(
+            rawUrl: normalizedPhotoUrl,
+            role: role,
+            initials: _initials,
+          ),
+        ),
+      );
+    }
+
+    if (hasPhotoUrl) {
+      return _FetchedAvatarOrFallback(
+        rawUrl: normalizedPhotoUrl,
+        role: role,
+        initials: _initials,
+      );
+    }
+
+    return _DefaultAvatar(role: role, initials: _initials);
+  }
+
+  bool _isDirectAvatarUrl(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+}
+
+class _FetchedAvatarOrFallback extends ConsumerStatefulWidget {
+  final String rawUrl;
+  final UserRole role;
+  final String initials;
+
+  const _FetchedAvatarOrFallback({
+    required this.rawUrl,
+    required this.role,
+    required this.initials,
+  });
+
+  @override
+  ConsumerState<_FetchedAvatarOrFallback> createState() =>
+      _FetchedAvatarOrFallbackState();
+}
+
+class _FetchedAvatarOrFallbackState
+    extends ConsumerState<_FetchedAvatarOrFallback> {
+  late Future<Uint8List?> _avatarBytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FetchedAvatarOrFallback oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rawUrl != widget.rawUrl) {
+      _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytes(String rawUrl) async {
+    final normalizedUrl = rawUrl.trim();
+    if (normalizedUrl.isEmpty) return null;
+
+    try {
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: normalizedUrl)
+          .timeout(const Duration(seconds: 20));
+      return downloaded.bytes;
+    } catch (error) {
+      debugPrint('User avatar bytes fetch failed for URL: $normalizedUrl');
+      debugPrint('User avatar bytes fetch error: $error');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AvatarFrame(
+      role: widget.role,
+      child: FutureBuilder<Uint8List?>(
+        key: ValueKey(widget.rawUrl),
+        future: _avatarBytesFuture,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null || bytes.isEmpty) {
+            return _AvatarInitials(
+              initials: widget.initials,
+              role: widget.role,
+            );
+          }
+
+          return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        },
+      ),
+    );
+  }
+}
+
+class _AvatarFrame extends StatelessWidget {
+  final UserRole role;
+  final Widget child;
+
+  const _AvatarFrame({required this.role, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: 38,
       height: 38,
@@ -831,14 +950,42 @@ class _UserAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: role.color.withOpacity(0.3), width: 1.5),
       ),
-      child: Center(
-        child: Text(
-          _initials,
-          style: TextStyle(
-            color: role.color,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
+      clipBehavior: Clip.hardEdge,
+      child: child,
+    );
+  }
+}
+
+class _DefaultAvatar extends StatelessWidget {
+  final UserRole role;
+  final String initials;
+
+  const _DefaultAvatar({required this.role, required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AvatarFrame(
+      role: role,
+      child: _AvatarInitials(initials: initials, role: role),
+    );
+  }
+}
+
+class _AvatarInitials extends StatelessWidget {
+  final String initials;
+  final UserRole role;
+
+  const _AvatarInitials({required this.initials, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: role.color,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
