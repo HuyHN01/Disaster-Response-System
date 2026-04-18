@@ -669,33 +669,35 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            (_resettingPassword || _deletingUser || _saving)
-                            ? null
-                            : () => _resetPassword(u),
-                        icon: const Icon(Icons.lock_reset_rounded, size: 15),
-                        label: Text(
-                          _resettingPassword
-                              ? 'Đang gửi email...'
-                              : 'Đặt lại mật khẩu',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: UC.amber,
-                          side: const BorderSide(color: UC.amber),
-                          textStyle: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                    if (u.role != 3) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              (_resettingPassword || _deletingUser || _saving)
+                              ? null
+                              : () => _resetPassword(u),
+                          icon: const Icon(Icons.lock_reset_rounded, size: 15),
+                          label: Text(
+                            _resettingPassword
+                                ? 'Đang gửi email...'
+                                : 'Đặt lại mật khẩu',
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: UC.amber,
+                            side: const BorderSide(color: UC.amber),
+                            textStyle: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
+                      const SizedBox(height: 8),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
