@@ -7,6 +7,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'dart:typed_data';
+
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
 
 import '../domain/user_management_controller.dart';
 import '../domain/user_management_exception.dart';
@@ -606,39 +609,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                     Center(
                       child: Column(
                         children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              color: UserRole.fromValue(u.role).bgColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: UserRole.fromValue(
-                                  u.role,
-                                ).color.withOpacity(0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                u.displayName.isNotEmpty
-                                    ? u.displayName
-                                          .trim()
-                                          .split(' ')
-                                          .where((s) => s.isNotEmpty)
-                                          .take(2)
-                                          .map((s) => s[0])
-                                          .join()
-                                          .toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                  color: UserRole.fromValue(u.role).color,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
+                          _SystemUserAvatar(user: u),
                           const SizedBox(height: 10),
                           Text(
                             u.displayName,
@@ -1237,6 +1208,193 @@ class _MetaItem extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SystemUserAvatar extends StatelessWidget {
+  final AppUser user;
+
+  const _SystemUserAvatar({required this.user});
+
+  String get _initials {
+    final parts = user.displayName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.length >= 2) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    return user.displayName.isNotEmpty ? user.displayName[0].toUpperCase() : '?';
+  }
+
+  bool _isDirectAvatarUrl(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final role = UserRole.fromValue(user.role);
+    final normalizedPhotoUrl = (user.photoUrl ?? '').trim();
+    final hasPhotoUrl = normalizedPhotoUrl.isNotEmpty;
+
+    if (hasPhotoUrl && _isDirectAvatarUrl(normalizedPhotoUrl)) {
+      return _SystemAvatarFrame(
+        role: role,
+        child: Image.network(
+          normalizedPhotoUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _SystemFetchedAvatarOrFallback(
+            rawUrl: normalizedPhotoUrl,
+            role: role,
+            initials: _initials,
+          ),
+        ),
+      );
+    }
+
+    if (hasPhotoUrl) {
+      return _SystemFetchedAvatarOrFallback(
+        rawUrl: normalizedPhotoUrl,
+        role: role,
+        initials: _initials,
+      );
+    }
+
+    return _SystemDefaultAvatar(role: role, initials: _initials);
+  }
+}
+
+class _SystemFetchedAvatarOrFallback extends ConsumerStatefulWidget {
+  final String rawUrl;
+  final UserRole role;
+  final String initials;
+
+  const _SystemFetchedAvatarOrFallback({
+    required this.rawUrl,
+    required this.role,
+    required this.initials,
+  });
+
+  @override
+  ConsumerState<_SystemFetchedAvatarOrFallback> createState() =>
+      _SystemFetchedAvatarOrFallbackState();
+}
+
+class _SystemFetchedAvatarOrFallbackState
+    extends ConsumerState<_SystemFetchedAvatarOrFallback> {
+  late Future<Uint8List?> _avatarBytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SystemFetchedAvatarOrFallback oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rawUrl != widget.rawUrl) {
+      _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytes(String rawUrl) async {
+    final normalizedUrl = rawUrl.trim();
+    if (normalizedUrl.isEmpty) return null;
+
+    try {
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: normalizedUrl)
+          .timeout(const Duration(seconds: 20));
+      return downloaded.bytes;
+    } catch (error) {
+      debugPrint('System avatar bytes fetch failed for URL: $normalizedUrl');
+      debugPrint('System avatar bytes fetch error: $error');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SystemAvatarFrame(
+      role: widget.role,
+      child: FutureBuilder<Uint8List?>(
+        key: ValueKey(widget.rawUrl),
+        future: _avatarBytesFuture,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null || bytes.isEmpty) {
+            return _SystemAvatarInitials(
+              initials: widget.initials,
+              role: widget.role,
+            );
+          }
+
+          return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        },
+      ),
+    );
+  }
+}
+
+class _SystemAvatarFrame extends StatelessWidget {
+  final UserRole role;
+  final Widget child;
+
+  const _SystemAvatarFrame({required this.role, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: role.bgColor,
+        shape: BoxShape.circle,
+        border: Border.all(color: role.color.withOpacity(0.3), width: 2),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: child,
+    );
+  }
+}
+
+class _SystemDefaultAvatar extends StatelessWidget {
+  final UserRole role;
+  final String initials;
+
+  const _SystemDefaultAvatar({required this.role, required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SystemAvatarFrame(
+      role: role,
+      child: _SystemAvatarInitials(initials: initials, role: role),
+    );
+  }
+}
+
+class _SystemAvatarInitials extends StatelessWidget {
+  final String initials;
+  final UserRole role;
+
+  const _SystemAvatarInitials({required this.initials, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: role.color,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
