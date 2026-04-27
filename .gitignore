@@ -250,3 +250,27 @@ GoogleService-Info.plist
 google-services.json
 # Plugins (already resolved through pubspec.yaml)
 .flutter-plugins
+
+# Ignore environment files
+.env
+
+/.continue
+.flutter-plugins-dependencies
+.trash/
+
+functions/
+# Added by code-review-graph
+.code-review-graph/
+.claude/
+.gemini/
+.kiro/
+.cursorrules
+.mcp.json
+.opencode.json
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+KIRO.md
+OPENSCODE.md
+WINDsurf.md

@@ -1,0 +1,702 @@
+// lib/core/services/firebase/sync_service.dart
+
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/database/db_provider.dart';
+import 'package:drift/drift.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// =============================================================================
+// CONSTANTS — Firestore collection names
+// =============================================================================
+class _Collections {
+  static const String posts = 'posts';
+  static const String locations = 'locations';
+  static const String disasterEvents = 'disaster_events';
+  static const String rescueStations = 'rescue_stations';
+  static const String users = 'users';
+}
+
+// =============================================================================
+// SYNC RESULT — a typed result instead of raw booleans
+// =============================================================================
+class SyncResult {
+  final int syncedCount;
+  final List<String> failedIds;
+  final String? errorMessage;
+
+  const SyncResult({
+    this.syncedCount = 0,
+    this.failedIds = const [],
+    this.errorMessage,
+  });
+
+  bool get isSuccess => errorMessage == null;
+  bool get hasPartialFailure => failedIds.isNotEmpty;
+
+  @override
+  String toString() =>
+      'SyncResult(synced: $syncedCount, failed: ${failedIds.length}, '
+      'error: $errorMessage)';
+}
+
+// =============================================================================
+// SYNC SERVICE
+// =============================================================================
+class FirebaseSyncService {
+  final AppDatabase _db;
+  final FirebaseFirestore _firestore;
+  final Connectivity _connectivity;
+
+  // Keeps track of the active Firestore listener so we can cancel it cleanly.
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _rescueStationsSubscription;
+  StreamSubscription<dynamic>? _usersSubscription;
+
+  FirebaseSyncService({
+    required AppDatabase db,
+    FirebaseFirestore? firestore,
+    Connectivity? connectivity,
+  }) : _db = db,
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _connectivity = connectivity ?? Connectivity();
+
+  // ---------------------------------------------------------------------------
+  // PUBLIC API
+  // ---------------------------------------------------------------------------
+
+  /// Pushes every local SOS post with `syncStatus == 'pending'` up to
+  /// Firestore, then marks them as `'synced'` in Drift.
+  ///
+  /// Returns a [SyncResult] describing how many records were synced and
+  /// which ones (if any) failed.
+  Future<SyncResult> syncPendingSOS() async {
+    // ── 1. Check connectivity ──────────────────────────────────────────────
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ SOS.',
+      );
+    }
+
+    // ── 2. Query pending SOS posts from Drift ──────────────────────────────
+    final pendingPosts = await _queryPendingSOSPosts();
+    if (pendingPosts.isEmpty) {
+      return const SyncResult(); // nothing to do
+    }
+
+    // ── 3. Load associated locations (one query, keyed by postId) ──────────
+    final postIds = pendingPosts.map((p) => p.id).toList();
+    final locationsByPostId = await _loadLocationsByPostIds(postIds);
+
+    // ── 4. Sync each post in its own Firestore batch ───────────────────────
+    final List<String> failedIds = [];
+    int syncedCount = 0;
+
+    for (final post in pendingPosts) {
+      try {
+        await _syncSinglePost(post: post, location: locationsByPostId[post.id]);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ post ${post.id}: $e\n$st');
+        failedIds.add(post.id);
+        // Continue with the remaining posts rather than aborting everything.
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
+  /// Pushes every local rescue station with `syncStatus == 'pending'`
+  /// up to Firestore and marks it as synced in Drift.
+  Future<SyncResult> syncPendingRescueStations() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ trạm cứu trợ.',
+      );
+    }
+
+    final pendingStations = await (_db.select(
+      _db.rescueStations,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingStations.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final station in pendingStations) {
+      try {
+        await _syncSingleRescueStation(station);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ rescue_station ${station.id}: $e\n$st');
+        failedIds.add(station.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
+  /// Opens a **realtime** Firestore listener on the `disaster_events`
+  /// collection and writes any new/updated documents straight into the
+  /// local Drift [DisasterEvents] table.
+  ///
+  /// Call [stopListeningToAdminEvents] to tear down the subscription.
+  void listenToAdminEvents({
+    void Function(DisasterEvent event)? onNewEvent,
+    void Function(Object error)? onError,
+  }) {
+    // Cancel any previously active subscription before opening a new one.
+    _eventsSubscription?.cancel();
+
+    final query = _firestore
+        .collection(_Collections.disasterEvents)
+        .orderBy('createdAt', descending: true);
+
+    _eventsSubscription = query.snapshots().listen(
+      (snapshot) => _handleEventSnapshot(snapshot, onNewEvent: onNewEvent),
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe disaster_events: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false, // keep listening even after a transient error
+    );
+  }
+
+  /// Cancels the active Firestore realtime listener (if any).
+  Future<void> stopListeningToAdminEvents() async {
+    await _eventsSubscription?.cancel();
+    _eventsSubscription = null;
+  }
+
+  /// Opens a realtime Firestore listener on `rescue_stations`.
+  ///
+  /// The handler applies last-write-wins using `updatedAt` and keeps Drift
+  /// as the local source for offline features.
+  void listenToRescueStations({
+    void Function(RescueStation station)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _rescueStationsSubscription?.cancel();
+
+    final query = _firestore.collection(_Collections.rescueStations);
+
+    _rescueStationsSubscription = query.snapshots().listen(
+      (snapshot) => _handleRescueStationSnapshot(snapshot, onUpsert: onUpsert),
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe rescue_stations: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToRescueStations() async {
+    await _rescueStationsSubscription?.cancel();
+    _rescueStationsSubscription = null;
+  }
+
+  /// Opens a realtime Firestore listener on `users`.
+  ///
+  /// This keeps local account metadata aligned for offline reads.
+  void listenToUsers({
+    void Function(User user)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _usersSubscription?.cancel();
+
+    final currentUser = fb_auth.FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      _log('Bỏ lắng nghe users: chưa có phiên đăng nhập.');
+      return;
+    }
+
+    final docRef = _firestore.collection(_Collections.users).doc(currentUser.uid);
+
+    _usersSubscription = docRef.snapshots().listen(
+      (snapshot) async {
+        try {
+          if (!snapshot.exists) {
+            await (_db.delete(_db.users)
+                  ..where((u) => u.id.equals(currentUser.uid)))
+                .go();
+            return;
+          }
+
+          final data = snapshot.data();
+          if (data == null) return;
+
+          final incoming = _firestoreToUserCompanion(
+            docId: snapshot.id,
+            data: data,
+          );
+
+          await _db.into(_db.users).insertOnConflictUpdate(incoming);
+
+          if (onUpsert != null) {
+            final inserted = await (_db.select(
+              _db.users,
+            )..where((u) => u.id.equals(snapshot.id))).getSingleOrNull();
+            if (inserted != null) onUpsert(inserted);
+          }
+        } catch (e, st) {
+          _log('Lỗi xử lý user ${snapshot.id}: $e\n$st');
+        }
+      },
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe users: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToUsers() async {
+    await _usersSubscription?.cancel();
+    _usersSubscription = null;
+  }
+
+  /// Convenience method: call once at app start to wire up both directions.
+  Future<SyncResult> startSync() async {
+    listenToAdminEvents();
+    listenToRescueStations();
+    listenToUsers();
+
+    final sosResult = await syncPendingSOS();
+    final stationResult = await syncPendingRescueStations();
+
+    if (!stationResult.isSuccess || stationResult.hasPartialFailure) {
+      _log('Rescue station sync result: $stationResult');
+    }
+
+    return sosResult;
+  }
+
+  /// Tears everything down — call when the user signs out or app disposes.
+  Future<void> dispose() async {
+    await stopListeningToAdminEvents();
+    await stopListeningToRescueStations();
+    await stopListeningToUsers();
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRIVATE — SOS sync helpers
+  // ---------------------------------------------------------------------------
+
+  Future<List<Post>> _queryPendingSOSPosts() async {
+    return (_db.select(_db.posts)..where(
+          (p) => p.postType.equals('sos') & p.syncStatus.equals('pending'),
+        ))
+        .get();
+  }
+
+  Future<Map<String, Location>> _loadLocationsByPostIds(
+    List<String> postIds,
+  ) async {
+    if (postIds.isEmpty) return {};
+
+    final locations = await (_db.select(
+      _db.locations,
+    )..where((l) => l.postId.isIn(postIds))).get();
+
+    return {for (final loc in locations) loc.postId: loc};
+  }
+
+  /// Writes a single post + its location to Firestore in one batch, then
+  /// marks the post as `'synced'` in Drift.
+  Future<void> _syncSinglePost({
+    required Post post,
+    required Location? location,
+  }) async {
+    final batch = _firestore.batch();
+
+    // ── Write post document ──────────────────────────────────────────────
+    final postRef = _firestore.collection(_Collections.posts).doc(post.id);
+    batch.set(postRef, _postToFirestore(post), SetOptions(merge: true));
+
+    // ── Write location document (if available) ───────────────────────────
+    if (location != null) {
+      final locRef = _firestore
+          .collection(_Collections.locations)
+          .doc(location.id);
+      batch.set(
+        locRef,
+        _locationToFirestore(location),
+        SetOptions(merge: true),
+      );
+    }
+
+    // Commit — will throw if Firestore rejects the write.
+    await batch.commit();
+
+    // ── Mark as synced in Drift ──────────────────────────────────────────
+    await (_db.update(_db.posts)..where((p) => p.id.equals(post.id))).write(
+      const PostsCompanion(syncStatus: Value('synced')),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRIVATE — Firestore → Drift helpers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _handleEventSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(DisasterEvent event)? onNewEvent,
+  }) async {
+    // Process only document additions and modifications — ignore removals
+    // so we keep a local cache even if admin deletes from Firestore.
+    final relevantChanges = snapshot.docChanges.where(
+      (c) =>
+          c.type == DocumentChangeType.added ||
+          c.type == DocumentChangeType.modified,
+    );
+
+    for (final change in relevantChanges) {
+      try {
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final companion = _firestoreToDisasterEventCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        // Upsert — insert or replace if the record already exists locally.
+        await _db.into(_db.disasterEvents).insertOnConflictUpdate(companion);
+
+        // Notify caller (e.g. to refresh a Riverpod provider).
+        if (onNewEvent != null) {
+          final inserted = await (_db.select(
+            _db.disasterEvents,
+          )..where((e) => e.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onNewEvent(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý disaster_event ${change.doc.id}: $e\n$st');
+        // Skip this document and continue with the rest.
+      }
+    }
+  }
+
+  Future<void> _handleRescueStationSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(RescueStation station)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await (_db.delete(
+            _db.rescueStations,
+          )..where((s) => s.id.equals(change.doc.id))).go();
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incoming = _firestoreToRescueStationCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        final existing = await (_db.select(
+          _db.rescueStations,
+        )..where((s) => s.id.equals(change.doc.id))).getSingleOrNull();
+
+        if (existing != null &&
+            existing.syncStatus == 'pending' &&
+            !_isIncomingStationNewer(existing, incoming)) {
+          // Local pending change is newer than incoming remote snapshot.
+          continue;
+        }
+
+        await _db.into(_db.rescueStations).insertOnConflictUpdate(incoming);
+
+        if (onUpsert != null) {
+          final inserted = await (_db.select(
+            _db.rescueStations,
+          )..where((s) => s.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onUpsert(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý rescue_station ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
+  Future<void> _handleUsersSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(User user)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await (_db.delete(_db.users)..where((u) => u.id.equals(change.doc.id)))
+              .go();
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incoming = _firestoreToUserCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        await _db.into(_db.users).insertOnConflictUpdate(incoming);
+
+        if (onUpsert != null) {
+          final inserted = await (_db.select(
+            _db.users,
+          )..where((u) => u.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onUpsert(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý user ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
+  bool _isIncomingStationNewer(
+    RescueStation local,
+    RescueStationsCompanion incoming,
+  ) {
+    final localUpdatedAt = local.updatedAt ?? local.createdAt;
+    final incomingUpdatedAt =
+        incoming.updatedAt.present && incoming.updatedAt.value != null
+        ? incoming.updatedAt.value!
+        : incoming.createdAt.value;
+    return !incomingUpdatedAt.isBefore(localUpdatedAt);
+  }
+
+  Future<void> _syncSingleRescueStation(RescueStation station) async {
+    final ref = _firestore
+        .collection(_Collections.rescueStations)
+        .doc(station.id);
+    await ref.set(_rescueStationToFirestore(station), SetOptions(merge: true));
+
+    await (_db.update(
+      _db.rescueStations,
+    )..where((s) => s.id.equals(station.id))).write(
+      RescueStationsCompanion(
+        syncStatus: const Value('synced'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRIVATE — Serialisation helpers
+  // ---------------------------------------------------------------------------
+
+  Map<String, dynamic> _postToFirestore(Post post) => {
+    'id': post.id,
+    'eventId': post.eventId,
+    'userId': post.userId,
+    'postType': post.postType,
+    'content': post.content,
+    'isVerified': post.isVerified,
+    'createdAt': Timestamp.fromDate(post.createdAt),
+    'syncStatus': 'synced',
+    'uploadedAt': FieldValue.serverTimestamp(),
+  };
+
+  Map<String, dynamic> _locationToFirestore(Location loc) => {
+    'id': loc.id,
+    'postId': loc.postId,
+    'latitude': loc.latitude,
+    'longitude': loc.longitude,
+    'addressText': loc.addressText,
+  };
+
+  Map<String, dynamic> _rescueStationToFirestore(RescueStation s) => {
+    'id': s.id,
+    'name': s.name,
+    'latitude': s.latitude,
+    'longitude': s.longitude,
+    'address': s.address,
+    'contactPhone': s.contactPhone,
+    'capacity': s.capacity,
+    'resourcesJson': s.resourcesJson,
+    'status': s.status,
+    'createdAt': Timestamp.fromDate(s.createdAt),
+    'updatedAt': Timestamp.fromDate(s.updatedAt ?? s.createdAt),
+    'deletedAt': s.deletedAt == null ? null : Timestamp.fromDate(s.deletedAt!),
+    'syncStatus': 'synced',
+  };
+
+  DisasterEventsCompanion _firestoreToDisasterEventCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final rawCreatedAt = data['createdAt'];
+    final createdAt = rawCreatedAt is Timestamp
+        ? rawCreatedAt.toDate()
+        : DateTime.now();
+
+    return DisasterEventsCompanion.insert(
+      id: docId,
+      title: (data['title'] as String?) ?? '(Không có tiêu đề)',
+      eventType: (data['eventType'] as String?) ?? 'unknown',
+      status: (data['status'] as String?) ?? 'active',
+      createdAt: createdAt,
+      createdBy: (data['createdBy'] as String?) ?? 'admin',
+    );
+  }
+
+  RescueStationsCompanion _firestoreToRescueStationCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final now = DateTime.now();
+
+    final rawCreatedAt = data['createdAt'];
+    final rawUpdatedAt = data['updatedAt'];
+    final rawDeletedAt = data['deletedAt'];
+
+    final createdAt = rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : now;
+    final updatedAt = rawUpdatedAt is Timestamp
+        ? rawUpdatedAt.toDate()
+        : createdAt;
+    final deletedAt = rawDeletedAt is Timestamp ? rawDeletedAt.toDate() : null;
+
+    final rawLat = data['latitude'];
+    final rawLng = data['longitude'];
+    if (rawLat is! num || rawLng is! num) {
+      throw const FormatException(
+        'Rescue station thiếu latitude/longitude hợp lệ.',
+      );
+    }
+
+    final rawResources = data['resourcesJson'];
+    String resourcesJson;
+    if (rawResources == null) {
+      resourcesJson = '{}';
+    } else if (rawResources is String) {
+      resourcesJson = rawResources;
+    } else {
+      resourcesJson = jsonEncode(rawResources);
+    }
+
+    return RescueStationsCompanion.insert(
+      id: docId,
+      name: ((data['name'] as String?)?.trim().isNotEmpty ?? false)
+          ? (data['name'] as String).trim()
+          : '(Chưa đặt tên trạm)',
+      latitude: rawLat.toDouble(),
+      longitude: rawLng.toDouble(),
+      address: Value((data['address'] as String?)?.trim()),
+      contactPhone: Value((data['contactPhone'] as String?)?.trim()),
+      capacity: Value((data['capacity'] as num?)?.toInt()),
+      resourcesJson: Value(resourcesJson),
+      status: Value(
+        ((data['status'] as String?)?.trim().isNotEmpty ?? false)
+            ? (data['status'] as String).trim()
+            : 'active',
+      ),
+      createdAt: createdAt,
+      updatedAt: Value(updatedAt),
+      deletedAt: Value(deletedAt),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  UsersCompanion _firestoreToUserCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final uid = ((data['uid'] as String?)?.trim().isNotEmpty ?? false)
+        ? (data['uid'] as String).trim()
+        : docId;
+
+    final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+    final updatedAt = _asDateTime(data['updatedAt']) ?? createdAt;
+    final lastLoginAt = _asDateTime(data['lastLoginAt']);
+    final resolvedPhotoUrl = (data['photoUrl'] as String?)?.trim();
+
+    return UsersCompanion.insert(
+      id: uid,
+      uid: uid,
+      email: ((data['email'] as String?) ?? '').trim(),
+      displayName: ((data['displayName'] as String?) ?? '').trim(),
+      photoUrl: Value(resolvedPhotoUrl),
+      role: _asInt(data['role'], 3),
+      status: _asInt(data['status'], 2),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      createdBy: Value((data['createdBy'] as String?)?.trim()),
+      lastLoginAt: Value(lastLoginAt),
+      mfaEnabled: Value((data['mfaEnabled'] as bool?) ?? false),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRIVATE — Utilities
+  // ---------------------------------------------------------------------------
+
+  Future<bool> _isConnected() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  DateTime? _asDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  int _asInt(dynamic value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String && value.trim().isNotEmpty) {
+      return int.tryParse(value.trim()) ?? fallback;
+    }
+    return fallback;
+  }
+
+  void _log(String message) {
+    // In production, replace with a proper logger (e.g. `logger` package).
+    // ignore: avoid_print
+    print('[FirebaseSyncService] $message');
+  }
+}
+
+// =============================================================================
+// RIVERPOD PROVIDERS
+// =============================================================================
+
+/// Provides the singleton [FirebaseSyncService].
+/// Automatically disposes the Firestore listener when the provider is
+/// destroyed (e.g. on sign-out).
+final firebaseSyncServiceProvider = Provider<FirebaseSyncService>((ref) {
+  final db = ref.watch(dbProvider);
+
+  final service = FirebaseSyncService(db: db);
+
+  ref.onDispose(service.dispose);
+
+  return service;
+});
+
+/// A fire-and-forget [FutureProvider] that kicks off the initial SOS sync.
+/// Useful to call in a top-level `ProviderScope` override or in
+/// `main()` after Firebase is initialised.
+final initialSyncProvider = FutureProvider<SyncResult>((ref) async {
+  final service = ref.watch(firebaseSyncServiceProvider);
+  return service.startSync();
+});
