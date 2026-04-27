@@ -185,21 +185,22 @@ class AdminAuthRepository {
         );
       }
 
-      if (!profile.canAccessAdminPortal) {
+      final activationCallable = _functions.httpsCallable(
+        'activateManagedUserOnFirstLogin',
+      );
+      await activationCallable.call();
+
+      final refreshed = await fetchUserProfile(user.uid);
+      if (refreshed == null || !refreshed.canAccessAdminPortal) {
         await _auth.signOut();
         throw const AdminAuthException(
           'Bạn không có quyền truy cập cổng quản trị hoặc tài khoản chưa kích hoạt.',
         );
       }
 
-      await _usersRef.doc(user.uid).set({
-        'displayName': user.displayName ?? profile.displayName,
-        'photoUrl': user.photoURL ?? profile.photoUrl,
-        'lastLoginAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      return profile;
+      return refreshed;
+    } on FirebaseFunctionsException catch (e) {
+      throw AdminAuthException(_mapCallableError(e));
     } on FirebaseAuthException catch (e) {
       throw AdminAuthException(_mapAuthError(e));
     } on FirebaseException catch (e) {

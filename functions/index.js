@@ -24,6 +24,7 @@ const OTP_MAX_VERIFY_ATTEMPTS = 5;
 const MAILTRAP_API_TOKEN = defineSecret("MAILTRAP_API_TOKEN");
 const MAILTRAP_SENDER_EMAIL = defineString("MAILTRAP_SENDER_EMAIL");
 const MAILTRAP_SENDER_NAME = defineString("MAILTRAP_SENDER_NAME");
+const ADMIN_PORTAL_LOGIN_URL = defineString("ADMIN_PORTAL_LOGIN_URL");
 
 const UserRoles = Object.freeze({
   SUPER_ADMIN: 0,
@@ -151,6 +152,115 @@ async function sendOtpEmailViaMailtrap({ toEmail, otpCode, expiresInSeconds }) {
   }
 }
 
+async function sendPasswordResetEmailViaMailtrap({ toEmail, resetLink }) {
+  const { apiToken, senderEmail, senderName } = ensureMailtrapConfig();
+
+  const textContent = [
+    "Dat lai mat khau tai khoan",
+    "He thong vua nhan yeu cau dat lai mat khau cho tai khoan cua ban.",
+    `Mo lien ket sau de dat lai mat khau: ${resetLink}`,
+    "Neu ban khong thuc hien yeu cau nay, vui long bo qua email.",
+  ].join("\n");
+
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: {
+        email: senderEmail,
+        name: senderName,
+      },
+      to: [{ email: toEmail }],
+      subject: "Yêu cầu đặt lại mật khẩu Disaster Response",
+      text: textContent,
+      category: "Admin Password Reset",
+    }),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text();
+    const detail = rawBody ? ` (${rawBody.slice(0, 200)})` : "";
+    throw new HttpsError(
+      "unavailable",
+      `Không thể gửi email đặt lại mật khẩu (HTTP ${response.status})${detail}`,
+    );
+  }
+}
+
+function resolveAdminLoginUrl(rawLoginUrl) {
+  const fromRequest = String(rawLoginUrl || "").trim();
+  if (fromRequest.startsWith("http://") || fromRequest.startsWith("https://")) {
+    return fromRequest;
+  }
+
+  const fromConfig = String(ADMIN_PORTAL_LOGIN_URL.value() || "").trim();
+  if (fromConfig.startsWith("http://") || fromConfig.startsWith("https://")) {
+    return fromConfig;
+  }
+
+  return "https://disaster-response-app-7a864.web.app/admin/login";
+}
+
+async function sendManagedInviteEmailViaMailtrap({
+  toEmail,
+  displayName,
+  role,
+  temporaryPassword,
+  loginUrl,
+}) {
+  const { apiToken, senderEmail, senderName } = ensureMailtrapConfig();
+
+  const roleLabel = role === UserRoles.SUPER_ADMIN
+    ? "Super Admin"
+    : role === UserRoles.ADMIN
+      ? "Admin"
+      : "Staff";
+
+  const textContent = [
+    `Xin chao ${displayName},`,
+    "",
+    "Ban duoc moi tham gia he thong quan tri Disaster Response.",
+    `Vai tro: ${roleLabel}`,
+    `Email dang nhap: ${toEmail}`,
+    `Mat khau tam thoi: ${temporaryPassword}`,
+    "Trang thai tai khoan ban dau: Cho duyet (PENDING).",
+    "",
+    `Dang nhap tai day: ${loginUrl}`,
+    "Sau lan dang nhap thanh cong dau tien, tai khoan se duoc kich hoat.",
+    "Vui long doi mat khau ngay sau khi dang nhap.",
+  ].join("\n");
+
+  const response = await fetch("https://send.api.mailtrap.io/api/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: {
+        email: senderEmail,
+        name: senderName,
+      },
+      to: [{ email: toEmail }],
+      subject: "[Invite] Tài khoản quản trị Disaster Response",
+      text: textContent,
+      category: "Managed User Invite",
+    }),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text();
+    const detail = rawBody ? ` (${rawBody.slice(0, 200)})` : "";
+    throw new HttpsError(
+      "unavailable",
+      `Không thể gửi email mời tài khoản (HTTP ${response.status})${detail}`,
+    );
+  }
+}
+
 async function createOrGetCitizenUserByEmail(email) {
   try {
     return await admin.auth().getUserByEmail(email);
@@ -209,6 +319,27 @@ function assertPassword(password, confirmPassword) {
   }
 }
 
+function assertStrongPassword(password) {
+  const normalized = String(password || "").trim();
+  if (normalized.length < 10) {
+    throw new HttpsError("invalid-argument", "Mật khẩu phải có ít nhất 10 ký tự.");
+  }
+
+  const hasUpper = /[A-Z]/.test(normalized);
+  const hasLower = /[a-z]/.test(normalized);
+  const hasDigit = /\d/.test(normalized);
+  const hasSpecial = /[^A-Za-z0-9]/.test(normalized);
+
+  if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Mật khẩu cần có chữ hoa, chữ thường, số và ký tự đặc biệt.",
+    );
+  }
+
+  return normalized;
+}
+
 function parseAllowedInt(value, allowedValues, fallback, fieldName) {
   const normalized = Number.isInteger(value) ? value : fallback;
   if (!allowedValues.includes(normalized)) {
@@ -229,8 +360,12 @@ function mapToHttpsError(error, fallbackMessage) {
       return new HttpsError("already-exists", "Email này đã được sử dụng.");
     case "auth/invalid-email":
       return new HttpsError("invalid-argument", "Email không hợp lệ.");
+    case "auth/user-not-found":
+      return new HttpsError("not-found", "Không tìm thấy tài khoản người dùng.");
     case "auth/invalid-password":
       return new HttpsError("invalid-argument", "Mật khẩu không hợp lệ.");
+    case "auth/insufficient-permission":
+      return new HttpsError("permission-denied", "Máy chủ không đủ quyền để thực hiện thao tác này.");
     case "auth/operation-not-allowed":
       return new HttpsError(
         "failed-precondition",
@@ -286,6 +421,91 @@ async function getUserProfile(uid) {
   }
 
   return snap.data();
+}
+
+function isPrivilegedRole(role) {
+  return role === UserRoles.SUPER_ADMIN || role === UserRoles.ADMIN;
+}
+
+function normalizeOptionalPhotoUrl(rawValue) {
+  if (rawValue == null) return null;
+  const normalized = String(rawValue).trim();
+  return normalized || null;
+}
+
+function isValidHttpUrl(value) {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
+}
+
+function generateManagedPassword(length = 16) {
+  const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+  const bytes = crypto.randomBytes(length);
+
+  let password = "";
+  for (let index = 0; index < length; index += 1) {
+    password += charset[bytes[index] % charset.length];
+  }
+
+  return password;
+}
+
+async function assertCallerIsActiveAdmin(request) {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Bạn cần đăng nhập để thực hiện thao tác này.");
+  }
+
+  const callerUid = request.auth.uid;
+  const callerProfile = await getUserProfile(callerUid);
+
+  if (!callerProfile) {
+    throw new HttpsError("permission-denied", "Không tìm thấy hồ sơ tài khoản quản trị.");
+  }
+
+  const callerRole = Number(callerProfile.role);
+  const callerStatus = Number(callerProfile.status);
+  const callerIsActiveAdmin =
+    callerStatus === UserStatuses.ACTIVE &&
+    (callerRole === UserRoles.SUPER_ADMIN || callerRole === UserRoles.ADMIN);
+
+  if (!callerIsActiveAdmin) {
+    throw new HttpsError("permission-denied", "Bạn không có quyền thực hiện thao tác này.");
+  }
+
+  return { callerUid, callerProfile, callerRole, callerStatus };
+}
+
+function assertAdminCanManageTarget({ callerUid, callerRole, targetUid, currentTargetRole, nextRole }) {
+  if (targetUid === callerUid && nextRole != null && nextRole !== callerRole) {
+    throw new HttpsError(
+      "permission-denied",
+      "Không thể tự thay đổi vai trò quản trị của chính bạn.",
+    );
+  }
+
+  if (callerRole !== UserRoles.ADMIN) {
+    return;
+  }
+
+  const desiredRole = nextRole == null ? currentTargetRole : nextRole;
+
+  if (currentTargetRole === UserRoles.SUPER_ADMIN || desiredRole === UserRoles.SUPER_ADMIN) {
+    throw new HttpsError("permission-denied", "Admin không thể thao tác với tài khoản Super Admin.");
+  }
+
+  if (targetUid !== callerUid && isPrivilegedRole(currentTargetRole)) {
+    throw new HttpsError("permission-denied", "Admin không thể chỉnh sửa tài khoản quản trị ngang cấp.");
+  }
+
+  if (targetUid !== callerUid && desiredRole === UserRoles.ADMIN) {
+    throw new HttpsError("permission-denied", "Admin không thể cấp vai trò Admin cho tài khoản khác.");
+  }
 }
 
 exports.sendOtp = onCall({ secrets: [MAILTRAP_API_TOKEN] }, async (request) => {
@@ -550,108 +770,346 @@ exports.registerInitialSuperAdmin = onCall(async (request) => {
   }
 });
 
-exports.createManagedUser = onCall(async (request) => {
+exports.createManagedUser = onCall(
+  { secrets: [MAILTRAP_API_TOKEN] },
+  async (request) => {
+    const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
+
+    if (callerRole !== UserRoles.SUPER_ADMIN) {
+      throw new HttpsError(
+        "permission-denied",
+        "Chỉ Super Admin mới có quyền tạo tài khoản quản trị đặc biệt.",
+      );
+    }
+
+    const data = request.data || {};
+    const displayName = assertRequiredString(data.displayName, "Tên hiển thị");
+    const email = assertEmail(data.email);
+    const password = assertStrongPassword(
+      assertRequiredString(data.password, "Mật khẩu"),
+    );
+    const role = parseAllowedInt(
+      data.role,
+      [UserRoles.SUPER_ADMIN, UserRoles.ADMIN, UserRoles.STAFF],
+      UserRoles.STAFF,
+      "Vai trò",
+    );
+    const status = UserStatuses.PENDING;
+    const mfaEnabled = typeof data.mfaEnabled === "boolean" ? data.mfaEnabled : false;
+    const loginUrl = resolveAdminLoginUrl(data.loginUrl);
+
+    let createdUser = null;
+
+    try {
+      const createPayload = {
+        email,
+        password,
+        displayName,
+        disabled: false,
+      };
+
+      createdUser = await admin.auth().createUser(createPayload);
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      await db.collection(USERS_COLLECTION).doc(createdUser.uid).set(
+        {
+          uid: createdUser.uid,
+          email,
+          displayName,
+          photoUrl: null,
+          role,
+          status,
+          createdAt: now,
+          updatedAt: now,
+          createdBy: callerUid,
+          lastLoginAt: null,
+          mfaEnabled,
+        },
+        { merge: true },
+      );
+
+      await sendManagedInviteEmailViaMailtrap({
+        toEmail: email,
+        displayName,
+        role,
+        temporaryPassword: password,
+        loginUrl,
+      });
+
+      return {
+        uid: createdUser.uid,
+        email,
+        role,
+        status,
+        inviteSent: true,
+      };
+    } catch (error) {
+      if (createdUser?.uid) {
+        try {
+          await db.collection(USERS_COLLECTION).doc(createdUser.uid).delete();
+        } catch (rollbackDocError) {
+          console.error("Rollback delete user doc failed:", rollbackDocError);
+        }
+
+        try {
+          await admin.auth().deleteUser(createdUser.uid);
+        } catch (rollbackAuthError) {
+          console.error("Rollback delete auth user failed:", rollbackAuthError);
+        }
+      }
+
+      throw mapToHttpsError(error, "Không thể tạo tài khoản quản trị đặc biệt.");
+    }
+  },
+);
+
+exports.activateManagedUserOnFirstLogin = onCall(async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Bạn cần đăng nhập để thực hiện thao tác này.");
   }
 
-  const callerUid = request.auth.uid;
-  const callerProfile = await getUserProfile(callerUid);
+  const uid = request.auth.uid;
+  const profile = await getUserProfile(uid);
 
-  if (!callerProfile) {
-    throw new HttpsError("permission-denied", "Không tìm thấy hồ sơ tài khoản quản trị.");
+  if (!profile) {
+    throw new HttpsError("not-found", "Không tìm thấy hồ sơ tài khoản quản trị.");
   }
 
-  const callerRole = Number(callerProfile.role);
-  const callerStatus = Number(callerProfile.status);
-  const callerIsActiveAdmin =
-    callerStatus === UserStatuses.ACTIVE &&
-    (callerRole === UserRoles.SUPER_ADMIN || callerRole === UserRoles.ADMIN);
+  const role = Number(profile.role ?? UserRoles.USER);
+  const status = Number(profile.status ?? UserStatuses.INACTIVE);
 
-  if (!callerIsActiveAdmin) {
-    throw new HttpsError("permission-denied", "Bạn không có quyền tạo tài khoản mới.");
+  if (role !== UserRoles.SUPER_ADMIN && role !== UserRoles.ADMIN && role !== UserRoles.STAFF) {
+    throw new HttpsError("permission-denied", "Tài khoản không thuộc nhóm quản trị đặc biệt.");
   }
+
+  if (status === UserStatuses.BANNED || status === UserStatuses.INACTIVE) {
+    throw new HttpsError(
+      "permission-denied",
+      "Tài khoản đang bị vô hiệu hóa hoặc cấm. Vui lòng liên hệ Super Admin.",
+    );
+  }
+
+  const shouldActivate = status === UserStatuses.PENDING;
+
+  await db.collection(USERS_COLLECTION).doc(uid).set(
+    {
+      uid,
+      status: shouldActivate ? UserStatuses.ACTIVE : status,
+      lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return {
+    uid,
+    activated: shouldActivate,
+    status: shouldActivate ? UserStatuses.ACTIVE : status,
+  };
+});
+
+exports.updateManagedUser = onCall(async (request) => {
+  const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
 
   const data = request.data || {};
-  const displayName = assertRequiredString(data.displayName, "Tên hiển thị");
-  const email = normalizeEmail(assertRequiredString(data.email, "Email"));
-  const password = String(data.password || "");
-  const role = parseAllowedInt(
+  const targetUid = assertRequiredString(data.uid, "UID người dùng");
+  const targetProfile = await getUserProfile(targetUid);
+
+  if (!targetProfile) {
+    throw new HttpsError("not-found", "Không tìm thấy hồ sơ người dùng cần cập nhật.");
+  }
+
+  const currentTargetRole = Number(targetProfile.role ?? UserRoles.USER);
+  const currentTargetStatus = Number(targetProfile.status ?? UserStatuses.PENDING);
+
+  const nextRole = parseAllowedInt(
     data.role,
     [UserRoles.SUPER_ADMIN, UserRoles.ADMIN, UserRoles.STAFF, UserRoles.USER],
-    UserRoles.USER,
+    currentTargetRole,
     "Vai trò",
   );
-  const status = parseAllowedInt(
+  const nextStatus = parseAllowedInt(
     data.status,
     [UserStatuses.INACTIVE, UserStatuses.ACTIVE, UserStatuses.PENDING, UserStatuses.BANNED],
-    UserStatuses.PENDING,
+    currentTargetStatus,
     "Trạng thái",
   );
 
-  if (password.length < 8) {
-    throw new HttpsError("invalid-argument", "Mật khẩu phải có ít nhất 8 ký tự.");
+  assertAdminCanManageTarget({
+    callerUid,
+    callerRole,
+    targetUid,
+    currentTargetRole,
+    nextRole,
+  });
+
+  if (targetUid === callerUid && nextStatus !== UserStatuses.ACTIVE) {
+    throw new HttpsError("permission-denied", "Không thể tự khóa tài khoản đang đăng nhập.");
   }
 
-  // Admin cấp 1 không được tạo tài khoản admin/superadmin để tránh tự nâng quyền.
-  if (
-    callerRole === UserRoles.ADMIN &&
-    (role === UserRoles.SUPER_ADMIN || role === UserRoles.ADMIN)
-  ) {
-    throw new HttpsError("permission-denied", "Bạn không đủ quyền để tạo tài khoản quản trị cấp cao.");
-  }
+  const fallbackDisplayName = String(targetProfile.displayName || "").trim();
+  const displayName = assertRequiredString(
+    data.displayName ?? fallbackDisplayName,
+    "Tên hiển thị",
+  );
 
-  const rawPhotoUrl = data.photoUrl || data.photoURL;
-  const photoUrl = rawPhotoUrl ? String(rawPhotoUrl).trim() : null;
-  const mfaEnabled = Boolean(data.mfaEnabled || false);
+  const fallbackEmail = String(targetProfile.email || "").trim();
+  const email = data.email == null ? assertEmail(fallbackEmail) : assertEmail(data.email);
 
-  let createdUser = null;
+  const mfaEnabled = typeof data.mfaEnabled === "boolean"
+    ? data.mfaEnabled
+    : Boolean(targetProfile.mfaEnabled || false);
 
   try {
-    createdUser = await admin.auth().createUser({
+    const updatePayload = {
       email,
-      password,
       displayName,
-      photoURL: photoUrl,
-      disabled: status !== UserStatuses.ACTIVE,
-    });
+      disabled: nextStatus !== UserStatuses.ACTIVE,
+    };
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    await db.collection(USERS_COLLECTION).doc(createdUser.uid).set(
+    await admin.auth().updateUser(targetUid, updatePayload);
+
+    await db.collection(USERS_COLLECTION).doc(targetUid).set(
       {
-        uid: createdUser.uid,
+        uid: targetUid,
         email,
         displayName,
-        photoUrl,
-        role,
-        status,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: callerUid,
-        lastLoginAt: null,
+        role: nextRole,
+        status: nextStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         mfaEnabled,
       },
       { merge: true },
     );
 
     return {
-      uid: createdUser.uid,
+      uid: targetUid,
       email,
-      role,
-      status,
+      role: nextRole,
+      status: nextStatus,
+      mfaEnabled,
     };
   } catch (error) {
-    if (createdUser?.uid) {
+    throw mapToHttpsError(error, "Không thể cập nhật tài khoản người dùng.");
+  }
+});
+
+exports.softDeleteManagedUser = onCall(async (request) => {
+  const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
+
+  const data = request.data || {};
+  const targetUid = assertRequiredString(data.uid, "UID người dùng");
+
+  if (targetUid === callerUid) {
+    throw new HttpsError("permission-denied", "Không thể tự khóa tài khoản của chính bạn.");
+  }
+
+  const targetProfile = await getUserProfile(targetUid);
+  if (!targetProfile) {
+    throw new HttpsError("not-found", "Không tìm thấy hồ sơ người dùng cần khóa.");
+  }
+
+  const currentTargetRole = Number(targetProfile.role ?? UserRoles.USER);
+
+  assertAdminCanManageTarget({
+    callerUid,
+    callerRole,
+    targetUid,
+    currentTargetRole,
+    nextRole: currentTargetRole,
+  });
+
+  try {
+    await admin.auth().updateUser(targetUid, { disabled: true });
+
+    await db.collection(USERS_COLLECTION).doc(targetUid).set(
+      {
+        uid: targetUid,
+        status: UserStatuses.BANNED,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      uid: targetUid,
+      status: UserStatuses.BANNED,
+    };
+  } catch (error) {
+    throw mapToHttpsError(error, "Không thể khóa tài khoản người dùng.");
+  }
+});
+
+exports.sendManagedPasswordReset = onCall(
+  { secrets: [MAILTRAP_API_TOKEN] },
+  async (request) => {
+    const { callerUid, callerRole } = await assertCallerIsActiveAdmin(request);
+
+    const data = request.data || {};
+    const targetUidRaw = String(data.uid || "").trim();
+
+    let targetUid = targetUidRaw || null;
+    let targetEmail = null;
+    let targetRole = UserRoles.USER;
+
+    if (targetUid) {
+      const targetProfile = await getUserProfile(targetUid);
+      if (!targetProfile) {
+        throw new HttpsError("not-found", "Không tìm thấy hồ sơ người dùng để đặt lại mật khẩu.");
+      }
+
+      targetRole = Number(targetProfile.role ?? UserRoles.USER);
+      assertAdminCanManageTarget({
+        callerUid,
+        callerRole,
+        targetUid,
+        currentTargetRole: targetRole,
+        nextRole: targetRole,
+      });
+
+      const candidateEmail = data.email == null ? targetProfile.email : data.email;
+      targetEmail = assertEmail(candidateEmail);
+    } else {
+      targetEmail = assertEmail(data.email);
+
       try {
-        await admin.auth().deleteUser(createdUser.uid);
-      } catch (rollbackError) {
-        console.error("Rollback deleteUser failed:", rollbackError);
+        const authUser = await admin.auth().getUserByEmail(targetEmail);
+        targetUid = authUser.uid;
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") {
+          throw mapToHttpsError(error, "Không thể kiểm tra email người dùng.");
+        }
       }
     }
 
-    throw mapToHttpsError(error, "Không thể tạo tài khoản mới.");
-  }
-});
+    try {
+      const resetLink = await admin.auth().generatePasswordResetLink(targetEmail);
+
+      await sendPasswordResetEmailViaMailtrap({
+        toEmail: targetEmail,
+        resetLink,
+      });
+
+      if (targetUid) {
+        await db.collection(USERS_COLLECTION).doc(targetUid).set(
+          {
+            uid: targetUid,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      return {
+        success: true,
+        uid: targetUid,
+        email: targetEmail,
+      };
+    } catch (error) {
+      throw mapToHttpsError(error, "Không thể gửi email đặt lại mật khẩu.");
+    }
+  },
+);
 
 exports.fetchAvatarFromUrl = onCall(async (request) => {
   if (!request.auth?.uid) {

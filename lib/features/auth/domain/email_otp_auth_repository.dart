@@ -240,6 +240,20 @@ class EmailOtpAuthRepository {
     }
 
     if (!snapshot.exists) {
+      // If there is already a profile with this email, keep existing identity
+      // data untouched (displayName/photoUrl/role/status).
+      if (normalizedEmail.isNotEmpty) {
+        final existingByEmail = await _firestore
+            .collection('users')
+            .where('email', isEqualTo: normalizedEmail)
+            .limit(1)
+            .get();
+
+        if (existingByEmail.docs.isNotEmpty) {
+          return;
+        }
+      }
+
       final createPayload = <String, dynamic>{
         'uid': user.uid,
         'email': normalizedEmail,
@@ -257,12 +271,28 @@ class EmailOtpAuthRepository {
       return;
     }
 
+    final existing = snapshot.data() ?? const <String, dynamic>{};
     final updatePayload = <String, dynamic>{
-      'displayName': normalizedDisplayName,
-      'photoUrl': normalizedPhotoUrl,
       'updatedAt': now,
       'lastLoginAt': now,
     };
+
+    // Backfill only when current profile is empty; never overwrite existing
+    // values from another provider/account profile.
+    final currentDisplayName = ((existing['displayName'] as String?) ?? '')
+        .trim();
+    final currentPhotoUrl = ((existing['photoUrl'] as String?) ?? '').trim();
+    final currentEmail = ((existing['email'] as String?) ?? '').trim();
+
+    if (currentDisplayName.isEmpty && normalizedDisplayName.isNotEmpty) {
+      updatePayload['displayName'] = normalizedDisplayName;
+    }
+    if (currentPhotoUrl.isEmpty && normalizedPhotoUrl.isNotEmpty) {
+      updatePayload['photoUrl'] = normalizedPhotoUrl;
+    }
+    if (currentEmail.isEmpty && normalizedEmail.isNotEmpty) {
+      updatePayload['email'] = normalizedEmail;
+    }
 
     await docRef.set(updatePayload, SetOptions(merge: true));
   }

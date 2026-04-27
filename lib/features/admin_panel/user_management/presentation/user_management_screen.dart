@@ -1,138 +1,38 @@
 // lib/features/admin_panel/user_management/presentation/user_management_screen.dart
 //
 // User Management — OmniDisaster Admin Panel
-// Giao diện quản lý người dùng: danh sách, tìm kiếm, lọc
-// Hiện tại dùng dữ liệu giả (mock) — chừa TODO để implement logic thật.
+// Giao diện quản lý người dùng: danh sách, tìm kiếm, lọc, CRUD thật.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'dart:typed_data';
 
-import 'user_detail_screen.dart';
+import 'package:disaster_response_app/core/routes/route_names.dart';
+import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
+
+import '../domain/user_management_controller.dart';
 import 'user_models.dart';
-
-// =============================================================================
-// MOCK DATA — thay bằng Firestore/Riverpod khi implement thật
-// =============================================================================
-final _kMockUsers = <AppUser>[
-  AppUser(
-    uid: 'sXk2mP9vQRa1bN3cLd7e',
-    email: 'superadmin@omnidisaster.vn',
-    displayName: 'Nguyễn Văn Hùng',
-    photoUrl: null,
-    role: 0,
-    status: 1,
-    createdAt: DateTime(2024, 1, 5, 8, 0),
-    updatedAt: DateTime(2025, 3, 20, 14, 23),
-    lastLoginAt: DateTime(2025, 4, 14, 9, 11),
-    mfaEnabled: true,
-  ),
-  AppUser(
-    uid: 'tYl3nQ0wRSb2cO4dMe8f',
-    email: 'admin.hanoi@omnidisaster.vn',
-    displayName: 'Trần Thị Mai',
-    photoUrl: null,
-    role: 1,
-    status: 1,
-    createdAt: DateTime(2024, 2, 12, 10, 30),
-    updatedAt: DateTime(2025, 4, 1, 16, 5),
-    createdBy: 'sXk2mP9vQRa1bN3cLd7e',
-    lastLoginAt: DateTime(2025, 4, 13, 17, 42),
-    mfaEnabled: true,
-  ),
-  AppUser(
-    uid: 'uZm4oR1xSTc3dP5eNf9g',
-    email: 'staff.danang@omnidisaster.vn',
-    displayName: 'Lê Quang Minh',
-    photoUrl: null,
-    role: 2,
-    status: 1,
-    createdAt: DateTime(2024, 3, 8, 9, 15),
-    updatedAt: DateTime(2025, 3, 28, 11, 0),
-    createdBy: 'tYl3nQ0wRSb2cO4dMe8f',
-    lastLoginAt: DateTime(2025, 4, 10, 8, 55),
-    mfaEnabled: false,
-  ),
-  AppUser(
-    uid: 'vAn5pS2yTUd4eQ6fOg0h',
-    email: 'citizen.0021@gmail.com',
-    displayName: 'Phạm Thị Lan',
-    photoUrl: null,
-    role: 3,
-    status: 1,
-    createdAt: DateTime(2024, 5, 22, 14, 0),
-    updatedAt: DateTime(2024, 5, 22, 14, 0),
-    lastLoginAt: DateTime(2025, 4, 11, 20, 30),
-    mfaEnabled: false,
-  ),
-  AppUser(
-    uid: 'wBo6qT3zUVe5fR7gPh1i',
-    email: 'citizen.0045@gmail.com',
-    displayName: 'Hoàng Văn Đức',
-    photoUrl: null,
-    role: 3,
-    status: 0,
-    createdAt: DateTime(2024, 6, 10, 11, 0),
-    updatedAt: DateTime(2025, 1, 15, 9, 0),
-    lastLoginAt: DateTime(2025, 1, 14, 18, 20),
-    mfaEnabled: false,
-  ),
-  AppUser(
-    uid: 'xCp7rU4aVWf6gS8hQi2j',
-    email: 'staff.hcm@omnidisaster.vn',
-    displayName: 'Võ Ngọc Ánh',
-    photoUrl: null,
-    role: 2,
-    status: 2,
-    createdAt: DateTime(2024, 8, 3, 8, 45),
-    updatedAt: DateTime(2024, 8, 3, 8, 45),
-    createdBy: 'tYl3nQ0wRSb2cO4dMe8f',
-    lastLoginAt: null,
-    mfaEnabled: false,
-  ),
-  AppUser(
-    uid: 'yDq8sV5bWXg7hT9iRj3k',
-    email: 'violator.999@gmail.com',
-    displayName: 'Tài Khoản Vi Phạm',
-    photoUrl: null,
-    role: 3,
-    status: 3,
-    createdAt: DateTime(2024, 9, 17, 15, 0),
-    updatedAt: DateTime(2025, 2, 5, 10, 0),
-    lastLoginAt: DateTime(2025, 2, 4, 22, 15),
-    mfaEnabled: false,
-  ),
-  AppUser(
-    uid: 'zEr9tW6cXYh8iU0jSk4l',
-    email: 'admin.hue@omnidisaster.vn',
-    displayName: 'Đinh Thế Anh',
-    photoUrl: null,
-    role: 1,
-    status: 1,
-    createdAt: DateTime(2024, 10, 1, 9, 0),
-    updatedAt: DateTime(2025, 3, 10, 13, 30),
-    createdBy: 'sXk2mP9vQRa1bN3cLd7e',
-    lastLoginAt: DateTime(2025, 4, 12, 10, 5),
-    mfaEnabled: true,
-  ),
-];
 
 // =============================================================================
 // USER MANAGEMENT SCREEN — Danh sách chính
 // =============================================================================
-class UserManagementScreen extends StatefulWidget {
+class UserManagementScreen extends ConsumerStatefulWidget {
   const UserManagementScreen({super.key});
 
   @override
-  State<UserManagementScreen> createState() => _UserManagementScreenState();
+  ConsumerState<UserManagementScreen> createState() =>
+      _UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   // ── Filter state ────────────────────────────────────────────────────────────
   final _searchCtrl = TextEditingController();
-  int? _roleFilter;     // null = tất cả
-  int? _statusFilter;   // null = tất cả
+  int? _roleFilter; // null = tất cả
+  int? _statusFilter; // null = tất cả
   String _searchQuery = '';
 
   // ── Pagination ──────────────────────────────────────────────────────────────
@@ -154,9 +54,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   }
 
   // ── Computed ─────────────────────────────────────────────────────────────────
-  List<AppUser> get _filteredUsers {
-    return _kMockUsers.where((u) {
-      final matchSearch = _searchQuery.isEmpty ||
+  List<AppUser> _filterUsers(List<AppUser> users) {
+    return users.where((u) {
+      final matchSearch =
+          _searchQuery.isEmpty ||
           u.displayName.toLowerCase().contains(_searchQuery) ||
           u.email.toLowerCase().contains(_searchQuery) ||
           u.uid.toLowerCase().contains(_searchQuery);
@@ -166,30 +67,45 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     }).toList();
   }
 
-  int get _totalPages =>
-      ((_filteredUsers.length) / _pageSize).ceil().clamp(1, 9999);
+  int _totalPages(int count) => (count / _pageSize).ceil().clamp(1, 9999);
 
-  List<AppUser> get _pagedUsers {
-    final all = _filteredUsers;
-    final start = (_currentPage - 1) * _pageSize;
+  List<AppUser> _pagedUsers(List<AppUser> all, int currentPage) {
+    final start = (currentPage - 1) * _pageSize;
     final end = (start + _pageSize).clamp(0, all.length);
     return all.sublist(start.clamp(0, all.length), end);
   }
 
+  String _errorMessageFrom(Object error) {
+    final raw = error.toString().trim();
+    if (raw.startsWith('Exception: ')) {
+      return raw.substring('Exception: '.length).trim();
+    }
+    return raw.isEmpty ? 'Đã xảy ra lỗi khi tải danh sách người dùng.' : raw;
+  }
+
   // ── Navigation ────────────────────────────────────────────────────────
   void _openDetail(AppUser? user) {
-    // TODO: Dùng GoRouter: context.go(RouteNames.adminUserDetail, extra: user)
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => UserDetailScreen(existingUser: user),
-      ),
+    context.pushNamed(
+      RouteNames.nameAdminUserDetail,
+      pathParameters: <String, String>{
+        RouteNames.paramUserId: user?.uid ?? 'new',
+      },
+      extra: user,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredUsers;
-    final paged = _pagedUsers;
+    final usersAsync = ref.watch(userManagementControllerProvider);
+    final allUsers = usersAsync.asData?.value ?? const <AppUser>[];
+    final filtered = _filterUsers(allUsers);
+    final totalPages = _totalPages(filtered.length);
+    final safeCurrentPage = _currentPage.clamp(1, totalPages);
+    final paged = _pagedUsers(filtered, safeCurrentPage);
+    final isInitialLoading = usersAsync.isLoading && allUsers.isEmpty;
+    final loadError = usersAsync.hasError
+        ? _errorMessageFrom(usersAsync.error!)
+        : null;
 
     return Scaffold(
       backgroundColor: UC.scaffoldBg,
@@ -203,7 +119,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             const SizedBox(height: 24),
 
             // ── Summary stats ────────────────────────────────────────────
-            _SummaryRow(users: _kMockUsers),
+            _SummaryRow(users: allUsers),
             const SizedBox(height: 24),
 
             // ── Search & Filters ─────────────────────────────────────────
@@ -211,10 +127,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               searchCtrl: _searchCtrl,
               roleFilter: _roleFilter,
               statusFilter: _statusFilter,
-              onRoleChanged: (v) =>
-                  setState(() { _roleFilter = v; _currentPage = 1; }),
-              onStatusChanged: (v) =>
-                  setState(() { _statusFilter = v; _currentPage = 1; }),
+              onRoleChanged: (v) => setState(() {
+                _roleFilter = v;
+                _currentPage = 1;
+              }),
+              onStatusChanged: (v) => setState(() {
+                _statusFilter = v;
+                _currentPage = 1;
+              }),
               onClearFilters: () => setState(() {
                 _searchCtrl.clear();
                 _roleFilter = null;
@@ -222,27 +142,30 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 _currentPage = 1;
               }),
             ),
+            if (loadError != null && allUsers.isEmpty) ...[
+              const SizedBox(height: 10),
+              _TableErrorState(message: loadError),
+            ],
             const SizedBox(height: 16),
 
             // ── Table ────────────────────────────────────────────────────
             Expanded(
-              child: _UsersTable(
-                users: paged,
-                onEdit: _openDetail,
-              ),
+              child: isInitialLoading
+                  ? const _TableLoadingState()
+                  : _UsersTable(users: paged, onEdit: _openDetail),
             ),
 
             // ── Pagination ───────────────────────────────────────────────
             _PaginationBar(
               totalCount: filtered.length,
-              currentPage: _currentPage,
-              totalPages: _totalPages,
+              currentPage: safeCurrentPage,
+              totalPages: totalPages,
               pageSize: _pageSize,
-              onPrev: _currentPage > 1
-                  ? () => setState(() => _currentPage--)
+              onPrev: safeCurrentPage > 1
+                  ? () => setState(() => _currentPage = safeCurrentPage - 1)
                   : null,
-              onNext: _currentPage < _totalPages
-                  ? () => setState(() => _currentPage++)
+              onNext: safeCurrentPage < totalPages
+                  ? () => setState(() => _currentPage = safeCurrentPage + 1)
                   : null,
             ),
           ],
@@ -295,8 +218,9 @@ class _PageHeader extends StatelessWidget {
             backgroundColor: UC.brandRed,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         ),
       ],
@@ -397,27 +321,34 @@ class _MiniStatCard extends StatelessWidget {
             Container(
               width: 38,
               height: 38,
-              decoration:
-                  BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Icon(icon, color: color, size: 20),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    )),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(label,
-                    style: const TextStyle(
-                        color: UC.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: UC.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ],
@@ -448,9 +379,7 @@ class _SearchFilterBar extends StatelessWidget {
   });
 
   bool get _hasActiveFilters =>
-      searchCtrl.text.isNotEmpty ||
-      roleFilter != null ||
-      statusFilter != null;
+      searchCtrl.text.isNotEmpty || roleFilter != null || statusFilter != null;
 
   @override
   Widget build(BuildContext context) {
@@ -466,21 +395,28 @@ class _SearchFilterBar extends StatelessWidget {
               style: const TextStyle(color: UC.textPrimary, fontSize: 13.5),
               decoration: InputDecoration(
                 hintText: 'Tìm theo tên, email, UID...',
-                hintStyle:
-                    const TextStyle(color: UC.textMuted, fontSize: 13.5),
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: UC.textMuted, size: 20),
+                hintStyle: const TextStyle(color: UC.textMuted, fontSize: 13.5),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: UC.textMuted,
+                  size: 20,
+                ),
                 suffixIcon: searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear_rounded,
-                            color: UC.textMuted, size: 16),
+                        icon: const Icon(
+                          Icons.clear_rounded,
+                          color: UC.textMuted,
+                          size: 16,
+                        ),
                         onPressed: searchCtrl.clear,
                       )
                     : null,
                 filled: true,
                 fillColor: UC.cardBg,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 0,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: UC.border),
@@ -491,8 +427,10 @@ class _SearchFilterBar extends StatelessWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide:
-                      const BorderSide(color: UC.focusBorder, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: UC.focusBorder,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -506,7 +444,9 @@ class _SearchFilterBar extends StatelessWidget {
           value: roleFilter,
           icon: Icons.manage_accounts_rounded,
           items: UserRole.values
-              .map((r) => DropdownMenuItem(value: r.value, child: Text(r.label)))
+              .map(
+                (r) => DropdownMenuItem(value: r.value, child: Text(r.label)),
+              )
               .toList(),
           onChanged: onRoleChanged,
         ),
@@ -518,7 +458,9 @@ class _SearchFilterBar extends StatelessWidget {
           value: statusFilter,
           icon: Icons.toggle_on_rounded,
           items: UserStatus.values
-              .map((s) => DropdownMenuItem(value: s.value, child: Text(s.label)))
+              .map(
+                (s) => DropdownMenuItem(value: s.value, child: Text(s.label)),
+              )
               .toList(),
           onChanged: onStatusChanged,
         ),
@@ -538,9 +480,12 @@ class _SearchFilterBar extends StatelessWidget {
                 foregroundColor: UC.textSecondary,
                 side: const BorderSide(color: UC.border),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -585,19 +530,23 @@ class _FilterDropdown<T> extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: UC.textMuted),
               const SizedBox(width: 6),
-              Text(hint,
-                  style: const TextStyle(
-                      color: UC.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500)),
+              Text(
+                hint,
+                style: const TextStyle(
+                  color: UC.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
           items: [
             DropdownMenuItem<T>(
               value: null,
-              child: Text('Tất cả $hint',
-                  style: const TextStyle(
-                      color: UC.textSecondary, fontSize: 13)),
+              child: Text(
+                'Tất cả $hint',
+                style: const TextStyle(color: UC.textSecondary, fontSize: 13),
+              ),
             ),
             ...items,
           ],
@@ -609,7 +558,10 @@ class _FilterDropdown<T> extends StatelessWidget {
             color: value != null ? UC.brandRed : UC.textMuted,
           ),
           style: const TextStyle(
-              color: UC.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+            color: UC.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
           dropdownColor: UC.cardBg,
           borderRadius: BorderRadius.circular(10),
         ),
@@ -780,7 +732,9 @@ class _UserRowState extends State<_UserRow> {
                         Text(
                           u.email,
                           style: const TextStyle(
-                              color: UC.textSecondary, fontSize: 12),
+                            color: UC.textSecondary,
+                            fontSize: 12,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
@@ -810,18 +764,9 @@ class _UserRowState extends State<_UserRow> {
                 ],
               ),
             ),
-            Expanded(
-              flex: 18,
-              child: _RoleBadge(role: role),
-            ),
-            Expanded(
-              flex: 16,
-              child: _StatusBadge(status: status),
-            ),
-            Expanded(
-              flex: 10,
-              child: _MfaBadge(enabled: u.mfaEnabled),
-            ),
+            Expanded(flex: 18, child: _RoleBadge(role: role)),
+            Expanded(flex: 16, child: _StatusBadge(status: status)),
+            Expanded(flex: 10, child: _MfaBadge(enabled: u.mfaEnabled)),
             Expanded(
               flex: 20,
               child: Text(
@@ -829,7 +774,9 @@ class _UserRowState extends State<_UserRow> {
                     ? _dateFmt.format(u.lastLoginAt!.toLocal())
                     : '—',
                 style: TextStyle(
-                  color: u.lastLoginAt != null ? UC.textSecondary : UC.textMuted,
+                  color: u.lastLoginAt != null
+                      ? UC.textSecondary
+                      : UC.textMuted,
                   fontSize: 12.5,
                 ),
               ),
@@ -878,6 +825,123 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final normalizedPhotoUrl = (user.photoUrl ?? '').trim();
+    final hasPhotoUrl = normalizedPhotoUrl.isNotEmpty;
+
+    if (hasPhotoUrl && _isDirectAvatarUrl(normalizedPhotoUrl)) {
+      return _AvatarFrame(
+        role: role,
+        child: Image.network(
+          normalizedPhotoUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _FetchedAvatarOrFallback(
+            rawUrl: normalizedPhotoUrl,
+            role: role,
+            initials: _initials,
+          ),
+        ),
+      );
+    }
+
+    if (hasPhotoUrl) {
+      return _FetchedAvatarOrFallback(
+        rawUrl: normalizedPhotoUrl,
+        role: role,
+        initials: _initials,
+      );
+    }
+
+    return _DefaultAvatar(role: role, initials: _initials);
+  }
+
+  bool _isDirectAvatarUrl(String rawUrl) {
+    final uri = Uri.tryParse(rawUrl);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+  }
+}
+
+class _FetchedAvatarOrFallback extends ConsumerStatefulWidget {
+  final String rawUrl;
+  final UserRole role;
+  final String initials;
+
+  const _FetchedAvatarOrFallback({
+    required this.rawUrl,
+    required this.role,
+    required this.initials,
+  });
+
+  @override
+  ConsumerState<_FetchedAvatarOrFallback> createState() =>
+      _FetchedAvatarOrFallbackState();
+}
+
+class _FetchedAvatarOrFallbackState
+    extends ConsumerState<_FetchedAvatarOrFallback> {
+  late Future<Uint8List?> _avatarBytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FetchedAvatarOrFallback oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rawUrl != widget.rawUrl) {
+      _avatarBytesFuture = _loadAvatarBytes(widget.rawUrl);
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytes(String rawUrl) async {
+    final normalizedUrl = rawUrl.trim();
+    if (normalizedUrl.isEmpty) return null;
+
+    try {
+      final downloaded = await ref
+          .read(adminAuthRepositoryProvider)
+          .fetchAvatarFromUrl(url: normalizedUrl)
+          .timeout(const Duration(seconds: 20));
+      return downloaded.bytes;
+    } catch (error) {
+      debugPrint('User avatar bytes fetch failed for URL: $normalizedUrl');
+      debugPrint('User avatar bytes fetch error: $error');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AvatarFrame(
+      role: widget.role,
+      child: FutureBuilder<Uint8List?>(
+        key: ValueKey(widget.rawUrl),
+        future: _avatarBytesFuture,
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null || bytes.isEmpty) {
+            return _AvatarInitials(
+              initials: widget.initials,
+              role: widget.role,
+            );
+          }
+
+          return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+        },
+      ),
+    );
+  }
+}
+
+class _AvatarFrame extends StatelessWidget {
+  final UserRole role;
+  final Widget child;
+
+  const _AvatarFrame({required this.role, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: 38,
       height: 38,
@@ -886,14 +950,42 @@ class _UserAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: role.color.withOpacity(0.3), width: 1.5),
       ),
-      child: Center(
-        child: Text(
-          _initials,
-          style: TextStyle(
-            color: role.color,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
+      clipBehavior: Clip.hardEdge,
+      child: child,
+    );
+  }
+}
+
+class _DefaultAvatar extends StatelessWidget {
+  final UserRole role;
+  final String initials;
+
+  const _DefaultAvatar({required this.role, required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AvatarFrame(
+      role: role,
+      child: _AvatarInitials(initials: initials, role: role),
+    );
+  }
+}
+
+class _AvatarInitials extends StatelessWidget {
+  final String initials;
+  final UserRole role;
+
+  const _AvatarInitials({required this.initials, required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: role.color,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -936,11 +1028,11 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
 
   IconData get _icon => switch (status) {
-        UserStatus.active => Icons.check_circle_rounded,
-        UserStatus.inactive => Icons.remove_circle_outline_rounded,
-        UserStatus.pending => Icons.hourglass_empty_rounded,
-        UserStatus.banned => Icons.block_rounded,
-      };
+    UserStatus.active => Icons.check_circle_rounded,
+    UserStatus.inactive => Icons.remove_circle_outline_rounded,
+    UserStatus.pending => Icons.hourglass_empty_rounded,
+    UserStatus.banned => Icons.block_rounded,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1029,7 +1121,9 @@ class _RowActionBtnState extends State<_RowActionBtn> {
             decoration: BoxDecoration(
               color: _hovered ? UC.brandRedBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: _hovered ? Border.all(color: UC.brandRed.withOpacity(0.3)) : null,
+              border: _hovered
+                  ? Border.all(color: UC.brandRed.withOpacity(0.3))
+                  : null,
             ),
             child: Icon(
               widget.icon,
@@ -1065,8 +1159,8 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final start = ((currentPage - 1) * pageSize + 1).clamp(1, totalCount);
-    final end = (currentPage * pageSize).clamp(0, totalCount);
+    final start = totalCount == 0 ? 0 : ((currentPage - 1) * pageSize + 1).clamp(1, totalCount);
+    final end = totalCount == 0 ? 0 : (currentPage * pageSize).clamp(0, totalCount);
 
     return Padding(
       padding: const EdgeInsets.only(top: 14),
@@ -1074,8 +1168,7 @@ class _PaginationBar extends StatelessWidget {
         children: [
           Text(
             'Hiển thị $start–$end trong tổng số $totalCount người dùng',
-            style:
-                const TextStyle(color: UC.textSecondary, fontSize: 12.5),
+            style: const TextStyle(color: UC.textSecondary, fontSize: 12.5),
           ),
           const Spacer(),
           _PageBtn(
@@ -1117,7 +1210,11 @@ class _PageBtn extends StatelessWidget {
   final VoidCallback? onTap;
   final String tooltip;
 
-  const _PageBtn({required this.icon, required this.onTap, required this.tooltip});
+  const _PageBtn({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1148,6 +1245,68 @@ class _PageBtn extends StatelessWidget {
   }
 }
 
+class _TableLoadingState extends StatelessWidget {
+  const _TableLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: UC.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: UC.border),
+        boxShadow: const [
+          BoxShadow(color: UC.shadow, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _TableErrorState extends StatelessWidget {
+  final String message;
+
+  const _TableErrorState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: UC.brandRedBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: UC.brandRed.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, size: 18, color: UC.brandRed),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: UC.brandRed,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // =============================================================================
 // EMPTY STATE
 // =============================================================================
@@ -1163,12 +1322,12 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 64,
             height: 64,
-            decoration: BoxDecoration(
-              color: UC.grayBg,
-              shape: BoxShape.circle,
+            decoration: BoxDecoration(color: UC.grayBg, shape: BoxShape.circle),
+            child: const Icon(
+              Icons.person_search_rounded,
+              color: UC.textMuted,
+              size: 32,
             ),
-            child: const Icon(Icons.person_search_rounded,
-                color: UC.textMuted, size: 32),
           ),
           const SizedBox(height: 16),
           const Text(
