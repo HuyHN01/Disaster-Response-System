@@ -3335,6 +3335,418 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   }
 }
 
+class $CheckInLogsTable extends CheckInLogs
+    with TableInfo<$CheckInLogsTable, CheckInLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CheckInLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stationIdMeta = const VerificationMeta(
+    'stationId',
+  );
+  @override
+  late final GeneratedColumn<String> stationId = GeneratedColumn<String>(
+    'station_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES rescue_stations (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _timestampMeta = const VerificationMeta(
+    'timestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
+    'timestamp',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    stationId,
+    userId,
+    type,
+    timestamp,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'check_in_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CheckInLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('station_id')) {
+      context.handle(
+        _stationIdMeta,
+        stationId.isAcceptableOrUnknown(data['station_id']!, _stationIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stationIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('timestamp')) {
+      context.handle(
+        _timestampMeta,
+        timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_timestampMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CheckInLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CheckInLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      stationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      timestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}timestamp'],
+      )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $CheckInLogsTable createAlias(String alias) {
+    return $CheckInLogsTable(attachedDatabase, alias);
+  }
+}
+
+class CheckInLog extends DataClass implements Insertable<CheckInLog> {
+  final String id;
+  final String stationId;
+  final String userId;
+  final String type;
+  final DateTime timestamp;
+  final String syncStatus;
+  const CheckInLog({
+    required this.id,
+    required this.stationId,
+    required this.userId,
+    required this.type,
+    required this.timestamp,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['station_id'] = Variable<String>(stationId);
+    map['user_id'] = Variable<String>(userId);
+    map['type'] = Variable<String>(type);
+    map['timestamp'] = Variable<DateTime>(timestamp);
+    map['sync_status'] = Variable<String>(syncStatus);
+    return map;
+  }
+
+  CheckInLogsCompanion toCompanion(bool nullToAbsent) {
+    return CheckInLogsCompanion(
+      id: Value(id),
+      stationId: Value(stationId),
+      userId: Value(userId),
+      type: Value(type),
+      timestamp: Value(timestamp),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory CheckInLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CheckInLog(
+      id: serializer.fromJson<String>(json['id']),
+      stationId: serializer.fromJson<String>(json['stationId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      type: serializer.fromJson<String>(json['type']),
+      timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'stationId': serializer.toJson<String>(stationId),
+      'userId': serializer.toJson<String>(userId),
+      'type': serializer.toJson<String>(type),
+      'timestamp': serializer.toJson<DateTime>(timestamp),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+    };
+  }
+
+  CheckInLog copyWith({
+    String? id,
+    String? stationId,
+    String? userId,
+    String? type,
+    DateTime? timestamp,
+    String? syncStatus,
+  }) => CheckInLog(
+    id: id ?? this.id,
+    stationId: stationId ?? this.stationId,
+    userId: userId ?? this.userId,
+    type: type ?? this.type,
+    timestamp: timestamp ?? this.timestamp,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  CheckInLog copyWithCompanion(CheckInLogsCompanion data) {
+    return CheckInLog(
+      id: data.id.present ? data.id.value : this.id,
+      stationId: data.stationId.present ? data.stationId.value : this.stationId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      type: data.type.present ? data.type.value : this.type,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CheckInLog(')
+          ..write('id: $id, ')
+          ..write('stationId: $stationId, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, stationId, userId, type, timestamp, syncStatus);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CheckInLog &&
+          other.id == this.id &&
+          other.stationId == this.stationId &&
+          other.userId == this.userId &&
+          other.type == this.type &&
+          other.timestamp == this.timestamp &&
+          other.syncStatus == this.syncStatus);
+}
+
+class CheckInLogsCompanion extends UpdateCompanion<CheckInLog> {
+  final Value<String> id;
+  final Value<String> stationId;
+  final Value<String> userId;
+  final Value<String> type;
+  final Value<DateTime> timestamp;
+  final Value<String> syncStatus;
+  final Value<int> rowid;
+  const CheckInLogsCompanion({
+    this.id = const Value.absent(),
+    this.stationId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.timestamp = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CheckInLogsCompanion.insert({
+    required String id,
+    required String stationId,
+    required String userId,
+    required String type,
+    required DateTime timestamp,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       stationId = Value(stationId),
+       userId = Value(userId),
+       type = Value(type),
+       timestamp = Value(timestamp);
+  static Insertable<CheckInLog> custom({
+    Expression<String>? id,
+    Expression<String>? stationId,
+    Expression<String>? userId,
+    Expression<String>? type,
+    Expression<DateTime>? timestamp,
+    Expression<String>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (stationId != null) 'station_id': stationId,
+      if (userId != null) 'user_id': userId,
+      if (type != null) 'type': type,
+      if (timestamp != null) 'timestamp': timestamp,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CheckInLogsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? stationId,
+    Value<String>? userId,
+    Value<String>? type,
+    Value<DateTime>? timestamp,
+    Value<String>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return CheckInLogsCompanion(
+      id: id ?? this.id,
+      stationId: stationId ?? this.stationId,
+      userId: userId ?? this.userId,
+      type: type ?? this.type,
+      timestamp: timestamp ?? this.timestamp,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (stationId.present) {
+      map['station_id'] = Variable<String>(stationId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (timestamp.present) {
+      map['timestamp'] = Variable<DateTime>(timestamp.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CheckInLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('stationId: $stationId, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3344,6 +3756,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LocationsTable locations = $LocationsTable(this);
   late final $AttachmentsTable attachments = $AttachmentsTable(this);
   late final $RescueStationsTable rescueStations = $RescueStationsTable(this);
+  late final $CheckInLogsTable checkInLogs = $CheckInLogsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3355,7 +3768,25 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locations,
     attachments,
     rescueStations,
+    checkInLogs,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'rescue_stations',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('check_in_logs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('check_in_logs', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$UsersTableCreateCompanionBuilder =
@@ -3409,6 +3840,24 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_postsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CheckInLogsTable, List<CheckInLog>>
+  _checkInLogsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.checkInLogs,
+    aliasName: $_aliasNameGenerator(db.users.id, db.checkInLogs.userId),
+  );
+
+  $$CheckInLogsTableProcessedTableManager get checkInLogsRefs {
+    final manager = $$CheckInLogsTableTableManager(
+      $_db,
+      $_db.checkInLogs,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_checkInLogsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3499,6 +3948,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$PostsTableFilterComposer(
             $db: $db,
             $table: $db.posts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> checkInLogsRefs(
+    Expression<bool> Function($$CheckInLogsTableFilterComposer f) f,
+  ) {
+    final $$CheckInLogsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableFilterComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3654,6 +4128,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> checkInLogsRefs<T extends Object>(
+    Expression<T> Function($$CheckInLogsTableAnnotationComposer a) f,
+  ) {
+    final $$CheckInLogsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -3669,7 +4168,7 @@ class $$UsersTableTableManager
           $$UsersTableUpdateCompanionBuilder,
           (User, $$UsersTableReferences),
           User,
-          PrefetchHooks Function({bool postsRefs})
+          PrefetchHooks Function({bool postsRefs, bool checkInLogsRefs})
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
     : super(
@@ -3748,29 +4247,55 @@ class $$UsersTableTableManager
                     (e.readTable(table), $$UsersTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({postsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (postsRefs) db.posts],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (postsRefs)
-                    await $_getPrefetchedData<User, $UsersTable, Post>(
-                      currentTable: table,
-                      referencedTable: $$UsersTableReferences._postsRefsTable(
-                        db,
-                      ),
-                      managerFromTypedResult: (p0) =>
-                          $$UsersTableReferences(db, table, p0).postsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.userId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({postsRefs = false, checkInLogsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (postsRefs) db.posts,
+                    if (checkInLogsRefs) db.checkInLogs,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (postsRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Post>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._postsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(db, table, p0).postsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (checkInLogsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          CheckInLog
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._checkInLogsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).checkInLogsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -3787,7 +4312,7 @@ typedef $$UsersTableProcessedTableManager =
       $$UsersTableUpdateCompanionBuilder,
       (User, $$UsersTableReferences),
       User,
-      PrefetchHooks Function({bool postsRefs})
+      PrefetchHooks Function({bool postsRefs, bool checkInLogsRefs})
     >;
 typedef $$DisasterEventsTableCreateCompanionBuilder =
     DisasterEventsCompanion Function({
@@ -5509,6 +6034,36 @@ typedef $$RescueStationsTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$RescueStationsTableReferences
+    extends BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation> {
+  $$RescueStationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<$CheckInLogsTable, List<CheckInLog>>
+  _checkInLogsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.checkInLogs,
+    aliasName: $_aliasNameGenerator(
+      db.rescueStations.id,
+      db.checkInLogs.stationId,
+    ),
+  );
+
+  $$CheckInLogsTableProcessedTableManager get checkInLogsRefs {
+    final manager = $$CheckInLogsTableTableManager(
+      $_db,
+      $_db.checkInLogs,
+    ).filter((f) => f.stationId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_checkInLogsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$RescueStationsTableFilterComposer
     extends Composer<_$AppDatabase, $RescueStationsTable> {
   $$RescueStationsTableFilterComposer({
@@ -5587,6 +6142,31 @@ class $$RescueStationsTableFilterComposer
     column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> checkInLogsRefs(
+    Expression<bool> Function($$CheckInLogsTableFilterComposer f) f,
+  ) {
+    final $$CheckInLogsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.stationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableFilterComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$RescueStationsTableOrderingComposer
@@ -5725,6 +6305,31 @@ class $$RescueStationsTableAnnotationComposer
     column: $table.syncStatus,
     builder: (column) => column,
   );
+
+  Expression<T> checkInLogsRefs<T extends Object>(
+    Expression<T> Function($$CheckInLogsTableAnnotationComposer a) f,
+  ) {
+    final $$CheckInLogsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.stationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$RescueStationsTableTableManager
@@ -5738,12 +6343,9 @@ class $$RescueStationsTableTableManager
           $$RescueStationsTableAnnotationComposer,
           $$RescueStationsTableCreateCompanionBuilder,
           $$RescueStationsTableUpdateCompanionBuilder,
-          (
-            RescueStation,
-            BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation>,
-          ),
+          (RescueStation, $$RescueStationsTableReferences),
           RescueStation,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool checkInLogsRefs})
         > {
   $$RescueStationsTableTableManager(
     _$AppDatabase db,
@@ -5827,9 +6429,43 @@ class $$RescueStationsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RescueStationsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({checkInLogsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (checkInLogsRefs) db.checkInLogs],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (checkInLogsRefs)
+                    await $_getPrefetchedData<
+                      RescueStation,
+                      $RescueStationsTable,
+                      CheckInLog
+                    >(
+                      currentTable: table,
+                      referencedTable: $$RescueStationsTableReferences
+                          ._checkInLogsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$RescueStationsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).checkInLogsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.stationId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -5844,12 +6480,436 @@ typedef $$RescueStationsTableProcessedTableManager =
       $$RescueStationsTableAnnotationComposer,
       $$RescueStationsTableCreateCompanionBuilder,
       $$RescueStationsTableUpdateCompanionBuilder,
-      (
-        RescueStation,
-        BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation>,
-      ),
+      (RescueStation, $$RescueStationsTableReferences),
       RescueStation,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool checkInLogsRefs})
+    >;
+typedef $$CheckInLogsTableCreateCompanionBuilder =
+    CheckInLogsCompanion Function({
+      required String id,
+      required String stationId,
+      required String userId,
+      required String type,
+      required DateTime timestamp,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$CheckInLogsTableUpdateCompanionBuilder =
+    CheckInLogsCompanion Function({
+      Value<String> id,
+      Value<String> stationId,
+      Value<String> userId,
+      Value<String> type,
+      Value<DateTime> timestamp,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$CheckInLogsTableReferences
+    extends BaseReferences<_$AppDatabase, $CheckInLogsTable, CheckInLog> {
+  $$CheckInLogsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $RescueStationsTable _stationIdTable(_$AppDatabase db) =>
+      db.rescueStations.createAlias(
+        $_aliasNameGenerator(db.checkInLogs.stationId, db.rescueStations.id),
+      );
+
+  $$RescueStationsTableProcessedTableManager get stationId {
+    final $_column = $_itemColumn<String>('station_id')!;
+
+    final manager = $$RescueStationsTableTableManager(
+      $_db,
+      $_db.rescueStations,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_stationIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $UsersTable _userIdTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.checkInLogs.userId, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CheckInLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$RescueStationsTableFilterComposer get stationId {
+    final $$RescueStationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableFilterComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$RescueStationsTableOrderingComposer get stationId {
+    final $$RescueStationsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableOrderingComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get timestamp =>
+      $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$RescueStationsTableAnnotationComposer get stationId {
+    final $$RescueStationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CheckInLogsTable,
+          CheckInLog,
+          $$CheckInLogsTableFilterComposer,
+          $$CheckInLogsTableOrderingComposer,
+          $$CheckInLogsTableAnnotationComposer,
+          $$CheckInLogsTableCreateCompanionBuilder,
+          $$CheckInLogsTableUpdateCompanionBuilder,
+          (CheckInLog, $$CheckInLogsTableReferences),
+          CheckInLog,
+          PrefetchHooks Function({bool stationId, bool userId})
+        > {
+  $$CheckInLogsTableTableManager(_$AppDatabase db, $CheckInLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CheckInLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CheckInLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CheckInLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> stationId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<DateTime> timestamp = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CheckInLogsCompanion(
+                id: id,
+                stationId: stationId,
+                userId: userId,
+                type: type,
+                timestamp: timestamp,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String stationId,
+                required String userId,
+                required String type,
+                required DateTime timestamp,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CheckInLogsCompanion.insert(
+                id: id,
+                stationId: stationId,
+                userId: userId,
+                type: type,
+                timestamp: timestamp,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CheckInLogsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({stationId = false, userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (stationId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.stationId,
+                                referencedTable: $$CheckInLogsTableReferences
+                                    ._stationIdTable(db),
+                                referencedColumn: $$CheckInLogsTableReferences
+                                    ._stationIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$CheckInLogsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$CheckInLogsTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CheckInLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CheckInLogsTable,
+      CheckInLog,
+      $$CheckInLogsTableFilterComposer,
+      $$CheckInLogsTableOrderingComposer,
+      $$CheckInLogsTableAnnotationComposer,
+      $$CheckInLogsTableCreateCompanionBuilder,
+      $$CheckInLogsTableUpdateCompanionBuilder,
+      (CheckInLog, $$CheckInLogsTableReferences),
+      CheckInLog,
+      PrefetchHooks Function({bool stationId, bool userId})
     >;
 
 class $AppDatabaseManager {
@@ -5867,4 +6927,6 @@ class $AppDatabaseManager {
       $$AttachmentsTableTableManager(_db, _db.attachments);
   $$RescueStationsTableTableManager get rescueStations =>
       $$RescueStationsTableTableManager(_db, _db.rescueStations);
+  $$CheckInLogsTableTableManager get checkInLogs =>
+      $$CheckInLogsTableTableManager(_db, _db.checkInLogs);
 }

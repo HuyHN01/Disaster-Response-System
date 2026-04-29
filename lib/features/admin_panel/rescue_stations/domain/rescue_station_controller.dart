@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:drift/drift.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'rescue_station_repository.dart';
@@ -143,6 +144,12 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     }
 
     await _repo.updateOccupancy(stationId, 1);
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    await _repo.insertCheckInLog(
+      stationId: stationId,
+      userId: userId,
+      type: 'in',
+    );
     await loadStations();
 
     try {
@@ -162,6 +169,12 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     if (station == null) throw Exception('Không tìm thấy trạm');
     
     await _repo.updateOccupancy(stationId, -1);
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    await _repo.insertCheckInLog(
+      stationId: stationId,
+      userId: userId,
+      type: 'out',
+    );
     await loadStations();
 
     try {

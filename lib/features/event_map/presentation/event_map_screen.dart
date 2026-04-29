@@ -7,6 +7,7 @@ import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -169,6 +170,7 @@ class _EventMapScreenState extends State<EventMapScreen>
 
   // ── Routing state (for external Google Maps directions) ──────────────────
   LatLng? _routeDestination;
+  RescueStation? _targetStation;
 
   @override
   void initState() {
@@ -307,12 +309,15 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
-  void _onRouteDestinationChanged(LatLng? destination) {
-    if (_isSameLatLng(_routeDestination, destination)) return;
+  void _onRouteDestinationChanged(LatLng? destination, RescueStation? station) {
+    if (_isSameLatLng(_routeDestination, destination) &&
+        _targetStation?.id == station?.id)
+      return;
     if (!mounted) return;
 
     setState(() {
       _routeDestination = destination;
+      _targetStation = station;
     });
   }
 
@@ -481,11 +486,18 @@ class _EventMapScreenState extends State<EventMapScreen>
               left: 0,
               right: 0,
               bottom: 0,
-              child: _BottomLegendSheet(
-                expanded: _legendExpanded,
-                onToggle: () =>
-                    setState(() => _legendExpanded = !_legendExpanded),
-                onSosTap: _onSosTapped,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_targetStation != null)
+                    _StationDetailsCard(station: _targetStation!),
+                  _BottomLegendSheet(
+                    expanded: _legendExpanded,
+                    onToggle: () =>
+                        setState(() => _legendExpanded = !_legendExpanded),
+                    onSosTap: _onSosTapped,
+                  ),
+                ],
               ),
             ),
           ],
@@ -625,7 +637,7 @@ class _MapLayer extends ConsumerStatefulWidget {
   final Animation<double> pulseAnim;
   final LatLng userLocation;
   final LatLng sosLocation;
-  final ValueChanged<LatLng?> onRouteTargetChanged;
+  final void Function(LatLng?, RescueStation?) onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
@@ -722,13 +734,16 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _routeLoading = false;
         _isFallback = false;
       });
-      widget.onRouteTargetChanged(null);
+      widget.onRouteTargetChanged(null, null);
       return;
     }
 
-    final destinationPoint = LatLng(destination.latitude, destination.longitude);
+    final destinationPoint = LatLng(
+      destination.latitude,
+      destination.longitude,
+    );
     _routeStationId = destination.id;
-    widget.onRouteTargetChanged(destinationPoint);
+    widget.onRouteTargetChanged(destinationPoint, destination);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -1175,7 +1190,9 @@ class _RescueMarker extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(selected ? 0.55 : 0.4),
+                color: _MapColors.rescueGreen.withOpacity(
+                  selected ? 0.55 : 0.4,
+                ),
                 blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
@@ -1844,6 +1861,153 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
             : Colors.orange.shade700,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// STATION DETAILS CARD
+// =============================================================================
+class _StationDetailsCard extends ConsumerStatefulWidget {
+  final RescueStation station;
+
+  const _StationDetailsCard({required this.station});
+
+  @override
+  ConsumerState<_StationDetailsCard> createState() =>
+      _StationDetailsCardState();
+}
+
+class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
+  bool _isLoading = false;
+  bool _isCheckedIn = false; // Simple local state for demo purposes
+
+  Future<void> _handleCheckInOut() async {
+    setState(() => _isLoading = true);
+    try {
+      if (_isCheckedIn) {
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkOut(widget.station.id);
+        if (mounted) setState(() => _isCheckedIn = false);
+      } else {
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkIn(widget.station.id);
+        if (mounted) setState(() => _isCheckedIn = true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFull = widget.station.status == 'full';
+    final canCheckIn = !isFull || _isCheckedIn;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: _MapColors.shadow,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.station.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _MapColors.textPrimary,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isFull
+                      ? Colors.orange.shade100
+                      : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  isFull ? 'Đã đầy' : 'Còn chỗ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isFull
+                        ? Colors.orange.shade800
+                        : Colors.green.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sức chứa: ${widget.station.occupancy}/${widget.station.capacity?.toString() ?? "∞"}',
+            style: const TextStyle(
+              fontSize: 14,
+              color: _MapColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: (!canCheckIn && !_isCheckedIn || _isLoading)
+                  ? null
+                  : _handleCheckInOut,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isCheckedIn
+                    ? Colors.grey.shade400
+                    : _MapColors.rescueGreen,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      _isCheckedIn ? 'Rời khỏi trạm' : 'Đến trạm này',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

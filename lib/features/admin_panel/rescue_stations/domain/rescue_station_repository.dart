@@ -91,6 +91,24 @@ class RescueStationRepository {
       ),
     );
   }
+
+  Future<void> insertCheckInLog({
+    required String stationId,
+    required String userId,
+    required String type,
+  }) async {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    await _db.into(_db.checkInLogs).insert(
+      CheckInLogsCompanion.insert(
+        id: id,
+        stationId: stationId,
+        userId: userId,
+        type: type,
+        timestamp: DateTime.now(),
+        syncStatus: const Value('pending'),
+      ),
+    );
+  }
 }
 
 final rescueStationRepositoryProvider = Provider<RescueStationRepository>((

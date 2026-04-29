@@ -103,6 +103,22 @@ class RescueStations extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+@DataClassName('CheckInLog')
+class CheckInLogs extends Table {
+  TextColumn get id => text()();
+  TextColumn get stationId =>
+      text().references(RescueStations, #id, onDelete: KeyAction.cascade)();
+  TextColumn get userId =>
+      text().references(Users, #id, onDelete: KeyAction.cascade)();
+  TextColumn get type => text()(); // 'in' or 'out'
+  DateTimeColumn get timestamp => dateTime()();
+  TextColumn get syncStatus =>
+      text().withDefault(const Constant('pending'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ============ APP DATABASE ============
 @DriftDatabase(
   tables: [
@@ -112,6 +128,7 @@ class RescueStations extends Table {
     Locations,
     Attachments,
     RescueStations,
+    CheckInLogs,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -121,7 +138,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -196,6 +213,10 @@ FROM users;
       
       if (from < 4) {
         await m.addColumn(rescueStations, rescueStations.occupancy);
+      }
+      
+      if (from < 5) {
+        await m.createTable(checkInLogs);
       }
     },
   );
