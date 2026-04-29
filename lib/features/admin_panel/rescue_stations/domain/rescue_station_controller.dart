@@ -135,6 +135,47 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     }
   }
 
+  Future<void> checkIn(String stationId) async {
+    final station = await _repo.getById(stationId);
+    if (station == null) throw Exception('Không tìm thấy trạm');
+    if (station.capacity != null && station.occupancy >= station.capacity!) {
+      throw Exception('Trạm đã đạt công suất tối đa');
+    }
+
+    await _repo.updateOccupancy(stationId, 1);
+    await loadStations();
+
+    try {
+      final local = await _repo.getById(stationId);
+      if (local != null) {
+        await _pushStationToFirestore(local);
+        await _repo.markSynced(stationId, DateTime.now());
+        await loadStations();
+      }
+    } catch (e) {
+      // Offline sync fallback
+    }
+  }
+
+  Future<void> checkOut(String stationId) async {
+    final station = await _repo.getById(stationId);
+    if (station == null) throw Exception('Không tìm thấy trạm');
+    
+    await _repo.updateOccupancy(stationId, -1);
+    await loadStations();
+
+    try {
+      final local = await _repo.getById(stationId);
+      if (local != null) {
+        await _pushStationToFirestore(local);
+        await _repo.markSynced(stationId, DateTime.now());
+        await loadStations();
+      }
+    } catch (e) {
+      // Offline sync fallback
+    }
+  }
+
   Future<void> _pushStationToFirestore(RescueStation station) {
     return _firestore.collection('rescue_stations').doc(station.id).set({
       'id': station.id,
@@ -144,6 +185,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
       'address': station.address,
       'contactPhone': station.contactPhone,
       'capacity': station.capacity,
+      'occupancy': station.occupancy,
       'resourcesJson': station.resourcesJson,
       'status': station.status,
       'createdAt': Timestamp.fromDate(station.createdAt),

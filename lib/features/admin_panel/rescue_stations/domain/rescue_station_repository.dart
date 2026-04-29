@@ -57,6 +57,30 @@ class RescueStationRepository {
     );
   }
 
+  Future<void> updateOccupancy(String id, int delta) async {
+    final station = await getById(id);
+    if (station == null) return;
+    
+    final currentOccupancy = station.occupancy;
+    final newOccupancy = (currentOccupancy + delta) < 0 ? 0 : (currentOccupancy + delta);
+    
+    String newStatus = station.status;
+    if (station.capacity != null && newOccupancy >= station.capacity!) {
+      newStatus = 'full';
+    } else if (station.capacity != null && newOccupancy < station.capacity! && station.status == 'full') {
+      newStatus = 'active'; // Revert back to active if it's below capacity
+    }
+
+    await (_db.update(_db.rescueStations)..where((t) => t.id.equals(id))).write(
+      RescueStationsCompanion(
+        occupancy: Value(newOccupancy),
+        status: Value(newStatus),
+        syncStatus: const Value('pending'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<void> softDeletePending(String id, DateTime now) async {
     await (_db.update(_db.rescueStations)..where((t) => t.id.equals(id))).write(
       RescueStationsCompanion(

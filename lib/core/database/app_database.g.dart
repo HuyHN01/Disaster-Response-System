@@ -2609,6 +2609,18 @@ class $RescueStationsTable extends RescueStations
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _occupancyMeta = const VerificationMeta(
+    'occupancy',
+  );
+  @override
+  late final GeneratedColumn<int> occupancy = GeneratedColumn<int>(
+    'occupancy',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _resourcesJsonMeta = const VerificationMeta(
     'resourcesJson',
   );
@@ -2685,6 +2697,7 @@ class $RescueStationsTable extends RescueStations
     address,
     contactPhone,
     capacity,
+    occupancy,
     resourcesJson,
     status,
     createdAt,
@@ -2752,6 +2765,12 @@ class $RescueStationsTable extends RescueStations
       context.handle(
         _capacityMeta,
         capacity.isAcceptableOrUnknown(data['capacity']!, _capacityMeta),
+      );
+    }
+    if (data.containsKey('occupancy')) {
+      context.handle(
+        _occupancyMeta,
+        occupancy.isAcceptableOrUnknown(data['occupancy']!, _occupancyMeta),
       );
     }
     if (data.containsKey('resources_json')) {
@@ -2832,6 +2851,10 @@ class $RescueStationsTable extends RescueStations
         DriftSqlType.int,
         data['${effectivePrefix}capacity'],
       ),
+      occupancy: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}occupancy'],
+      )!,
       resourcesJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}resources_json'],
@@ -2873,6 +2896,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String? address;
   final String? contactPhone;
   final int? capacity;
+  final int occupancy;
   final String resourcesJson;
   final String status;
   final DateTime createdAt;
@@ -2887,6 +2911,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     this.address,
     this.contactPhone,
     this.capacity,
+    required this.occupancy,
     required this.resourcesJson,
     required this.status,
     required this.createdAt,
@@ -2910,6 +2935,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     if (!nullToAbsent || capacity != null) {
       map['capacity'] = Variable<int>(capacity);
     }
+    map['occupancy'] = Variable<int>(occupancy);
     map['resources_json'] = Variable<String>(resourcesJson);
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -2938,6 +2964,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       capacity: capacity == null && nullToAbsent
           ? const Value.absent()
           : Value(capacity),
+      occupancy: Value(occupancy),
       resourcesJson: Value(resourcesJson),
       status: Value(status),
       createdAt: Value(createdAt),
@@ -2964,6 +2991,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       address: serializer.fromJson<String?>(json['address']),
       contactPhone: serializer.fromJson<String?>(json['contactPhone']),
       capacity: serializer.fromJson<int?>(json['capacity']),
+      occupancy: serializer.fromJson<int>(json['occupancy']),
       resourcesJson: serializer.fromJson<String>(json['resourcesJson']),
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2983,6 +3011,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       'address': serializer.toJson<String?>(address),
       'contactPhone': serializer.toJson<String?>(contactPhone),
       'capacity': serializer.toJson<int?>(capacity),
+      'occupancy': serializer.toJson<int>(occupancy),
       'resourcesJson': serializer.toJson<String>(resourcesJson),
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -3000,6 +3029,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     Value<String?> address = const Value.absent(),
     Value<String?> contactPhone = const Value.absent(),
     Value<int?> capacity = const Value.absent(),
+    int? occupancy,
     String? resourcesJson,
     String? status,
     DateTime? createdAt,
@@ -3014,6 +3044,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     address: address.present ? address.value : this.address,
     contactPhone: contactPhone.present ? contactPhone.value : this.contactPhone,
     capacity: capacity.present ? capacity.value : this.capacity,
+    occupancy: occupancy ?? this.occupancy,
     resourcesJson: resourcesJson ?? this.resourcesJson,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
@@ -3032,6 +3063,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           ? data.contactPhone.value
           : this.contactPhone,
       capacity: data.capacity.present ? data.capacity.value : this.capacity,
+      occupancy: data.occupancy.present ? data.occupancy.value : this.occupancy,
       resourcesJson: data.resourcesJson.present
           ? data.resourcesJson.value
           : this.resourcesJson,
@@ -3055,6 +3087,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           ..write('address: $address, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('capacity: $capacity, ')
+          ..write('occupancy: $occupancy, ')
           ..write('resourcesJson: $resourcesJson, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
@@ -3074,6 +3107,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     address,
     contactPhone,
     capacity,
+    occupancy,
     resourcesJson,
     status,
     createdAt,
@@ -3092,6 +3126,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           other.address == this.address &&
           other.contactPhone == this.contactPhone &&
           other.capacity == this.capacity &&
+          other.occupancy == this.occupancy &&
           other.resourcesJson == this.resourcesJson &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
@@ -3108,6 +3143,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<String?> address;
   final Value<String?> contactPhone;
   final Value<int?> capacity;
+  final Value<int> occupancy;
   final Value<String> resourcesJson;
   final Value<String> status;
   final Value<DateTime> createdAt;
@@ -3123,6 +3159,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     this.address = const Value.absent(),
     this.contactPhone = const Value.absent(),
     this.capacity = const Value.absent(),
+    this.occupancy = const Value.absent(),
     this.resourcesJson = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -3139,6 +3176,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     this.address = const Value.absent(),
     this.contactPhone = const Value.absent(),
     this.capacity = const Value.absent(),
+    this.occupancy = const Value.absent(),
     this.resourcesJson = const Value.absent(),
     this.status = const Value.absent(),
     required DateTime createdAt,
@@ -3159,6 +3197,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     Expression<String>? address,
     Expression<String>? contactPhone,
     Expression<int>? capacity,
+    Expression<int>? occupancy,
     Expression<String>? resourcesJson,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
@@ -3175,6 +3214,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
       if (address != null) 'address': address,
       if (contactPhone != null) 'contact_phone': contactPhone,
       if (capacity != null) 'capacity': capacity,
+      if (occupancy != null) 'occupancy': occupancy,
       if (resourcesJson != null) 'resources_json': resourcesJson,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
@@ -3193,6 +3233,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     Value<String?>? address,
     Value<String?>? contactPhone,
     Value<int?>? capacity,
+    Value<int>? occupancy,
     Value<String>? resourcesJson,
     Value<String>? status,
     Value<DateTime>? createdAt,
@@ -3209,6 +3250,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
       address: address ?? this.address,
       contactPhone: contactPhone ?? this.contactPhone,
       capacity: capacity ?? this.capacity,
+      occupancy: occupancy ?? this.occupancy,
       resourcesJson: resourcesJson ?? this.resourcesJson,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -3242,6 +3284,9 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     }
     if (capacity.present) {
       map['capacity'] = Variable<int>(capacity.value);
+    }
+    if (occupancy.present) {
+      map['occupancy'] = Variable<int>(occupancy.value);
     }
     if (resourcesJson.present) {
       map['resources_json'] = Variable<String>(resourcesJson.value);
@@ -3277,6 +3322,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
           ..write('address: $address, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('capacity: $capacity, ')
+          ..write('occupancy: $occupancy, ')
           ..write('resourcesJson: $resourcesJson, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
@@ -5435,6 +5481,7 @@ typedef $$RescueStationsTableCreateCompanionBuilder =
       Value<String?> address,
       Value<String?> contactPhone,
       Value<int?> capacity,
+      Value<int> occupancy,
       Value<String> resourcesJson,
       Value<String> status,
       required DateTime createdAt,
@@ -5452,6 +5499,7 @@ typedef $$RescueStationsTableUpdateCompanionBuilder =
       Value<String?> address,
       Value<String?> contactPhone,
       Value<int?> capacity,
+      Value<int> occupancy,
       Value<String> resourcesJson,
       Value<String> status,
       Value<DateTime> createdAt,
@@ -5502,6 +5550,11 @@ class $$RescueStationsTableFilterComposer
 
   ColumnFilters<int> get capacity => $composableBuilder(
     column: $table.capacity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get occupancy => $composableBuilder(
+    column: $table.occupancy,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5580,6 +5633,11 @@ class $$RescueStationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get occupancy => $composableBuilder(
+    column: $table.occupancy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get resourcesJson => $composableBuilder(
     column: $table.resourcesJson,
     builder: (column) => ColumnOrderings(column),
@@ -5642,6 +5700,9 @@ class $$RescueStationsTableAnnotationComposer
 
   GeneratedColumn<int> get capacity =>
       $composableBuilder(column: $table.capacity, builder: (column) => column);
+
+  GeneratedColumn<int> get occupancy =>
+      $composableBuilder(column: $table.occupancy, builder: (column) => column);
 
   GeneratedColumn<String> get resourcesJson => $composableBuilder(
     column: $table.resourcesJson,
@@ -5706,6 +5767,7 @@ class $$RescueStationsTableTableManager
                 Value<String?> address = const Value.absent(),
                 Value<String?> contactPhone = const Value.absent(),
                 Value<int?> capacity = const Value.absent(),
+                Value<int> occupancy = const Value.absent(),
                 Value<String> resourcesJson = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5721,6 +5783,7 @@ class $$RescueStationsTableTableManager
                 address: address,
                 contactPhone: contactPhone,
                 capacity: capacity,
+                occupancy: occupancy,
                 resourcesJson: resourcesJson,
                 status: status,
                 createdAt: createdAt,
@@ -5738,6 +5801,7 @@ class $$RescueStationsTableTableManager
                 Value<String?> address = const Value.absent(),
                 Value<String?> contactPhone = const Value.absent(),
                 Value<int?> capacity = const Value.absent(),
+                Value<int> occupancy = const Value.absent(),
                 Value<String> resourcesJson = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 required DateTime createdAt,
@@ -5753,6 +5817,7 @@ class $$RescueStationsTableTableManager
                 address: address,
                 contactPhone: contactPhone,
                 capacity: capacity,
+                occupancy: occupancy,
                 resourcesJson: resourcesJson,
                 status: status,
                 createdAt: createdAt,

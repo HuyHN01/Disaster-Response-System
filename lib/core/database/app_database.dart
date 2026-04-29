@@ -89,6 +89,7 @@ class RescueStations extends Table {
   TextColumn get address => text().nullable()();
   TextColumn get contactPhone => text().nullable()();
   IntColumn get capacity => integer().nullable()();
+  IntColumn get occupancy => integer().withDefault(const Constant(0))();
   TextColumn get resourcesJson => text().withDefault(const Constant('{}'))();
   TextColumn get status =>
       text().withDefault(const Constant('active'))(); // active/inactive/full
@@ -120,7 +121,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -191,6 +192,10 @@ FROM users;
   await customStatement('DROP TABLE users;');
   await customStatement('ALTER TABLE users_new RENAME TO users;');
   await customStatement('PRAGMA foreign_keys = ON;');
+      }
+      
+      if (from < 4) {
+        await m.addColumn(rescueStations, rescueStations.occupancy);
       }
     },
   );

@@ -528,6 +528,7 @@ class FirebaseSyncService {
     'address': s.address,
     'contactPhone': s.contactPhone,
     'capacity': s.capacity,
+    'occupancy': s.occupancy,
     'resourcesJson': s.resourcesJson,
     'status': s.status,
     'createdAt': Timestamp.fromDate(s.createdAt),
@@ -599,6 +600,7 @@ class FirebaseSyncService {
       address: Value((data['address'] as String?)?.trim()),
       contactPhone: Value((data['contactPhone'] as String?)?.trim()),
       capacity: Value((data['capacity'] as num?)?.toInt()),
+      occupancy: Value((data['occupancy'] as num?)?.toInt() ?? 0),
       resourcesJson: Value(resourcesJson),
       status: Value(
         ((data['status'] as String?)?.trim().isNotEmpty ?? false)
