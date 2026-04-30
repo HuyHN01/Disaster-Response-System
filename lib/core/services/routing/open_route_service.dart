@@ -94,7 +94,7 @@ class OpenRouteService {
   static final String _apiKey = dotenv.env['ORS_API_KEY'] ?? '';
 
   static const String _baseUrl =
-      'https://api.openrouteservice.org/v2/directions/driving-car';
+      'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
 
   static const String _geocodeSearchUrl = 
       'https://api.openrouteservice.org/geocode/search';
@@ -121,19 +121,50 @@ class OpenRouteService {
   ///   - JSON thiếu field cần thiết
   ///
   /// Caller phải bọc trong try-catch và fallback về đường chim bay nếu cần.
-  Future<List<LatLng>> getRoute(LatLng start, LatLng end) async {
-    final uri = Uri.parse(
-      // ORS nhận tọa độ theo thứ tự [longitude, latitude] — ngược với LatLng!
-      '$_baseUrl'
-      '?api_key=$_apiKey'
-      '&start=${start.longitude},${start.latitude}'
-      '&end=${end.longitude},${end.latitude}',
-    );
+  Future<List<LatLng>> getRoute(LatLng start, LatLng end, {List<LatLng>? avoidPoints}) async {
+    final uri = Uri.parse(_baseUrl);
 
-    debugPrint('[ORS] GET $uri');
+    debugPrint('[ORS] POST $uri');
+
+    final Map<String, dynamic> requestBody = {
+      "coordinates": [
+        [start.longitude, start.latitude],
+        [end.longitude, end.latitude]
+      ]
+    };
+
+    if (avoidPoints != null && avoidPoints.isNotEmpty) {
+      final polygons = avoidPoints.map((p) {
+        const offset = 0.00015; // approx 15m
+        return [
+          [
+            [p.longitude - offset, p.latitude - offset],
+            [p.longitude + offset, p.latitude - offset],
+            [p.longitude + offset, p.latitude + offset],
+            [p.longitude - offset, p.latitude + offset],
+            [p.longitude - offset, p.latitude - offset],
+          ]
+        ];
+      }).toList();
+
+      requestBody["options"] = {
+        "avoid_polygons": {
+          "type": "MultiPolygon",
+          "coordinates": polygons
+        }
+      };
+    }
 
     final response = await _client
-        .get(uri, headers: {'Accept': 'application/json, application/geo+json'})
+        .post(
+          uri,
+          headers: {
+            'Authorization': _apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, application/geo+json'
+          },
+          body: jsonEncode(requestBody),
+        )
         .timeout(
           _timeout,
           onTimeout: () => throw const RoutingException(

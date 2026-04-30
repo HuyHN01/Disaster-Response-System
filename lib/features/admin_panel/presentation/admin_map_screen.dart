@@ -3,6 +3,7 @@
 import 'dart:ui' as ui;
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 
 import 'package:disaster_response_app/features/admin_panel/domain/admin_map_controller.dart';
 import 'package:flutter/material.dart';
@@ -145,6 +146,8 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     final stationList = stationsAsync.value ?? const [];
 
     final markersAsync = ref.watch(adminMapProvider);
+    final communityReportsAsync = ref.watch(communityReportsProvider);
+    final communityReports = communityReportsAsync.value ?? const [];
 
     ref.listen<AsyncValue<List<SosMapMarker>>>(adminMapProvider, (_, next) {
       final markers = next.value;
@@ -192,6 +195,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
                   ...stationList.map(
                     (s) => _buildStationMarker(s),
                   ), // Dùng spread operator (...)
+                  ...communityReports.map((r) => _buildCommunityReportMarker(r)),
                   // Vẽ thêm Marker Admin nếu đã lấy được vị trí
                   if (_adminLocation != null)
                     Marker(
@@ -285,6 +289,71 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
           );
         },
         child: _RescueMarker(isActive: s.status == 'active'),
+      ),
+    );
+  }
+
+  Marker _buildCommunityReportMarker(CommunityReport report) {
+    IconData icon;
+    switch (report.type) {
+      case 'fallen_tree':
+        icon = Icons.park_rounded;
+        break;
+      case 'flood':
+        icon = Icons.water_drop_rounded;
+        break;
+      case 'road_block':
+        icon = Icons.remove_road_rounded;
+        break;
+      default:
+        icon = Icons.warning_rounded;
+    }
+
+    return Marker(
+      point: LatLng(report.latitude, report.longitude),
+      width: 40,
+      height: 48,
+      child: GestureDetector(
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Sự cố: ${report.customTypeName ?? report.type}\n'
+                '${report.description ?? ""}',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.orange.shade700,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.shade700.withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            CustomPaint(
+              size: const Size(8, 5),
+              painter: _PinTailPainter(color: Colors.orange.shade700),
+            ),
+          ],
+        ),
       ),
     );
   }
