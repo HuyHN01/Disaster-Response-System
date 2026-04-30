@@ -127,5 +127,9 @@ service cloud.firestore {
     match /check_in_logs/{docId} {
       allow read, write: if true;
     }
+
+    match /community_reports/{docId} {
+      allow read, write: if true;
+    }
   }
 }

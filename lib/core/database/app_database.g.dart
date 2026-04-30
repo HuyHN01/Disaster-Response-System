@@ -3747,6 +3747,583 @@ class CheckInLogsCompanion extends UpdateCompanion<CheckInLog> {
   }
 }
 
+class $CommunityReportsTable extends CommunityReports
+    with TableInfo<$CommunityReportsTable, CommunityReport> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CommunityReportsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _customTypeNameMeta = const VerificationMeta(
+    'customTypeName',
+  );
+  @override
+  late final GeneratedColumn<String> customTypeName = GeneratedColumn<String>(
+    'custom_type_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latitudeMeta = const VerificationMeta(
+    'latitude',
+  );
+  @override
+  late final GeneratedColumn<double> latitude = GeneratedColumn<double>(
+    'latitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _longitudeMeta = const VerificationMeta(
+    'longitude',
+  );
+  @override
+  late final GeneratedColumn<double> longitude = GeneratedColumn<double>(
+    'longitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reportedByMeta = const VerificationMeta(
+    'reportedBy',
+  );
+  @override
+  late final GeneratedColumn<String> reportedBy = GeneratedColumn<String>(
+    'reported_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    type,
+    customTypeName,
+    latitude,
+    longitude,
+    description,
+    reportedBy,
+    createdAt,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'community_reports';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CommunityReport> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('custom_type_name')) {
+      context.handle(
+        _customTypeNameMeta,
+        customTypeName.isAcceptableOrUnknown(
+          data['custom_type_name']!,
+          _customTypeNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latitude')) {
+      context.handle(
+        _latitudeMeta,
+        latitude.isAcceptableOrUnknown(data['latitude']!, _latitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_latitudeMeta);
+    }
+    if (data.containsKey('longitude')) {
+      context.handle(
+        _longitudeMeta,
+        longitude.isAcceptableOrUnknown(data['longitude']!, _longitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_longitudeMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reported_by')) {
+      context.handle(
+        _reportedByMeta,
+        reportedBy.isAcceptableOrUnknown(data['reported_by']!, _reportedByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reportedByMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CommunityReport map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CommunityReport(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      customTypeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_type_name'],
+      ),
+      latitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}latitude'],
+      )!,
+      longitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}longitude'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      reportedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reported_by'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $CommunityReportsTable createAlias(String alias) {
+    return $CommunityReportsTable(attachedDatabase, alias);
+  }
+}
+
+class CommunityReport extends DataClass implements Insertable<CommunityReport> {
+  final String id;
+  final String type;
+  final String? customTypeName;
+  final double latitude;
+  final double longitude;
+  final String? description;
+  final String reportedBy;
+  final DateTime createdAt;
+  final String syncStatus;
+  const CommunityReport({
+    required this.id,
+    required this.type,
+    this.customTypeName,
+    required this.latitude,
+    required this.longitude,
+    this.description,
+    required this.reportedBy,
+    required this.createdAt,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || customTypeName != null) {
+      map['custom_type_name'] = Variable<String>(customTypeName);
+    }
+    map['latitude'] = Variable<double>(latitude);
+    map['longitude'] = Variable<double>(longitude);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['reported_by'] = Variable<String>(reportedBy);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['sync_status'] = Variable<String>(syncStatus);
+    return map;
+  }
+
+  CommunityReportsCompanion toCompanion(bool nullToAbsent) {
+    return CommunityReportsCompanion(
+      id: Value(id),
+      type: Value(type),
+      customTypeName: customTypeName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTypeName),
+      latitude: Value(latitude),
+      longitude: Value(longitude),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      reportedBy: Value(reportedBy),
+      createdAt: Value(createdAt),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory CommunityReport.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CommunityReport(
+      id: serializer.fromJson<String>(json['id']),
+      type: serializer.fromJson<String>(json['type']),
+      customTypeName: serializer.fromJson<String?>(json['customTypeName']),
+      latitude: serializer.fromJson<double>(json['latitude']),
+      longitude: serializer.fromJson<double>(json['longitude']),
+      description: serializer.fromJson<String?>(json['description']),
+      reportedBy: serializer.fromJson<String>(json['reportedBy']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'type': serializer.toJson<String>(type),
+      'customTypeName': serializer.toJson<String?>(customTypeName),
+      'latitude': serializer.toJson<double>(latitude),
+      'longitude': serializer.toJson<double>(longitude),
+      'description': serializer.toJson<String?>(description),
+      'reportedBy': serializer.toJson<String>(reportedBy),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+    };
+  }
+
+  CommunityReport copyWith({
+    String? id,
+    String? type,
+    Value<String?> customTypeName = const Value.absent(),
+    double? latitude,
+    double? longitude,
+    Value<String?> description = const Value.absent(),
+    String? reportedBy,
+    DateTime? createdAt,
+    String? syncStatus,
+  }) => CommunityReport(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    customTypeName: customTypeName.present
+        ? customTypeName.value
+        : this.customTypeName,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    description: description.present ? description.value : this.description,
+    reportedBy: reportedBy ?? this.reportedBy,
+    createdAt: createdAt ?? this.createdAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  CommunityReport copyWithCompanion(CommunityReportsCompanion data) {
+    return CommunityReport(
+      id: data.id.present ? data.id.value : this.id,
+      type: data.type.present ? data.type.value : this.type,
+      customTypeName: data.customTypeName.present
+          ? data.customTypeName.value
+          : this.customTypeName,
+      latitude: data.latitude.present ? data.latitude.value : this.latitude,
+      longitude: data.longitude.present ? data.longitude.value : this.longitude,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      reportedBy: data.reportedBy.present
+          ? data.reportedBy.value
+          : this.reportedBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CommunityReport(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('description: $description, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    type,
+    customTypeName,
+    latitude,
+    longitude,
+    description,
+    reportedBy,
+    createdAt,
+    syncStatus,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CommunityReport &&
+          other.id == this.id &&
+          other.type == this.type &&
+          other.customTypeName == this.customTypeName &&
+          other.latitude == this.latitude &&
+          other.longitude == this.longitude &&
+          other.description == this.description &&
+          other.reportedBy == this.reportedBy &&
+          other.createdAt == this.createdAt &&
+          other.syncStatus == this.syncStatus);
+}
+
+class CommunityReportsCompanion extends UpdateCompanion<CommunityReport> {
+  final Value<String> id;
+  final Value<String> type;
+  final Value<String?> customTypeName;
+  final Value<double> latitude;
+  final Value<double> longitude;
+  final Value<String?> description;
+  final Value<String> reportedBy;
+  final Value<DateTime> createdAt;
+  final Value<String> syncStatus;
+  final Value<int> rowid;
+  const CommunityReportsCompanion({
+    this.id = const Value.absent(),
+    this.type = const Value.absent(),
+    this.customTypeName = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.description = const Value.absent(),
+    this.reportedBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CommunityReportsCompanion.insert({
+    required String id,
+    required String type,
+    this.customTypeName = const Value.absent(),
+    required double latitude,
+    required double longitude,
+    this.description = const Value.absent(),
+    required String reportedBy,
+    required DateTime createdAt,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       type = Value(type),
+       latitude = Value(latitude),
+       longitude = Value(longitude),
+       reportedBy = Value(reportedBy),
+       createdAt = Value(createdAt);
+  static Insertable<CommunityReport> custom({
+    Expression<String>? id,
+    Expression<String>? type,
+    Expression<String>? customTypeName,
+    Expression<double>? latitude,
+    Expression<double>? longitude,
+    Expression<String>? description,
+    Expression<String>? reportedBy,
+    Expression<DateTime>? createdAt,
+    Expression<String>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (customTypeName != null) 'custom_type_name': customTypeName,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (description != null) 'description': description,
+      if (reportedBy != null) 'reported_by': reportedBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CommunityReportsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? type,
+    Value<String?>? customTypeName,
+    Value<double>? latitude,
+    Value<double>? longitude,
+    Value<String?>? description,
+    Value<String>? reportedBy,
+    Value<DateTime>? createdAt,
+    Value<String>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return CommunityReportsCompanion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      customTypeName: customTypeName ?? this.customTypeName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      description: description ?? this.description,
+      reportedBy: reportedBy ?? this.reportedBy,
+      createdAt: createdAt ?? this.createdAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (customTypeName.present) {
+      map['custom_type_name'] = Variable<String>(customTypeName.value);
+    }
+    if (latitude.present) {
+      map['latitude'] = Variable<double>(latitude.value);
+    }
+    if (longitude.present) {
+      map['longitude'] = Variable<double>(longitude.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (reportedBy.present) {
+      map['reported_by'] = Variable<String>(reportedBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CommunityReportsCompanion(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('description: $description, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3757,6 +4334,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AttachmentsTable attachments = $AttachmentsTable(this);
   late final $RescueStationsTable rescueStations = $RescueStationsTable(this);
   late final $CheckInLogsTable checkInLogs = $CheckInLogsTable(this);
+  late final $CommunityReportsTable communityReports = $CommunityReportsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3769,6 +4349,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     attachments,
     rescueStations,
     checkInLogs,
+    communityReports,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3785,6 +4366,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('check_in_logs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('community_reports', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -3858,6 +4446,29 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_checkInLogsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CommunityReportsTable, List<CommunityReport>>
+  _communityReportsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.communityReports,
+    aliasName: $_aliasNameGenerator(
+      db.users.id,
+      db.communityReports.reportedBy,
+    ),
+  );
+
+  $$CommunityReportsTableProcessedTableManager get communityReportsRefs {
+    final manager = $$CommunityReportsTableTableManager(
+      $_db,
+      $_db.communityReports,
+    ).filter((f) => f.reportedBy.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _communityReportsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3973,6 +4584,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$CheckInLogsTableFilterComposer(
             $db: $db,
             $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> communityReportsRefs(
+    Expression<bool> Function($$CommunityReportsTableFilterComposer f) f,
+  ) {
+    final $$CommunityReportsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.communityReports,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CommunityReportsTableFilterComposer(
+            $db: $db,
+            $table: $db.communityReports,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4153,6 +4789,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> communityReportsRefs<T extends Object>(
+    Expression<T> Function($$CommunityReportsTableAnnotationComposer a) f,
+  ) {
+    final $$CommunityReportsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.communityReports,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CommunityReportsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.communityReports,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -4168,7 +4829,11 @@ class $$UsersTableTableManager
           $$UsersTableUpdateCompanionBuilder,
           (User, $$UsersTableReferences),
           User,
-          PrefetchHooks Function({bool postsRefs, bool checkInLogsRefs})
+          PrefetchHooks Function({
+            bool postsRefs,
+            bool checkInLogsRefs,
+            bool communityReportsRefs,
+          })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
     : super(
@@ -4248,12 +4913,17 @@ class $$UsersTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({postsRefs = false, checkInLogsRefs = false}) {
+              ({
+                postsRefs = false,
+                checkInLogsRefs = false,
+                communityReportsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (postsRefs) db.posts,
                     if (checkInLogsRefs) db.checkInLogs,
+                    if (communityReportsRefs) db.communityReports,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4292,6 +4962,27 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (communityReportsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          CommunityReport
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._communityReportsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).communityReportsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.reportedBy == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4312,7 +5003,11 @@ typedef $$UsersTableProcessedTableManager =
       $$UsersTableUpdateCompanionBuilder,
       (User, $$UsersTableReferences),
       User,
-      PrefetchHooks Function({bool postsRefs, bool checkInLogsRefs})
+      PrefetchHooks Function({
+        bool postsRefs,
+        bool checkInLogsRefs,
+        bool communityReportsRefs,
+      })
     >;
 typedef $$DisasterEventsTableCreateCompanionBuilder =
     DisasterEventsCompanion Function({
@@ -6911,6 +7606,415 @@ typedef $$CheckInLogsTableProcessedTableManager =
       CheckInLog,
       PrefetchHooks Function({bool stationId, bool userId})
     >;
+typedef $$CommunityReportsTableCreateCompanionBuilder =
+    CommunityReportsCompanion Function({
+      required String id,
+      required String type,
+      Value<String?> customTypeName,
+      required double latitude,
+      required double longitude,
+      Value<String?> description,
+      required String reportedBy,
+      required DateTime createdAt,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$CommunityReportsTableUpdateCompanionBuilder =
+    CommunityReportsCompanion Function({
+      Value<String> id,
+      Value<String> type,
+      Value<String?> customTypeName,
+      Value<double> latitude,
+      Value<double> longitude,
+      Value<String?> description,
+      Value<String> reportedBy,
+      Value<DateTime> createdAt,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$CommunityReportsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CommunityReportsTable, CommunityReport> {
+  $$CommunityReportsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $UsersTable _reportedByTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.communityReports.reportedBy, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get reportedBy {
+    final $_column = $_itemColumn<String>('reported_by')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_reportedByTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CommunityReportsTableFilterComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get reportedBy {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get reportedBy {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get reportedBy {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CommunityReportsTable,
+          CommunityReport,
+          $$CommunityReportsTableFilterComposer,
+          $$CommunityReportsTableOrderingComposer,
+          $$CommunityReportsTableAnnotationComposer,
+          $$CommunityReportsTableCreateCompanionBuilder,
+          $$CommunityReportsTableUpdateCompanionBuilder,
+          (CommunityReport, $$CommunityReportsTableReferences),
+          CommunityReport,
+          PrefetchHooks Function({bool reportedBy})
+        > {
+  $$CommunityReportsTableTableManager(
+    _$AppDatabase db,
+    $CommunityReportsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CommunityReportsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CommunityReportsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CommunityReportsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String?> customTypeName = const Value.absent(),
+                Value<double> latitude = const Value.absent(),
+                Value<double> longitude = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> reportedBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CommunityReportsCompanion(
+                id: id,
+                type: type,
+                customTypeName: customTypeName,
+                latitude: latitude,
+                longitude: longitude,
+                description: description,
+                reportedBy: reportedBy,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String type,
+                Value<String?> customTypeName = const Value.absent(),
+                required double latitude,
+                required double longitude,
+                Value<String?> description = const Value.absent(),
+                required String reportedBy,
+                required DateTime createdAt,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CommunityReportsCompanion.insert(
+                id: id,
+                type: type,
+                customTypeName: customTypeName,
+                latitude: latitude,
+                longitude: longitude,
+                description: description,
+                reportedBy: reportedBy,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CommunityReportsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({reportedBy = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (reportedBy) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.reportedBy,
+                                referencedTable:
+                                    $$CommunityReportsTableReferences
+                                        ._reportedByTable(db),
+                                referencedColumn:
+                                    $$CommunityReportsTableReferences
+                                        ._reportedByTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CommunityReportsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CommunityReportsTable,
+      CommunityReport,
+      $$CommunityReportsTableFilterComposer,
+      $$CommunityReportsTableOrderingComposer,
+      $$CommunityReportsTableAnnotationComposer,
+      $$CommunityReportsTableCreateCompanionBuilder,
+      $$CommunityReportsTableUpdateCompanionBuilder,
+      (CommunityReport, $$CommunityReportsTableReferences),
+      CommunityReport,
+      PrefetchHooks Function({bool reportedBy})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6929,4 +8033,6 @@ class $AppDatabaseManager {
       $$RescueStationsTableTableManager(_db, _db.rescueStations);
   $$CheckInLogsTableTableManager get checkInLogs =>
       $$CheckInLogsTableTableManager(_db, _db.checkInLogs);
+  $$CommunityReportsTableTableManager get communityReports =>
+      $$CommunityReportsTableTableManager(_db, _db.communityReports);
 }

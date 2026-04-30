@@ -119,6 +119,23 @@ class CheckInLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// ============ BẢNG COMMUNITY REPORTS ============
+@DataClassName('CommunityReport')
+class CommunityReports extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // 'fallen_tree', 'flood', 'road_block', 'other'
+  TextColumn get customTypeName => text().nullable()(); // Name for 'other'
+  RealColumn get latitude => real()();
+  RealColumn get longitude => real()();
+  TextColumn get description => text().nullable()();
+  TextColumn get reportedBy => text().references(Users, #id, onDelete: KeyAction.cascade)();
+  DateTimeColumn get createdAt => dateTime()();
+  TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ============ APP DATABASE ============
 @DriftDatabase(
   tables: [
@@ -129,6 +146,7 @@ class CheckInLogs extends Table {
     Attachments,
     RescueStations,
     CheckInLogs,
+    CommunityReports,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -138,7 +156,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -217,6 +235,10 @@ FROM users;
       
       if (from < 5) {
         await m.createTable(checkInLogs);
+      }
+      
+      if (from < 6) {
+        await m.createTable(communityReports);
       }
     },
   );

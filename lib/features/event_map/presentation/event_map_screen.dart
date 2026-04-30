@@ -7,6 +7,7 @@ import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
+import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
 import 'package:drift/drift.dart' as drift;
@@ -437,6 +438,12 @@ class _EventMapScreenState extends State<EventMapScreen>
             ),
             const SizedBox(height: 12),
             _legendDialogItem(
+              color: Colors.orange.shade700,
+              icon: Icons.warning_rounded,
+              label: 'Cộng đồng báo cáo',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
               color: _MapColors.sosRed,
               customWidget: Container(
                 width: 20,
@@ -769,6 +776,9 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   /// true nếu đang dùng fallback đường chim bay (do API lỗi).
   bool _isFallback = false;
 
+  List<CommunityReport> _latestReports = const [];
+  String _reportsFingerprint = '';
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -779,7 +789,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     initial.whenData((stations) {
       _latestStations = stations;
       _stationsFingerprint = _fingerprintStations(stations);
-      _computeRouteFromProps(widget.userLocation, stations);
+      _computeRouteFromProps(widget.userLocation, stations, _latestReports);
     });
 
     _initCheckInState();
@@ -810,7 +820,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         20; // mét
 
     if (locationChanged) {
-      _computeRouteFromProps(widget.userLocation, _latestStations);
+      _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
     }
   }
 
@@ -824,6 +834,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   Future<void> _computeRouteFromProps(
     LatLng userLoc,
     List<RescueStation> stations,
+    List<CommunityReport> reports,
   ) async {
     // ── Bước 1: Chọn trạm đích (ưu tiên trạm user chọn, fallback gần nhất) ──
     final destination = _resolveTargetStation(userLoc, stations);
@@ -888,6 +899,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       final points = await OpenRouteService.instance.getRoute(
         userLoc,
         destinationPoint,
+        avoidPoints: reports.map((r) => LatLng(r.latitude, r.longitude)).toList(),
       );
 
       if (!mounted) return;
@@ -998,7 +1010,39 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       _selectedStationId = station.id;
     });
 
-    _computeRouteFromProps(widget.userLocation, _latestStations);
+    _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
+  }
+
+  String _fingerprintReports(List<CommunityReport> reports) {
+    final keys = reports.map((r) => '${r.id}:${r.latitude}:${r.longitude}').toList()..sort();
+    return keys.join('|');
+  }
+
+  void _showCommunityReportDialog(LatLng location, {CommunityReport? existingReport}) {
+    showDialog(
+      context: context,
+      builder: (_) => _CommunityReportDialog(
+        location: location,
+        parentRef: ref,
+        existingReport: existingReport,
+      ),
+    );
+  }
+
+  void _showCommunityReportDetailsDialog(CommunityReport report) {
+    showDialog(
+      context: context,
+      builder: (_) => _CommunityReportDetailsDialog(
+        report: report,
+        parentRef: ref,
+        onEdit: () {
+          _showCommunityReportDialog(
+            LatLng(report.latitude, report.longitude),
+            existingReport: report,
+          );
+        },
+      ),
+    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -1015,7 +1059,18 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
 
         _stationsFingerprint = nextFingerprint;
         _latestStations = stations;
-        _computeRouteFromProps(widget.userLocation, stations);
+        _computeRouteFromProps(widget.userLocation, stations, _latestReports);
+      });
+    });
+
+    ref.listen<AsyncValue<List<CommunityReport>>>(communityReportsProvider, (previous, next) {
+      next.whenData((reports) {
+        final nextFingerprint = _fingerprintReports(reports);
+        if (nextFingerprint == _reportsFingerprint) return;
+
+        _reportsFingerprint = nextFingerprint;
+        _latestReports = reports;
+        _computeRouteFromProps(widget.userLocation, _latestStations, reports);
       });
     });
 
@@ -1024,7 +1079,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         if (next != null) {
           _selectedStationId = next;
         }
-        _computeRouteFromProps(widget.userLocation, _latestStations);
+        _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
       }
     });
 
@@ -1035,6 +1090,15 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         return stations;
       },
       orElse: () => _latestStations,
+    );
+
+    final reportsAsync = ref.watch(communityReportsProvider);
+    final communityReports = reportsAsync.maybeWhen(
+      data: (reports) {
+        _latestReports = reports;
+        return reports;
+      },
+      orElse: () => _latestReports,
     );
 
     final hasRoute = _routePoints.length >= 2;
@@ -1052,6 +1116,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
             ),
+            onLongPress: (tapPosition, point) => _showCommunityReportDialog(point),
           ),
           children: [
             // ── 1. Tile layer — OpenStreetMap ──────────────────────────
@@ -1096,6 +1161,18 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                     ),
                   ),
 
+                // ── Community Reports ──────────────────────────────────────────
+                for (final report in communityReports)
+                  Marker(
+                    point: LatLng(report.latitude, report.longitude),
+                    width: 40,
+                    height: 40,
+                    child: GestureDetector(
+                      onTap: () => _showCommunityReportDetailsDialog(report),
+                      child: _CommunityReportMarker(report: report),
+                    ),
+                  ),
+
                 // ── User location (on top) ─────────────────────────────
                 Marker(
                   point: widget.userLocation,
@@ -1125,7 +1202,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             right: 12,
             child: _RouteFallbackChip(
               onRetry: () =>
-                  _computeRouteFromProps(widget.userLocation, _latestStations),
+                  _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports),
             ),
           ),
       ],
@@ -1991,6 +2068,411 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
             ),
         ],
       ),
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT MARKER
+// =============================================================================
+class _CommunityReportMarker extends StatelessWidget {
+  final CommunityReport report;
+
+  const _CommunityReportMarker({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon;
+    switch (report.type) {
+      case 'fallen_tree':
+        icon = Icons.park_rounded;
+        break;
+      case 'flood':
+        icon = Icons.water_drop_rounded;
+        break;
+      case 'road_block':
+        icon = Icons.remove_road_rounded;
+        break;
+      default:
+        icon = Icons.warning_rounded;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.orange.shade700,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.shade700.withOpacity(0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 18,
+          ),
+        ),
+        CustomPaint(
+          size: const Size(8, 5),
+          painter: _PinTailPainter(color: Colors.orange.shade700),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT DIALOG
+// =============================================================================
+class _CommunityReportDialog extends StatefulWidget {
+  final LatLng location;
+  final WidgetRef parentRef;
+  final CommunityReport? existingReport;
+
+  const _CommunityReportDialog({
+    required this.location,
+    required this.parentRef,
+    this.existingReport,
+  });
+
+  @override
+  State<_CommunityReportDialog> createState() => _CommunityReportDialogState();
+}
+
+class _CommunityReportDialogState extends State<_CommunityReportDialog> {
+  String _selectedType = 'fallen_tree';
+  final _customTypeController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingReport != null) {
+      final report = widget.existingReport!;
+      final types = ['fallen_tree', 'flood', 'road_block', 'other'];
+      if (types.contains(report.type)) {
+        _selectedType = report.type;
+      } else {
+        _selectedType = 'other';
+      }
+      _customTypeController.text = report.customTypeName ?? '';
+      _descriptionController.text = report.description ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _customTypeController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitReport() async {
+    if (_selectedType == 'other' && _customTypeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập tên loại sự cố khác.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final controller = widget.parentRef.read(communityReportControllerProvider);
+      
+      if (widget.existingReport != null) {
+        await controller.updateReport(
+          reportId: widget.existingReport!.id,
+          type: _selectedType,
+          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          description: _descriptionController.text.trim(),
+        );
+      } else {
+        await controller.addReport(
+          latitude: widget.location.latitude,
+          longitude: widget.location.longitude,
+          type: _selectedType,
+          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          description: _descriptionController.text.trim(),
+        );
+      }
+      
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.existingReport != null ? 'Cập nhật thành công!' : 'Cảm ơn bạn! Báo cáo sự cố đã được ghi nhận.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: const [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          SizedBox(width: 8),
+          Text(
+            'Báo cáo sự cố',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Loại sự cố:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedType,
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'fallen_tree', child: Text('Cây đổ')),
+                DropdownMenuItem(value: 'flood', child: Text('Ngập sâu')),
+                DropdownMenuItem(value: 'road_block', child: Text('Tắc đường / Sạt lở')),
+                DropdownMenuItem(value: 'other', child: Text('Khác...')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedType = val);
+              },
+            ),
+            if (_selectedType == 'other') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customTypeController,
+                decoration: InputDecoration(
+                  labelText: 'Tên sự cố',
+                  hintText: 'Vd: Sập cầu, Cháy nhà...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text(
+              'Mô tả thêm (Tùy chọn):',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _descriptionController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Nhập thông tin chi tiết...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _submitReport,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : Text(widget.existingReport != null ? 'Cập nhật' : 'Báo cáo', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT DETAILS DIALOG
+// =============================================================================
+class _CommunityReportDetailsDialog extends StatefulWidget {
+  final CommunityReport report;
+  final WidgetRef parentRef;
+  final VoidCallback onEdit;
+
+  const _CommunityReportDetailsDialog({
+    required this.report,
+    required this.parentRef,
+    required this.onEdit,
+  });
+
+  @override
+  State<_CommunityReportDetailsDialog> createState() => _CommunityReportDetailsDialogState();
+}
+
+class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDialog> {
+  bool _isDeleting = false;
+
+  Future<void> _deleteReport() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: const Text('Bạn có chắc chắn muốn xóa báo cáo này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      final controller = widget.parentRef.read(communityReportControllerProvider);
+      await controller.deleteReport(widget.report.id);
+      
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã xóa báo cáo.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi xóa: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isOwner = currentUser != null && widget.report.reportedBy == currentUser.uid;
+
+    IconData icon;
+    String typeLabel;
+    switch (widget.report.type) {
+      case 'fallen_tree':
+        icon = Icons.park_rounded;
+        typeLabel = 'Cây đổ';
+        break;
+      case 'flood':
+        icon = Icons.water_drop_rounded;
+        typeLabel = 'Ngập sâu';
+        break;
+      case 'road_block':
+        icon = Icons.remove_road_rounded;
+        typeLabel = 'Tắc đường / Sạt lở';
+        break;
+      default:
+        icon = Icons.warning_rounded;
+        typeLabel = widget.report.customTypeName ?? 'Khác';
+    }
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.orange.shade700, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              typeLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.report.description?.isNotEmpty == true) ...[
+              const Text(
+                'Mô tả:',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.report.description!,
+                style: const TextStyle(fontSize: 15),
+              ),
+              const SizedBox(height: 16),
+            ],
+            const Text(
+              'Người báo cáo:',
+              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            Text(isOwner ? 'Bạn' : 'Cộng đồng'),
+          ],
+        ),
+      ),
+      actions: [
+        if (isOwner) ...[
+          TextButton(
+            onPressed: _isDeleting ? null : _deleteReport,
+            child: _isDeleting
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: _isDeleting ? null : () {
+              Navigator.of(context).pop();
+              widget.onEdit();
+            },
+            child: const Text('Sửa', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+        TextButton(
+          onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
+          child: Text(isOwner ? 'Đóng' : 'OK', style: const TextStyle(color: Colors.grey)),
+        ),
+      ],
     );
   }
 }
