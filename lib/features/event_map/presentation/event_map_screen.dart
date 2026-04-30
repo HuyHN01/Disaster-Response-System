@@ -1036,7 +1036,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         report: report,
         parentRef: ref,
         onEdit: () {
-          Navigator.of(context).pop();
           _showCommunityReportDialog(
             LatLng(report.latitude, report.longitude),
             existingReport: report,
@@ -2462,7 +2461,10 @@ class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDi
                 : const Text('Xóa', style: TextStyle(color: Colors.red)),
           ),
           TextButton(
-            onPressed: _isDeleting ? null : widget.onEdit,
+            onPressed: _isDeleting ? null : () {
+              Navigator.of(context).pop();
+              widget.onEdit();
+            },
             child: const Text('Sửa', style: TextStyle(color: Colors.blue)),
           ),
         ],
