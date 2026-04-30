@@ -831,6 +831,35 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       destination.latitude,
       destination.longitude,
     );
+
+    // Tối ưu hóa: Nếu trạm đích và vị trí bắt đầu/kết thúc không thay đổi đáng kể,
+    // ta chỉ cập nhật đối tượng station cho UI mà không cần fetch lại route.
+    final bool isSameStation = destination.id == _routeStationId;
+    final bool hasExistingRoute = _routePoints.isNotEmpty;
+    final bool startValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          userLoc.latitude,
+          userLoc.longitude,
+          _routePoints.first.latitude,
+          _routePoints.first.longitude,
+        ) <
+        20;
+    final bool endValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          destinationPoint.latitude,
+          destinationPoint.longitude,
+          _routePoints.last.latitude,
+          _routePoints.last.longitude,
+        ) <
+        5;
+
+    if (isSameStation && startValid && endValid) {
+      widget.onRouteTargetChanged(destinationPoint, destination);
+      return;
+    }
+
     _routeStationId = destination.id;
     widget.onRouteTargetChanged(destinationPoint, destination);
 
@@ -938,7 +967,10 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   String _fingerprintStations(List<RescueStation> stations) {
     final keys =
         stations
-            .map((s) => '${s.id}:${s.latitude}:${s.longitude}:${s.status}')
+            .map(
+              (s) =>
+                  '${s.id}:${s.latitude}:${s.longitude}:${s.status}:${s.occupancy}',
+            )
             .toList()
           ..sort();
     return keys.join('|');
@@ -1801,10 +1833,20 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final currentCheckedInId = ref.watch(currentCheckedInStationProvider);
-    final isCheckedInHere = currentCheckedInId == widget.station.id;
+    // Luôn lấy dữ liệu mới nhất từ provider để đảm bảo tính thời gian thực (occupancy, status...)
+    final stationsAsync = ref.watch(rescueStationsProvider);
+    final station = stationsAsync.maybeWhen(
+      data: (list) => list.firstWhere(
+        (s) => s.id == widget.station.id,
+        orElse: () => widget.station,
+      ),
+      orElse: () => widget.station,
+    );
 
-    final isFull = widget.station.status == 'full';
+    final currentCheckedInId = ref.watch(currentCheckedInStationProvider);
+    final isCheckedInHere = currentCheckedInId == station.id;
+
+    final isFull = station.status == 'full';
     final canCheckIn = !isFull || isCheckedInHere;
 
     return Container(
@@ -1833,7 +1875,7 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.station.name,
+                      station.name,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1842,7 +1884,7 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Sức chứa: ${widget.station.occupancy}/${widget.station.capacity?.toString() ?? "∞"}',
+                      'Sức chứa: ${station.occupancy}/${station.capacity?.toString() ?? "∞"}',
                       style: const TextStyle(
                         fontSize: 13,
                         color: _MapColors.textSecondary,

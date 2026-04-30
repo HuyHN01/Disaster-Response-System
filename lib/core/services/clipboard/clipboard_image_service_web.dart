@@ -22,11 +22,10 @@ import 'package:web/web.dart' as web;
 /// Caller nhận null → bỏ qua, để Quill tự paste text như thường.
 Future<Uint8List?> readImageBytesFromClipboard() async {
   try {
-    final items =
-        await web.window.navigator.clipboard.read().toDart;
+    final items = await web.window.navigator.clipboard.read().toDart;
 
     for (var i = 0; i < items.length; i++) {
-      final item = items[i] as web.ClipboardItem;
+      final item = items[i];
 
       // Thử theo thứ tự phổ biến:
       //   PNG  — Snipping Tool, screenshot macOS, copy từ browser
