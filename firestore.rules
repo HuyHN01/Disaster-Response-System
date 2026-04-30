@@ -123,5 +123,9 @@ service cloud.firestore {
     match /rescue_stations/{docId} {
       allow read, write: if true;
     }
+
+    match /check_in_logs/{docId} {
+      allow read, write: if true;
+    }
   }
 }

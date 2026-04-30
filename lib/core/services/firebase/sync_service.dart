@@ -543,15 +543,6 @@ class FirebaseSyncService {
     );
   }
 
-  Future<void> _syncSingleCheckInLog(CheckInLog log) async {
-    final ref = _firestore.collection('check_in_logs').doc(log.id);
-    await ref.set(_checkInLogToFirestore(log), SetOptions(merge: true));
-
-    await (_db.update(_db.checkInLogs)..where((l) => l.id.equals(log.id))).write(
-      const CheckInLogsCompanion(syncStatus: Value('synced')),
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // PRIVATE — Serialisation helpers
   // ---------------------------------------------------------------------------
