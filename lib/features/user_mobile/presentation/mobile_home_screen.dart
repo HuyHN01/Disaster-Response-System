@@ -106,7 +106,9 @@ class MobileHomeScreen extends ConsumerWidget {
                     label: 'Báo cáo\nSOS',
                     iconColor: _MobileColors.menuSOS,
                     bgColor: _MobileColors.menuSOSBg,
-                    onTap: () {},
+                    onTap: () {
+                      context.pushNamed(RouteNames.nameSOS);
+                    },
                     isUrgent: true,
                   ),
                   _MenuButton(
