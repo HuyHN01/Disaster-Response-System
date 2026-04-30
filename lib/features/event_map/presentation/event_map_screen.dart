@@ -1067,6 +1067,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                       onTap: () => _onStationTapped(station),
                       child: _RescueMarker(
                         selected: station.id == _routeStationId,
+                        isFull: station.status == 'full',
                       ),
                     ),
                   ),
@@ -1287,11 +1288,14 @@ class _SosMarker extends StatelessWidget {
 // ── Rescue Station: Green cross ───────────────────────────────────────────────
 class _RescueMarker extends StatelessWidget {
   final bool selected;
+  final bool isFull;
 
-  const _RescueMarker({this.selected = false});
+  const _RescueMarker({this.selected = false, this.isFull = false});
 
   @override
   Widget build(BuildContext context) {
+    final color = isFull ? Colors.orange.shade700 : _MapColors.rescueGreen;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1299,11 +1303,11 @@ class _RescueMarker extends StatelessWidget {
           width: selected ? 42 : 38,
           height: selected ? 42 : 38,
           decoration: BoxDecoration(
-            color: _MapColors.rescueGreen,
+            color: color,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(
+                color: color.withOpacity(
                   selected ? 0.55 : 0.4,
                 ),
                 blurRadius: selected ? 14 : 10,
@@ -1319,7 +1323,7 @@ class _RescueMarker extends StatelessWidget {
         ),
         CustomPaint(
           size: const Size(10, 6),
-          painter: _PinTailPainter(color: _MapColors.rescueGreen),
+          painter: _PinTailPainter(color: color),
         ),
       ],
     );
@@ -1929,39 +1933,38 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
             ],
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (!canCheckIn && !isCheckedInHere || _isLoading)
-                  ? null
-                  : _handleCheckInOut,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isCheckedInHere
-                    ? Colors.grey.shade400
-                    : _MapColors.rescueGreen,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          if (!isFull || isCheckedInHere)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleCheckInOut,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isCheckedInHere
+                      ? Colors.grey.shade400
+                      : _MapColors.rescueGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        isCheckedInHere ? 'Rời khỏi trạm' : 'Đến trạm này',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      isCheckedInHere ? 'Rời khỏi trạm' : 'Đến trạm này',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
             ),
-          ),
         ],
       ),
     );

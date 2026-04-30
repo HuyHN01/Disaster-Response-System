@@ -33,7 +33,11 @@ class RescueStationRepository {
 
   Stream<List<RescueStation>> watchActiveStations() {
     return (_db.select(_db.rescueStations)
-          ..where((t) => t.deletedAt.isNull() & t.status.equals('active'))
+          ..where(
+            (t) =>
+                t.deletedAt.isNull() &
+                (t.status.equals('active') | t.status.equals('full')),
+          )
           ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
         .watch();
   }
