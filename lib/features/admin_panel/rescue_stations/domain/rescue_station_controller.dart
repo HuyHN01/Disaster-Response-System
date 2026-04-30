@@ -145,7 +145,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
 
     await _repo.updateOccupancy(stationId, 1);
     final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
-    await _repo.insertCheckInLog(
+    final log = await _repo.insertCheckInLog(
       stationId: stationId,
       userId: userId,
       type: 'in',
@@ -156,6 +156,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
       final local = await _repo.getById(stationId);
       if (local != null) {
         await _pushStationToFirestore(local);
+        await _pushLogToFirestore(log);
         await _repo.markSynced(stationId, DateTime.now());
         await loadStations();
       }
@@ -170,7 +171,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     
     await _repo.updateOccupancy(stationId, -1);
     final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
-    await _repo.insertCheckInLog(
+    final log = await _repo.insertCheckInLog(
       stationId: stationId,
       userId: userId,
       type: 'out',
@@ -181,6 +182,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
       final local = await _repo.getById(stationId);
       if (local != null) {
         await _pushStationToFirestore(local);
+        await _pushLogToFirestore(log);
         await _repo.markSynced(stationId, DateTime.now());
         await loadStations();
       }
@@ -207,6 +209,16 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
           ? null
           : Timestamp.fromDate(station.deletedAt!),
       'syncStatus': 'synced',
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _pushLogToFirestore(CheckInLog log) {
+    return _firestore.collection('check_in_logs').doc(log.id).set({
+      'id': log.id,
+      'stationId': log.stationId,
+      'userId': log.userId,
+      'type': log.type,
+      'timestamp': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 }

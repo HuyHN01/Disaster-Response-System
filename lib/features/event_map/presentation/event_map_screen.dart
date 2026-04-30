@@ -8,7 +8,9 @@ import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
 import 'package:drift/drift.dart' as drift;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -779,6 +781,18 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       _stationsFingerprint = _fingerprintStations(stations);
       _computeRouteFromProps(widget.userLocation, stations);
     });
+
+    _initCheckInState();
+  }
+
+  Future<void> _initCheckInState() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    final repo = ref.read(rescueStationRepositoryProvider);
+    final latestLog = await repo.getLatestCheckInLog(userId);
+    if (latestLog != null && latestLog.type == 'in') {
+      ref.read(currentCheckedInStationProvider.notifier).state =
+          latestLog.stationId;
+    }
   }
 
   @override

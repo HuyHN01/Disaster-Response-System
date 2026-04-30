@@ -96,22 +96,30 @@ class RescueStationRepository {
     );
   }
 
-  Future<void> insertCheckInLog({
+  Future<CheckInLog> insertCheckInLog({
     required String stationId,
     required String userId,
     required String type,
   }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
-    await _db.into(_db.checkInLogs).insert(
-      CheckInLogsCompanion.insert(
-        id: id,
-        stationId: stationId,
-        userId: userId,
-        type: type,
-        timestamp: DateTime.now(),
-        syncStatus: const Value('pending'),
-      ),
+    final log = CheckInLog(
+      id: id,
+      stationId: stationId,
+      userId: userId,
+      type: type,
+      timestamp: DateTime.now(),
+      syncStatus: 'pending',
     );
+    await _db.into(_db.checkInLogs).insert(log);
+    return log;
+  }
+
+  Future<CheckInLog?> getLatestCheckInLog(String userId) {
+    return (_db.select(_db.checkInLogs)
+          ..where((t) => t.userId.equals(userId))
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
+          ..limit(1))
+        .getSingleOrNull();
   }
 }
 
