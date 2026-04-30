@@ -786,9 +786,8 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   }
 
   Future<void> _initCheckInState() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
     final repo = ref.read(rescueStationRepositoryProvider);
-    final latestLog = await repo.getLatestCheckInLog(userId);
+    final latestLog = await repo.getLatestCheckInLog();
     if (latestLog != null && latestLog.type == 'in') {
       ref.read(currentCheckedInStationProvider.notifier).state =
           latestLog.stationId;

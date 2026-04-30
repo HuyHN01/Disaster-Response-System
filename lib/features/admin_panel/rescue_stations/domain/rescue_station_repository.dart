@@ -114,12 +114,17 @@ class RescueStationRepository {
     return log;
   }
 
-  Future<CheckInLog?> getLatestCheckInLog(String userId) {
+  Future<CheckInLog?> getLatestCheckInLog() {
     return (_db.select(_db.checkInLogs)
-          ..where((t) => t.userId.equals(userId))
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
           ..limit(1))
         .getSingleOrNull();
+  }
+
+  Future<void> markLogSynced(String logId) async {
+    await (_db.update(_db.checkInLogs)..where((l) => l.id.equals(logId))).write(
+      const CheckInLogsCompanion(syncStatus: Value('synced')),
+    );
   }
 }
 

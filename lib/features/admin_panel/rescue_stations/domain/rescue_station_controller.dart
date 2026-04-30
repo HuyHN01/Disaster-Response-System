@@ -158,6 +158,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
         await _pushStationToFirestore(local);
         await _pushLogToFirestore(log);
         await _repo.markSynced(stationId, DateTime.now());
+        await _repo.markLogSynced(log.id);
         await loadStations();
       }
     } catch (e) {
@@ -184,6 +185,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
         await _pushStationToFirestore(local);
         await _pushLogToFirestore(log);
         await _repo.markSynced(stationId, DateTime.now());
+        await _repo.markLogSynced(log.id);
         await loadStations();
       }
     } catch (e) {
