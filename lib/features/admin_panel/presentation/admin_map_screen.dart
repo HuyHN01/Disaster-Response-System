@@ -51,7 +51,6 @@ class AdminMapScreen extends ConsumerStatefulWidget {
 
 class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     with SingleTickerProviderStateMixin {
-
   final MapController _mapCtrl = MapController();
 
   late final AnimationController _pulseCtrl;
@@ -59,7 +58,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
 
   String? _activeMarkerId;
   bool _hasFlownToFirstMarker = false;
-  
+
   // Trạng thái đóng thông báo trống
   bool _isEmptyBannerClosed = false;
 
@@ -73,10 +72,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _pulseAnim = CurvedAnimation(
-      parent: _pulseCtrl,
-      curve: Curves.easeInOut,
-    );
+    _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
   }
 
   @override
@@ -92,12 +88,14 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
   Future<void> _locateAdmin() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw 'Vui lòng bật Dịch vụ vị trí (GPS) trên thiết bị.';
+      if (!serviceEnabled)
+        throw 'Vui lòng bật Dịch vụ vị trí (GPS) trên thiết bị.';
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw 'Quyền truy cập vị trí bị từ chối.';
+        if (permission == LocationPermission.denied)
+          throw 'Quyền truy cập vị trí bị từ chối.';
       }
       if (permission == LocationPermission.deniedForever) {
         throw 'Quyền vị trí bị từ chối vĩnh viễn. Vui lòng kiểm tra cài đặt trình duyệt/thiết bị.';
@@ -112,14 +110,17 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       );
 
       final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
       if (mounted) {
         setState(() {
           _adminLocation = LatLng(pos.latitude, pos.longitude);
         });
       }
-      
+
       _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
 
       _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
@@ -149,7 +150,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       final markers = next.value;
       if (markers != null && markers.isNotEmpty) {
         // Có dữ liệu mới -> Reset lại cờ đóng banner để lần sau trống thì hiện lại
-        _isEmptyBannerClosed = false; 
+        _isEmptyBannerClosed = false;
 
         if (!_hasFlownToFirstMarker) {
           _hasFlownToFirstMarker = true;
@@ -188,7 +189,9 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
               MarkerLayer(
                 markers: [
                   ...markerList.map((m) => _buildMarker(m)),
-                  ...stationList.map((s) => _buildStationMarker(s)), // Dùng spread operator (...)
+                  ...stationList.map(
+                    (s) => _buildStationMarker(s),
+                  ), // Dùng spread operator (...)
                   // Vẽ thêm Marker Admin nếu đã lấy được vị trí
                   if (_adminLocation != null)
                     Marker(
@@ -213,27 +216,33 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         // Loading
         if (markersAsync.isLoading)
           const Positioned(
-            top: 16, left: 0, right: 0,
+            top: 16,
+            left: 0,
+            right: 0,
             child: Center(child: _LoadingChip()),
           ),
 
         // Error
         if (markersAsync.hasError)
           Positioned(
-            top: 16, left: 16, right: 72,
+            top: 16,
+            left: 16,
+            right: 72,
             child: _ErrorChip(message: markersAsync.error.toString()),
           ),
 
         // SOS Count (Góc trái)
         if (markerList.isNotEmpty)
           Positioned(
-            top: 16, left: 16,
+            top: 16,
+            left: 16,
             child: _SosCountBadge(count: markerList.length),
           ),
 
         // Zoom Controls & Locate Me (Góc phải)
         Positioned(
-          top: 16, right: 16,
+          top: 16,
+          right: 16,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -245,9 +254,14 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         ),
 
         // Empty State Banner (Thu gọn, có nút X)
-        if (!markersAsync.isLoading && !markersAsync.hasError && markerList.isEmpty && !_isEmptyBannerClosed)
+        if (!markersAsync.isLoading &&
+            !markersAsync.hasError &&
+            markerList.isEmpty &&
+            !_isEmptyBannerClosed)
           Positioned(
-            top: 16, left: 0, right: 0,
+            top: 16,
+            left: 0,
+            right: 0,
             child: _EmptyStateBanner(
               onClose: () => setState(() => _isEmptyBannerClosed = true),
             ),
@@ -256,7 +270,6 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     );
   }
 
-  
   Marker _buildStationMarker(RescueStation s) {
     return Marker(
       point: LatLng(s.latitude, s.longitude),
@@ -271,16 +284,16 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
             builder: (_) => _StationDetailSheet(station: s),
           );
         },
-        child: _RescueMarker(
-          isActive: s.status == 'active',
-        ),
+        child: _RescueMarker(isActive: s.status == 'active'),
       ),
     );
   }
-Marker _buildMarker(SosMapMarker m) {
+
+  Marker _buildMarker(SosMapMarker m) {
     return Marker(
       point: LatLng(m.latitude, m.longitude),
-      width: 56, height: 64,
+      width: 56,
+      height: 64,
       child: GestureDetector(
         onTap: () => _onMarkerTap(m),
         child: AnimatedBuilder(
@@ -322,13 +335,18 @@ Marker _buildMarker(SosMapMarker m) {
             children: [
               Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
               SizedBox(width: 10),
-              Text('Đã xử lý tín hiệu SOS', style: TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                'Đã xử lý tín hiệu SOS',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ],
           ),
           backgroundColor: _C.resolvedGreen,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } catch (e) {
@@ -390,13 +408,16 @@ class _RescueMarker extends StatelessWidget {
 }
 
 // =============================================================================
-// PULSING SOS MARKER 
+// PULSING SOS MARKER
 // =============================================================================
 class _PulsingSosMarker extends StatelessWidget {
-  final double pulseValue; 
+  final double pulseValue;
   final bool isHighlighted;
 
-  const _PulsingSosMarker({required this.pulseValue, required this.isHighlighted});
+  const _PulsingSosMarker({
+    required this.pulseValue,
+    required this.isHighlighted,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -407,14 +428,16 @@ class _PulsingSosMarker extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: 52, height: 52,
+          width: 52,
+          height: 52,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Transform.scale(
                 scale: ringScale,
                 child: Container(
-                  width: 52, height: 52,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _C.sosRing.withOpacity(ringOpacity),
@@ -428,7 +451,9 @@ class _PulsingSosMarker extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _C.sosCore,
                   shape: BoxShape.circle,
-                  border: isHighlighted ? Border.all(color: Colors.white, width: 2.5) : null,
+                  border: isHighlighted
+                      ? Border.all(color: Colors.white, width: 2.5)
+                      : null,
                   boxShadow: [
                     BoxShadow(
                       color: _C.sosShadow,
@@ -442,8 +467,11 @@ class _PulsingSosMarker extends StatelessWidget {
                   child: Text(
                     'SOS',
                     style: TextStyle(
-                      color: Colors.white, fontSize: 9,
-                      fontWeight: FontWeight.w900, letterSpacing: 0.5, height: 1,
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                      height: 1,
                     ),
                   ),
                 ),
@@ -475,6 +503,7 @@ class _PinTailPainter extends CustomPainter {
       Paint()..color = color,
     );
   }
+
   @override
   bool shouldRepaint(_PinTailPainter o) => o.color != color;
 }
@@ -498,7 +527,9 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final m = widget.marker;
-    final timeStr = DateFormat('HH:mm – dd/MM/yyyy').format(m.createdAt.toLocal());
+    final timeStr = DateFormat(
+      'HH:mm – dd/MM/yyyy',
+    ).format(m.createdAt.toLocal());
     final ago = _timeAgo(m.createdAt);
 
     return Container(
@@ -506,7 +537,9 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
       decoration: BoxDecoration(
         color: _C.sheetBg,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 24, offset: Offset(0, -4))],
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 24, offset: Offset(0, -4)),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -514,8 +547,12 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
           Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 4),
             child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(color: _C.divider, borderRadius: BorderRadius.circular(2)),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _C.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           Padding(
@@ -527,17 +564,44 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: _C.sosCore, borderRadius: BorderRadius.circular(8)),
-                      child: const Text('⚠ SOS', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _C.sosCore,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        '⚠ SOS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Tín hiệu Khẩn cấp', style: TextStyle(color: _C.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                          Text(ago, style: const TextStyle(color: _C.textMuted, fontSize: 12)),
+                          const Text(
+                            'Tín hiệu Khẩn cấp',
+                            style: TextStyle(
+                              color: _C.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            ago,
+                            style: const TextStyle(
+                              color: _C.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -550,18 +614,41 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.campaign_rounded, color: _C.sosCore, size: 18),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.campaign_rounded,
+                        color: _C.sosCore,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('NỘI DUNG KÊU CỨU', style: TextStyle(color: _C.textMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                          const Text(
+                            'NỘI DUNG KÊU CỨU',
+                            style: TextStyle(
+                              color: _C.textMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          Text(m.content, style: const TextStyle(color: _C.textPrimary, fontSize: 14, height: 1.5)),
+                          Text(
+                            m.content,
+                            style: const TextStyle(
+                              color: _C.textPrimary,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -570,9 +657,22 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: _InfoTile(icon: Icons.schedule_rounded, label: 'THỜI GIAN', value: timeStr)),
+                    Expanded(
+                      child: _InfoTile(
+                        icon: Icons.schedule_rounded,
+                        label: 'THỜI GIAN',
+                        value: timeStr,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _InfoTile(icon: Icons.location_on_rounded, label: 'TỌA ĐỘ', value: '${m.latitude.toStringAsFixed(4)}, ${m.longitude.toStringAsFixed(4)}')),
+                    Expanded(
+                      child: _InfoTile(
+                        icon: Icons.location_on_rounded,
+                        label: 'TỌA ĐỘ',
+                        value:
+                            '${m.latitude.toStringAsFixed(4)}, ${m.longitude.toStringAsFixed(4)}',
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -580,35 +680,63 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _verifying ? null : () => Navigator.of(context).pop(),
+                        onPressed: _verifying
+                            ? null
+                            : () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           side: const BorderSide(color: _C.divider),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                        child: const Text('Đóng', style: TextStyle(color: _C.textSecondary, fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          'Đóng',
+                          style: TextStyle(
+                            color: _C.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       flex: 2,
                       child: ElevatedButton.icon(
-                        onPressed: _verifying ? null : () {
-                          setState(() => _verifying = true);
-                          widget.onVerify();
-                        },
+                        onPressed: _verifying
+                            ? null
+                            : () {
+                                setState(() => _verifying = true);
+                                widget.onVerify();
+                              },
                         icon: _verifying
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.check_circle_rounded, size: 18, color: Colors.white),
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.check_circle_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
                         label: Text(
                           _verifying ? 'Đang xử lý...' : 'Đánh dấu đã xử lý',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _C.resolvedGreen,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -637,7 +765,11 @@ class _InfoTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoTile({required this.icon, required this.label, required this.value});
+  const _InfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -657,9 +789,24 @@ class _InfoTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: _C.textMuted, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: _C.textMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(value, style: const TextStyle(color: _C.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: _C.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -682,14 +829,30 @@ class _ZoomControls extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.fabBg,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3)),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ZBtn(icon: Icons.add, isTop: true, onTap: () => mapController.move(mapController.camera.center, mapController.camera.zoom + 1)),
+          _ZBtn(
+            icon: Icons.add,
+            isTop: true,
+            onTap: () => mapController.move(
+              mapController.camera.center,
+              mapController.camera.zoom + 1,
+            ),
+          ),
           const Divider(height: 1, color: _C.divider),
-          _ZBtn(icon: Icons.remove, isTop: false, onTap: () => mapController.move(mapController.camera.center, mapController.camera.zoom - 1)),
+          _ZBtn(
+            icon: Icons.remove,
+            isTop: false,
+            onTap: () => mapController.move(
+              mapController.camera.center,
+              mapController.camera.zoom - 1,
+            ),
+          ),
         ],
       ),
     );
@@ -706,8 +869,15 @@ class _ZBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.vertical(top: isTop ? const Radius.circular(12) : Radius.zero, bottom: !isTop ? const Radius.circular(12) : Radius.zero),
-      child: SizedBox(width: 42, height: 42, child: Icon(icon, size: 20, color: const Color(0xFF374151))),
+      borderRadius: BorderRadius.vertical(
+        top: isTop ? const Radius.circular(12) : Radius.zero,
+        bottom: !isTop ? const Radius.circular(12) : Radius.zero,
+      ),
+      child: SizedBox(
+        width: 42,
+        height: 42,
+        child: Icon(icon, size: 20, color: const Color(0xFF374151)),
+      ),
     );
   }
 }
@@ -722,14 +892,17 @@ class _LocateMeButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.fabBg,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3)),
+        ],
       ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: const SizedBox(
-          width: 42, height: 42, 
-          child: Icon(Icons.my_location_rounded, size: 20, color: _C.userDot)
+          width: 42,
+          height: 42,
+          child: Icon(Icons.my_location_rounded, size: 20, color: _C.userDot),
         ),
       ),
     );
@@ -750,14 +923,23 @@ class _SosCountBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: _C.sosCore,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 10, offset: Offset(0, 3))],
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 10, offset: Offset(0, 3)),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.sos_rounded, color: Colors.white, size: 15),
           const SizedBox(width: 6),
-          Text('$count tín hiệu SOS', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            '$count tín hiệu SOS',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -770,13 +952,28 @@ class _LoadingChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 10)]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 10)],
+      ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2, color: _C.sosCore)),
+          SizedBox(
+            width: 13,
+            height: 13,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _C.sosCore),
+          ),
           SizedBox(width: 8),
-          Text('Đang tải SOS...', style: TextStyle(color: _C.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(
+            'Đang tải SOS...',
+            style: TextStyle(
+              color: _C.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -790,12 +987,31 @@ class _ErrorChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: _C.sosCore, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 10)]),
+      decoration: BoxDecoration(
+        color: _C.sosCore,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 10)],
+      ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 15),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.white,
+            size: 15,
+          ),
           const SizedBox(width: 7),
-          Expanded(child: Text('Lỗi: $message', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(
+              'Lỗi: $message',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -816,14 +1032,23 @@ class _EmptyStateBanner extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [BoxShadow(color: _C.shadow, blurRadius: 16, offset: Offset(0, 4))],
+          boxShadow: const [
+            BoxShadow(color: _C.shadow, blurRadius: 16, offset: Offset(0, 4)),
+          ],
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: _C.resolvedGreen.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.check_circle_rounded, color: _C.resolvedGreen, size: 20),
+              decoration: BoxDecoration(
+                color: _C.resolvedGreen.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: _C.resolvedGreen,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -831,14 +1056,28 @@ class _EmptyStateBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Text('Bản đồ an toàn', style: TextStyle(color: _C.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Bản đồ an toàn',
+                    style: TextStyle(
+                      color: _C.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   SizedBox(height: 2),
-                  Text('Tất cả SOS đã được xử lý', style: TextStyle(color: _C.textSecondary, fontSize: 12)),
+                  Text(
+                    'Tất cả SOS đã được xử lý',
+                    style: TextStyle(color: _C.textSecondary, fontSize: 12),
+                  ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, size: 18, color: _C.textMuted),
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: _C.textMuted,
+              ),
               onPressed: onClose,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -891,7 +1130,8 @@ class _AdminLocationMarker extends StatelessWidget {
 class _StationDetailSheet extends ConsumerWidget {
   final RescueStation station;
 
-  const _StationDetailSheet({Key? key, required this.station}) : super(key: key);
+  const _StationDetailSheet({Key? key, required this.station})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -914,7 +1154,12 @@ class _StationDetailSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Trạng thái: ' + (station.status == 'active' ? 'Hoạt động' : station.status == 'full' ? 'Đầy' : 'Ngưng hoạt động'),
+            'Trạng thái: ' +
+                (station.status == 'active'
+                    ? 'Hoạt động'
+                    : station.status == 'full'
+                    ? 'Đầy'
+                    : 'Ngưng hoạt động'),
             style: const TextStyle(fontSize: 14, color: Colors.black54),
           ),
           const SizedBox(height: 24),
@@ -926,9 +1171,8 @@ class _StationDetailSheet extends ConsumerWidget {
                     Navigator.of(context).pop();
                     showDialog(
                       context: context,
-                      builder: (ctx) => RescueStationFormDialog(
-                        existing: station,
-                      ),
+                      builder: (ctx) =>
+                          RescueStationFormDialog(existing: station),
                     );
                   },
                   style: OutlinedButton.styleFrom(
@@ -945,27 +1189,35 @@ class _StationDetailSheet extends ConsumerWidget {
                 child: FilledButton(
                   onPressed: () {
                     Navigator.of(context).pop();
-                    final newStatus = station.status == 'active' ? 'full' : 'active';
-                    ref.read(rescueStationControllerProvider.notifier).updateStation(
-                      id: station.id,
-                      name: station.name,
-                      latitude: station.latitude,
-                      longitude: station.longitude,
-                      address: station.address,
-                      contactPhone: station.contactPhone,
-                      capacity: station.capacity,
-                      resourcesJson: station.resourcesJson,
-                      status: newStatus,
-                    );
+                    final newStatus = station.status == 'active'
+                        ? 'full'
+                        : 'active';
+                    ref
+                        .read(rescueStationControllerProvider.notifier)
+                        .updateStation(
+                          id: station.id,
+                          name: station.name,
+                          latitude: station.latitude,
+                          longitude: station.longitude,
+                          address: station.address,
+                          contactPhone: station.contactPhone,
+                          capacity: station.capacity,
+                          resourcesJson: station.resourcesJson,
+                          status: newStatus,
+                        );
                   },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: station.status == 'active' ? Colors.orange : Colors.green,
+                    backgroundColor: station.status == 'active'
+                        ? Colors.orange
+                        : Colors.green,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(station.status == 'active' ? 'Đánh dấu đầy' : 'Đánh dấu HĐ'),
+                  child: Text(
+                    station.status == 'active' ? 'Đánh dấu đầy' : 'Đánh dấu HĐ',
+                  ),
                 ),
               ),
             ],
@@ -974,7 +1226,9 @@ class _StationDetailSheet extends ConsumerWidget {
           OutlinedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              ref.read(rescueStationControllerProvider.notifier).softDeleteStation(station.id);
+              ref
+                  .read(rescueStationControllerProvider.notifier)
+                  .softDeleteStation(station.id);
             },
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -986,7 +1240,7 @@ class _StationDetailSheet extends ConsumerWidget {
             ),
             child: const Text('Xóa trạm cứu hộ'),
           ),
-           const SizedBox(height: 20),
+          const SizedBox(height: 20),
         ],
       ),
     );

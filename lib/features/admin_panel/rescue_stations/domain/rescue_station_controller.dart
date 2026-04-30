@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:drift/drift.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'rescue_station_repository.dart';
@@ -135,6 +136,63 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
     }
   }
 
+  Future<void> checkIn(String stationId) async {
+    final station = await _repo.getById(stationId);
+    if (station == null) throw Exception('Không tìm thấy trạm');
+    if (station.capacity != null && station.occupancy >= station.capacity!) {
+      throw Exception('Trạm đã đạt công suất tối đa');
+    }
+
+    await _repo.updateOccupancy(stationId, 1);
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    final log = await _repo.insertCheckInLog(
+      stationId: stationId,
+      userId: userId,
+      type: 'in',
+    );
+    await loadStations();
+
+    try {
+      final local = await _repo.getById(stationId);
+      if (local != null) {
+        await _pushStationToFirestore(local);
+        await _pushLogToFirestore(log);
+        await _repo.markSynced(stationId, DateTime.now());
+        await _repo.markLogSynced(log.id);
+        await loadStations();
+      }
+    } catch (e) {
+      // Offline sync fallback
+    }
+  }
+
+  Future<void> checkOut(String stationId) async {
+    final station = await _repo.getById(stationId);
+    if (station == null) throw Exception('Không tìm thấy trạm');
+    
+    await _repo.updateOccupancy(stationId, -1);
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    final log = await _repo.insertCheckInLog(
+      stationId: stationId,
+      userId: userId,
+      type: 'out',
+    );
+    await loadStations();
+
+    try {
+      final local = await _repo.getById(stationId);
+      if (local != null) {
+        await _pushStationToFirestore(local);
+        await _pushLogToFirestore(log);
+        await _repo.markSynced(stationId, DateTime.now());
+        await _repo.markLogSynced(log.id);
+        await loadStations();
+      }
+    } catch (e) {
+      // Offline sync fallback
+    }
+  }
+
   Future<void> _pushStationToFirestore(RescueStation station) {
     return _firestore.collection('rescue_stations').doc(station.id).set({
       'id': station.id,
@@ -144,6 +202,7 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
       'address': station.address,
       'contactPhone': station.contactPhone,
       'capacity': station.capacity,
+      'occupancy': station.occupancy,
       'resourcesJson': station.resourcesJson,
       'status': station.status,
       'createdAt': Timestamp.fromDate(station.createdAt),
@@ -152,6 +211,16 @@ class RescueStationController extends AsyncNotifier<List<RescueStation>> {
           ? null
           : Timestamp.fromDate(station.deletedAt!),
       'syncStatus': 'synced',
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _pushLogToFirestore(CheckInLog log) {
+    return _firestore.collection('check_in_logs').doc(log.id).set({
+      'id': log.id,
+      'stationId': log.stationId,
+      'userId': log.userId,
+      'type': log.type,
+      'timestamp': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 }

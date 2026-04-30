@@ -7,14 +7,21 @@ import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
 import 'package:drift/drift.dart' as drift;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// Provider to track the currently checked-in station ID across the map screen
+final currentCheckedInStationProvider = StateProvider<String?>((ref) => null);
 
 // =============================================================================
 // THEME TOKENS  (unchanged)
@@ -165,10 +172,9 @@ class _EventMapScreenState extends State<EventMapScreen>
   _LocErrCode? _locationErrCode;
 
   // ── UI state ─────────────────────────────────────────────────────────────
-  bool _legendExpanded = true;
-
   // ── Routing state (for external Google Maps directions) ──────────────────
   LatLng? _routeDestination;
+  RescueStation? _targetStation;
 
   @override
   void initState() {
@@ -307,12 +313,15 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
-  void _onRouteDestinationChanged(LatLng? destination) {
-    if (_isSameLatLng(_routeDestination, destination)) return;
+  void _onRouteDestinationChanged(LatLng? destination, RescueStation? station) {
+    if (_isSameLatLng(_routeDestination, destination) &&
+        _targetStation?.id == station?.id)
+      return;
     if (!mounted) return;
 
     setState(() {
       _routeDestination = destination;
+      _targetStation = station;
     });
   }
 
@@ -402,6 +411,95 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
+  void _showLegendDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Chú thích bản đồ',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _legendDialogItem(
+              color: _MapColors.userDot,
+              icon: Icons.location_on_rounded,
+              label: 'Vị trí hiện tại của bạn',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: _MapColors.rescueGreen,
+              icon: Icons.medical_services_rounded,
+              label: 'Trạm cứu trợ',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: _MapColors.sosRed,
+              customWidget: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: _MapColors.sosRed,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text(
+                    '!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              label: 'Vị trí phát tín hiệu SOS',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendDialogItem({
+    required Color color,
+    required String label,
+    IconData? icon,
+    Widget? customWidget,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: customWidget ?? Icon(icon, color: color, size: 18),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: _MapColors.textPrimary),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // BUILD
   // ---------------------------------------------------------------------------
@@ -422,7 +520,6 @@ class _EventMapScreenState extends State<EventMapScreen>
                 mapController: _mapController,
                 pulseAnim: _pulseAnim,
                 userLocation: effectiveLocation,
-                sosLocation: _mockSosLocation(effectiveLocation),
                 onRouteTargetChanged: _onRouteDestinationChanged,
               ),
             ),
@@ -448,12 +545,22 @@ class _EventMapScreenState extends State<EventMapScreen>
               top: topPadding + 10,
               left: 14,
               right: 14,
+
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _FloatingBackButton(),
                   const Spacer(),
-                  _ZoomControls(mapController: _mapController),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ZoomControls(mapController: _mapController),
+                      const SizedBox(height: 12),
+                      _LegendInfoButton(
+                        onTap: () => _showLegendDialog(context),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -461,32 +568,30 @@ class _EventMapScreenState extends State<EventMapScreen>
             // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
-              bottom: _legendExpanded ? 328 : 204,
+              bottom: _targetStation != null ? 350 : 100,
               child: _LocateMeButton(onTap: _locateMe),
             ),
 
-            // ── Directions button ────────────────────────────────────────
-            Positioned(
-              right: 14,
-              bottom: _legendExpanded ? 272 : 148,
-              child: _DirectionsButton(
-                onTap: _routeDestination == null
-                    ? null
-                    : _openGoogleMapsDirections,
-              ),
-            ),
+            // Removed _DirectionsButton
 
-            // ── Bottom Legend + SOS Sheet ────────────────────────────────
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _BottomLegendSheet(
-                expanded: _legendExpanded,
-                onToggle: () =>
-                    setState(() => _legendExpanded = !_legendExpanded),
-                onSosTap: _onSosTapped,
+            // ── Selected Station Details ────────────────────────────────
+            if (_targetStation != null)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 110,
+                child: _StationDetailsCard(
+                  station: _targetStation!,
+                  onNavigate: _openGoogleMapsDirections,
+                  onClose: () => setState(() => _targetStation = null),
+                ),
               ),
+
+            // ── Floating Action Buttons (SOS & Info) ────────────────────
+            Positioned(
+              left: 14,
+              bottom: 30,
+              child: _SosFloatingButton(onTap: _onSosTapped),
             ),
           ],
         ),
@@ -624,14 +729,12 @@ class _MapLayer extends ConsumerStatefulWidget {
   final MapController mapController;
   final Animation<double> pulseAnim;
   final LatLng userLocation;
-  final LatLng sosLocation;
-  final ValueChanged<LatLng?> onRouteTargetChanged;
+  final void Function(LatLng?, RescueStation?) onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
     required this.pulseAnim,
     required this.userLocation,
-    required this.sosLocation,
     required this.onRouteTargetChanged,
   });
 
@@ -678,6 +781,17 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       _stationsFingerprint = _fingerprintStations(stations);
       _computeRouteFromProps(widget.userLocation, stations);
     });
+
+    _initCheckInState();
+  }
+
+  Future<void> _initCheckInState() async {
+    final repo = ref.read(rescueStationRepositoryProvider);
+    final latestLog = await repo.getLatestCheckInLog();
+    if (latestLog != null && latestLog.type == 'in') {
+      ref.read(currentCheckedInStationProvider.notifier).state =
+          latestLog.stationId;
+    }
   }
 
   @override
@@ -722,13 +836,45 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _routeLoading = false;
         _isFallback = false;
       });
-      widget.onRouteTargetChanged(null);
+      widget.onRouteTargetChanged(null, null);
       return;
     }
 
-    final destinationPoint = LatLng(destination.latitude, destination.longitude);
+    final destinationPoint = LatLng(
+      destination.latitude,
+      destination.longitude,
+    );
+
+    // Tối ưu hóa: Nếu trạm đích và vị trí bắt đầu/kết thúc không thay đổi đáng kể,
+    // ta chỉ cập nhật đối tượng station cho UI mà không cần fetch lại route.
+    final bool isSameStation = destination.id == _routeStationId;
+    final bool hasExistingRoute = _routePoints.isNotEmpty;
+    final bool startValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          userLoc.latitude,
+          userLoc.longitude,
+          _routePoints.first.latitude,
+          _routePoints.first.longitude,
+        ) <
+        20;
+    final bool endValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          destinationPoint.latitude,
+          destinationPoint.longitude,
+          _routePoints.last.latitude,
+          _routePoints.last.longitude,
+        ) <
+        5;
+
+    if (isSameStation && startValid && endValid) {
+      widget.onRouteTargetChanged(destinationPoint, destination);
+      return;
+    }
+
     _routeStationId = destination.id;
-    widget.onRouteTargetChanged(destinationPoint);
+    widget.onRouteTargetChanged(destinationPoint, destination);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -768,13 +914,17 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   ) {
     if (stations.isEmpty) return null;
 
-    final selectedId = _selectedStationId;
+    final checkedInId = ref.read(currentCheckedInStationProvider);
+    final selectedId = _selectedStationId ?? checkedInId;
+    
     if (selectedId != null) {
       final selected = _findStationById(stations, selectedId);
       if (selected != null) return selected;
 
       // Trạm đã bị xoá/ẩn khỏi dữ liệu hiện tại, quay về chế độ mặc định.
-      _selectedStationId = null;
+      if (_selectedStationId != null) {
+        _selectedStationId = null;
+      }
     }
 
     return _findNearestStation(userLoc, stations);
@@ -834,15 +984,16 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   String _fingerprintStations(List<RescueStation> stations) {
     final keys =
         stations
-            .map((s) => '${s.id}:${s.latitude}:${s.longitude}:${s.status}')
+            .map(
+              (s) =>
+                  '${s.id}:${s.latitude}:${s.longitude}:${s.status}:${s.occupancy}',
+            )
             .toList()
           ..sort();
     return keys.join('|');
   }
 
   void _onStationTapped(RescueStation station) {
-    if (_selectedStationId == station.id) return;
-
     setState(() {
       _selectedStationId = station.id;
     });
@@ -866,6 +1017,15 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _latestStations = stations;
         _computeRouteFromProps(widget.userLocation, stations);
       });
+    });
+
+    ref.listen<String?>(currentCheckedInStationProvider, (previous, next) {
+      if (previous != next) {
+        if (next != null) {
+          _selectedStationId = next;
+        }
+        _computeRouteFromProps(widget.userLocation, _latestStations);
+      }
     });
 
     final rescueStationsAsync = ref.watch(rescueStationsProvider);
@@ -921,14 +1081,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             // ── 3. Marker layer — SAU PolylineLayer ───────────────────
             MarkerLayer(
               markers: [
-                // ── Mock SOS signal ────────────────────────────────────
-                Marker(
-                  point: widget.sosLocation,
-                  width: 56,
-                  height: 56,
-                  child: _SosMarker(),
-                ),
-
                 // ── Rescue stations — trạm đích hiện tại highlight to hơn ──
                 for (final station in rescueStations)
                   Marker(
@@ -939,6 +1091,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                       onTap: () => _onStationTapped(station),
                       child: _RescueMarker(
                         selected: station.id == _routeStationId,
+                        isFull: station.status == 'full',
                       ),
                     ),
                   ),
@@ -1159,11 +1312,14 @@ class _SosMarker extends StatelessWidget {
 // ── Rescue Station: Green cross ───────────────────────────────────────────────
 class _RescueMarker extends StatelessWidget {
   final bool selected;
+  final bool isFull;
 
-  const _RescueMarker({this.selected = false});
+  const _RescueMarker({this.selected = false, this.isFull = false});
 
   @override
   Widget build(BuildContext context) {
+    final color = isFull ? Colors.orange.shade700 : _MapColors.rescueGreen;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1171,11 +1327,13 @@ class _RescueMarker extends StatelessWidget {
           width: selected ? 42 : 38,
           height: selected ? 42 : 38,
           decoration: BoxDecoration(
-            color: _MapColors.rescueGreen,
+            color: color,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(selected ? 0.55 : 0.4),
+                color: color.withOpacity(
+                  selected ? 0.55 : 0.4,
+                ),
                 blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
@@ -1189,7 +1347,7 @@ class _RescueMarker extends StatelessWidget {
         ),
         CustomPaint(
           size: const Size(10, 6),
-          painter: _PinTailPainter(color: _MapColors.rescueGreen),
+          painter: _PinTailPainter(color: color),
         ),
       ],
     );
@@ -1351,34 +1509,69 @@ class _LocateMeButton extends StatelessWidget {
 }
 
 // =============================================================================
-// DIRECTIONS BUTTON — Chỉ đường đến địa điểm được chọn
+// FLOATING ACTION BUTTONS (SOS & INFO)
 // =============================================================================
-class _DirectionsButton extends StatelessWidget {
-  final VoidCallback? onTap;
+class _SosFloatingButton extends StatelessWidget {
+  final VoidCallback onTap;
 
-  const _DirectionsButton({required this.onTap});
-
-  bool get _isEnabled => onTap != null;
+  const _SosFloatingButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _isEnabled ? _MapColors.fabBg : Colors.grey.shade200,
+      color: _MapColors.sosRed,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 6,
+      shadowColor: _MapColors.sosRed.withOpacity(0.5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.sos_rounded, color: Colors.white, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Phát SOS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendInfoButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _LegendInfoButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _MapColors.fabBg,
       borderRadius: BorderRadius.circular(12),
       elevation: 4,
       shadowColor: _MapColors.shadow,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: SizedBox(
+        child: const SizedBox(
           width: 44,
           height: 44,
           child: Icon(
-            Icons.directions_rounded,
-            size: 21,
-            color: _isEnabled
-                ? const Color(0xFF4285F4)
-                : _MapColors.textSecondary.withOpacity(0.6),
+            Icons.info_outline_rounded,
+            size: 24,
+            color: _MapColors.textPrimary,
           ),
         ),
       ),
@@ -1386,251 +1579,8 @@ class _DirectionsButton extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// BOTTOM LEGEND SHEET  (unchanged)
-// =============================================================================
-class _BottomLegendSheet extends StatelessWidget {
-  final bool expanded;
-  final VoidCallback onToggle;
-  final VoidCallback onSosTap;
-
-  const _BottomLegendSheet({
-    required this.expanded,
-    required this.onToggle,
-    required this.onSosTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: _MapColors.cardBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: _MapColors.shadow,
-            blurRadius: 24,
-            offset: Offset(0, -6),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: _MapColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.layers_rounded,
-                        size: 18,
-                        color: _MapColors.textSecondary,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Chú thích bản đồ',
-                        style: TextStyle(
-                          color: _MapColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      AnimatedRotation(
-                        turns: expanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: const Icon(
-                          Icons.expand_less_rounded,
-                          size: 22,
-                          color: _MapColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            child: expanded
-                ? _LegendContent(onSosTap: onSosTap)
-                : const SizedBox(height: 4),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendContent extends StatelessWidget {
-  final VoidCallback onSosTap;
-  const _LegendContent({required this.onSosTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        16 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _LegendItem(
-                color: _MapColors.userDot,
-                icon: Icons.location_on_rounded,
-                label: 'Vị trí bạn',
-              ),
-              const SizedBox(width: 12),
-              _LegendItem(
-                color: _MapColors.sosRed,
-                label: 'Tín hiệu SOS',
-                customWidget: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: _MapColors.sosRed,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              _LegendItem(
-                color: _MapColors.rescueGreen,
-                icon: Icons.medical_services_rounded,
-                label: 'Trạm cứu trợ',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: _MapColors.divider, height: 1),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFDC2626).withOpacity(0.4),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: onSosTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(
-                  Icons.sos_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                label: const Text(
-                  'Phát tín hiệu SOS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Single legend item ────────────────────────────────────────────────────────
-class _LegendItem extends StatelessWidget {
-  final Color color;
-  final IconData? icon;
-  final String label;
-  final Widget? customWidget;
-
-  const _LegendItem({
-    required this.color,
-    this.icon,
-    required this.label,
-    this.customWidget,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            customWidget ?? Icon(icon, color: color, size: 18),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// DirectionsButton removed
+// _BottomLegendSheet removed
 
 // =============================================================================
 // SOS CONFIRM DIALOG  — now a ConsumerStatefulWidget, receives real coords
@@ -1844,6 +1794,202 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
             : Colors.orange.shade700,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// STATION DETAILS CARD
+// =============================================================================
+class _StationDetailsCard extends ConsumerStatefulWidget {
+  final RescueStation station;
+  final VoidCallback onNavigate;
+  final VoidCallback onClose;
+
+  const _StationDetailsCard({
+    required this.station,
+    required this.onNavigate,
+    required this.onClose,
+  });
+
+  @override
+  ConsumerState<_StationDetailsCard> createState() =>
+      _StationDetailsCardState();
+}
+
+class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
+  bool _isLoading = false;
+
+  Future<void> _handleCheckInOut() async {
+    final currentCheckedInId = ref.read(currentCheckedInStationProvider);
+    final isCheckedInHere = currentCheckedInId == widget.station.id;
+
+    setState(() => _isLoading = true);
+    try {
+      if (isCheckedInHere) {
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkOut(widget.station.id);
+        ref.read(currentCheckedInStationProvider.notifier).state = null;
+      } else {
+        if (currentCheckedInId != null) {
+          await ref
+              .read(rescueStationControllerProvider.notifier)
+              .checkOut(currentCheckedInId);
+        }
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkIn(widget.station.id);
+        ref.read(currentCheckedInStationProvider.notifier).state =
+            widget.station.id;
+
+        widget.onNavigate();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Luôn lấy dữ liệu mới nhất từ provider để đảm bảo tính thời gian thực (occupancy, status...)
+    final stationsAsync = ref.watch(rescueStationsProvider);
+    final station = stationsAsync.maybeWhen(
+      data: (list) => list.firstWhere(
+        (s) => s.id == widget.station.id,
+        orElse: () => widget.station,
+      ),
+      orElse: () => widget.station,
+    );
+
+    final currentCheckedInId = ref.watch(currentCheckedInStationProvider);
+    final isCheckedInHere = currentCheckedInId == station.id;
+
+    final isFull = station.status == 'full';
+    final canCheckIn = !isFull || isCheckedInHere;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: _MapColors.shadow,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      station.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _MapColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sức chứa: ${station.occupancy}/${station.capacity?.toString() ?? "∞"}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _MapColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isFull
+                      ? Colors.orange.shade100
+                      : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  isFull ? 'Đã đầy' : 'Còn chỗ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isFull
+                        ? Colors.orange.shade800
+                        : Colors.green.shade800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: widget.onClose,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 20,
+                    color: _MapColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (!isFull || isCheckedInHere)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleCheckInOut,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isCheckedInHere
+                      ? Colors.grey.shade400
+                      : _MapColors.rescueGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        isCheckedInHere ? 'Rời khỏi trạm' : 'Đến trạm này',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+        ],
       ),
     );
   }

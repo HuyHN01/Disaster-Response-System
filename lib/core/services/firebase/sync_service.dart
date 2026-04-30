@@ -147,6 +147,40 @@ class FirebaseSyncService {
     return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
   }
 
+  /// Pushes every local check-in log with `syncStatus == 'pending'`
+  /// up to Firestore and marks it as synced in Drift.
+  Future<SyncResult> syncPendingCheckInLogs() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ logs.',
+      );
+    }
+
+    final pendingLogs = await (_db.select(
+      _db.checkInLogs,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingLogs.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final log in pendingLogs) {
+      try {
+        await _syncSingleCheckInLog(log);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ check_in_log ${log.id}: $e\n$st');
+        failedIds.add(log.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
   /// Opens a **realtime** Firestore listener on the `disaster_events`
   /// collection and writes any new/updated documents straight into the
   /// local Drift [DisasterEvents] table.
@@ -274,9 +308,13 @@ class FirebaseSyncService {
 
     final sosResult = await syncPendingSOS();
     final stationResult = await syncPendingRescueStations();
+    final logResult = await syncPendingCheckInLogs();
 
     if (!stationResult.isSuccess || stationResult.hasPartialFailure) {
       _log('Rescue station sync result: $stationResult');
+    }
+    if (!logResult.isSuccess || logResult.hasPartialFailure) {
+      _log('Check-in log sync result: $logResult');
     }
 
     return sosResult;
@@ -287,6 +325,15 @@ class FirebaseSyncService {
     await stopListeningToAdminEvents();
     await stopListeningToRescueStations();
     await stopListeningToUsers();
+  }
+
+  Future<void> _syncSingleCheckInLog(CheckInLog log) async {
+    final docRef = _firestore.collection('check_in_logs').doc(log.id);
+    await docRef.set(_checkInLogToFirestore(log), SetOptions(merge: true));
+
+    await (_db.update(_db.checkInLogs)..where((l) => l.id.equals(log.id))).write(
+      const CheckInLogsCompanion(syncStatus: Value('synced')),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -500,6 +547,16 @@ class FirebaseSyncService {
   // PRIVATE — Serialisation helpers
   // ---------------------------------------------------------------------------
 
+  Map<String, dynamic> _checkInLogToFirestore(CheckInLog log) => {
+    'id': log.id,
+    'stationId': log.stationId,
+    'userId': log.userId,
+    'type': log.type,
+    'timestamp': Timestamp.fromDate(log.timestamp),
+    'syncStatus': 'synced',
+    'uploadedAt': FieldValue.serverTimestamp(),
+  };
+
   Map<String, dynamic> _postToFirestore(Post post) => {
     'id': post.id,
     'eventId': post.eventId,
@@ -528,6 +585,7 @@ class FirebaseSyncService {
     'address': s.address,
     'contactPhone': s.contactPhone,
     'capacity': s.capacity,
+    'occupancy': s.occupancy,
     'resourcesJson': s.resourcesJson,
     'status': s.status,
     'createdAt': Timestamp.fromDate(s.createdAt),
@@ -599,6 +657,7 @@ class FirebaseSyncService {
       address: Value((data['address'] as String?)?.trim()),
       contactPhone: Value((data['contactPhone'] as String?)?.trim()),
       capacity: Value((data['capacity'] as num?)?.toInt()),
+      occupancy: Value((data['occupancy'] as num?)?.toInt() ?? 0),
       resourcesJson: Value(resourcesJson),
       status: Value(
         ((data['status'] as String?)?.trim().isNotEmpty ?? false)

@@ -362,7 +362,7 @@ class _TableRow extends StatelessWidget {
           Expanded(
             flex: 1,
             child: Text(
-              station.capacity?.toString() ?? '—',
+              '${station.occupancy}/${station.capacity?.toString() ?? '∞'}',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
           ),
@@ -372,17 +372,27 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                color: isActive
+                color: station.status == 'active' && station.deletedAt == null
                     ? AppColors.resolvedGreenBg
-                    : AppColors.activeRedBg,
+                    : station.status == 'full' && station.deletedAt == null
+                        ? Colors.orange.shade100
+                        : AppColors.activeRedBg,
               ),
               child: Text(
-                isActive ? 'Active' : 'Inactive',
+                station.deletedAt != null
+                    ? 'Deleted'
+                    : station.status == 'full'
+                        ? 'Full'
+                        : station.status == 'active'
+                            ? 'Active'
+                            : 'Inactive',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isActive
+                  color: station.status == 'active' && station.deletedAt == null
                       ? AppColors.resolvedGreen
-                      : AppColors.brandRed,
+                      : station.status == 'full' && station.deletedAt == null
+                          ? Colors.orange.shade800
+                          : AppColors.brandRed,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                 ),
