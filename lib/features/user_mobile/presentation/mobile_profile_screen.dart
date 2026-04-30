@@ -23,22 +23,22 @@ import 'package:disaster_response_app/features/auth/domain/email_otp_auth_reposi
 // THEME TOKENS
 // =============================================================================
 class _PC {
-  static const Color scaffold      = Color(0xFFF5F7FA);
-  static const Color cardBg        = Color(0xFFFFFFFF);
-  static const Color primary       = Color(0xFFDC2626);
-  static const Color primaryDark   = Color(0xFFB91C1C);
-  static const Color primaryLight  = Color(0xFFFEF2F2);
-  static const Color textPrimary   = Color(0xFF111827);
+  static const Color scaffold = Color(0xFFF5F7FA);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color primary = Color(0xFFDC2626);
+  static const Color primaryDark = Color(0xFFB91C1C);
+  static const Color primaryLight = Color(0xFFFEF2F2);
+  static const Color textPrimary = Color(0xFF111827);
   static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textMuted     = Color(0xFF9CA3AF);
-  static const Color border        = Color(0xFFE5E7EB);
-  static const Color inputBg       = Color(0xFFF9FAFB);
-  static const Color green         = Color(0xFF16A34A);
-  static const Color greenLight    = Color(0xFFDCFCE7);
-  static const Color amber         = Color(0xFFD97706);
-  static const Color amberLight    = Color(0xFFFFFBEB);
-  static const Color blue          = Color(0xFF2563EB);
-  static const Color blueLight     = Color(0xFFEFF6FF);
+  static const Color textMuted = Color(0xFF9CA3AF);
+  static const Color border = Color(0xFFE5E7EB);
+  static const Color inputBg = Color(0xFFF9FAFB);
+  static const Color green = Color(0xFF16A34A);
+  static const Color greenLight = Color(0xFFDCFCE7);
+  static const Color amber = Color(0xFFD97706);
+  static const Color amberLight = Color(0xFFFFFBEB);
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueLight = Color(0xFFEFF6FF);
 }
 
 // =============================================================================
@@ -49,8 +49,8 @@ class UserProfile {
   final String email;
   final String displayName;
   final String? photoUrl;
-  final int role;         // 0=superadmin 1=admin 2=staff 3=user
-  final int status;       // 0=inactive 1=active 2=pending 3=banned
+  final int role; // 0=superadmin 1=admin 2=staff 3=user
+  final int status; // 0=inactive 1=active 2=pending 3=banned
   final DateTime createdAt;
   final DateTime lastLoginAt;
   final bool mfaEnabled;
@@ -84,19 +84,14 @@ class MobileProfileScreen extends ConsumerStatefulWidget {
 
 class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
   static const int _maxAvatarBytes = 5 * 1024 * 1024;
-  static const Set<String> _allowedExtensions = {
-    'jpg',
-    'jpeg',
-    'png',
-    'webp',
-  };
+  static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
 
   final ImagePicker _imagePicker = ImagePicker();
   late final TextEditingController _nameController;
   final FocusNode _nameFocus = FocusNode();
 
   bool _isEditingName = false;
-  bool _isSavingName  = false;
+  bool _isSavingName = false;
   bool _isUploadingAvatar = false;
   bool _isSigningOut = false;
   bool _isSignOutDialogVisible = false;
@@ -148,7 +143,8 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
       _nameController.text = _resolvedDisplayName;
     }
 
-    if (_photoUrlOverride != null && widget.user.photoUrl == _photoUrlOverride) {
+    if (_photoUrlOverride != null &&
+        widget.user.photoUrl == _photoUrlOverride) {
       _photoUrlOverride = null;
       _avatarPreviewBytes = null;
     }
@@ -321,6 +317,37 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
         setState(() => _isUploadingAvatar = false);
       }
     }
+  }
+
+  Widget _buildMedicalProfileLink(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        color: _PC.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () => context.push(
+          RouteNames.medicalProfile,
+        ), // Route chúng ta sẽ định nghĩa ở bước 2
+        borderRadius: BorderRadius.circular(18),
+        child: const _InfoRow(
+          icon: Icons.medical_services_outlined,
+          iconColor: _PC.primary,
+          iconBg: _PC.primaryLight,
+          label: 'Hồ sơ Y tế Khẩn cấp',
+          value: 'Nhóm máu, bệnh nền, liên hệ...',
+          isLast: true, // Để bo góc dưới cho đẹp
+        ),
+      ),
+    );
   }
 
   String _extractExtension(String fileName) {
@@ -568,10 +595,7 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
             ),
             title: Text(
               title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 17,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
             ),
             content: Text(
               message,
@@ -638,7 +662,8 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
               child: _SectionTitle(title: 'Thông tin tài khoản'),
             ),
             SliverToBoxAdapter(child: _buildInfoCard()),
-
+            SliverToBoxAdapter(child: _SectionTitle(title: 'Thông tin cứu hộ')),
+            SliverToBoxAdapter(child: _buildMedicalProfileLink(context)),
             // ── Security section ──────────────────────────────────────────
             SliverToBoxAdapter(
               child: _SectionTitle(title: 'Bảo mật & Quyền riêng tư'),
@@ -691,10 +716,7 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
                 SizedBox(height: 3),
                 Text(
                   'Quản lý thông tin tài khoản của bạn',
-                  style: TextStyle(
-                    color: _PC.textSecondary,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: _PC.textSecondary, fontSize: 13),
                 ),
               ],
             ),
@@ -737,10 +759,7 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
                 ),
                 child: ClipOval(
                   child: _avatarPreviewBytes != null
-                      ? Image.memory(
-                          _avatarPreviewBytes!,
-                          fit: BoxFit.cover,
-                        )
+                      ? Image.memory(_avatarPreviewBytes!, fit: BoxFit.cover)
                       : _resolvedPhotoUrl != null
                       ? Image.network(
                           _resolvedPhotoUrl!,
@@ -929,11 +948,7 @@ class _NameDisplayRow extends StatelessWidget {
               color: _PC.primaryLight,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.edit_rounded,
-              size: 14,
-              color: _PC.primary,
-            ),
+            child: const Icon(Icons.edit_rounded, size: 14, color: _PC.primary),
           ),
         ),
       ],
@@ -981,8 +996,10 @@ class _NameEditField extends StatelessWidget {
               counterText: '',
               hintText: 'Nhập tên hiển thị',
               hintStyle: const TextStyle(color: _PC.textMuted, fontSize: 15),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: _PC.border),
@@ -1005,8 +1022,10 @@ class _NameEditField extends StatelessWidget {
             OutlinedButton(
               onPressed: isSaving ? null : onCancel,
               style: OutlinedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 side: const BorderSide(color: _PC.border),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(9),
@@ -1114,11 +1133,15 @@ class _RoleBadge extends StatelessWidget {
   const _RoleBadge({required this.role});
 
   _BadgeData get _data => switch (role) {
-        0 => _BadgeData('Super Admin', const Color(0xFF7C3AED), const Color(0xFFF5F3FF)),
-        1 => _BadgeData('Admin', _PC.primary, _PC.primaryLight),
-        2 => _BadgeData('Nhân viên', _PC.amber, _PC.amberLight),
-        _ => _BadgeData('Người dùng', _PC.blue, _PC.blueLight),
-      };
+    0 => _BadgeData(
+      'Super Admin',
+      const Color(0xFF7C3AED),
+      const Color(0xFFF5F3FF),
+    ),
+    1 => _BadgeData('Admin', _PC.primary, _PC.primaryLight),
+    2 => _BadgeData('Nhân viên', _PC.amber, _PC.amberLight),
+    _ => _BadgeData('Người dùng', _PC.blue, _PC.blueLight),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1169,11 +1192,11 @@ class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status});
 
   _BadgeData get _data => switch (status) {
-        1 => _BadgeData('Tài khoản đang hoạt động', _PC.green, _PC.greenLight),
-        2 => _BadgeData('Đang chờ xác nhận', _PC.amber, _PC.amberLight),
-        3 => _BadgeData('Tài khoản bị khoá', _PC.primary, _PC.primaryLight),
-        _ => _BadgeData('Không hoạt động', _PC.textMuted, const Color(0xFFF3F4F6)),
-      };
+    1 => _BadgeData('Tài khoản đang hoạt động', _PC.green, _PC.greenLight),
+    2 => _BadgeData('Đang chờ xác nhận', _PC.amber, _PC.amberLight),
+    3 => _BadgeData('Tài khoản bị khoá', _PC.primary, _PC.primaryLight),
+    _ => _BadgeData('Không hoạt động', _PC.textMuted, const Color(0xFFF3F4F6)),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1191,8 +1214,8 @@ class _StatusChip extends StatelessWidget {
             status == 1
                 ? Icons.check_circle_rounded
                 : status == 3
-                    ? Icons.block_rounded
-                    : Icons.hourglass_top_rounded,
+                ? Icons.block_rounded
+                : Icons.hourglass_top_rounded,
             size: 12,
             color: d.color,
           ),
@@ -1294,8 +1317,7 @@ class _InfoRow extends StatelessWidget {
           // Read-only lock badge
           if (isReadOnly)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
                 color: _PC.inputBg,
                 borderRadius: BorderRadius.circular(6),
@@ -1304,8 +1326,11 @@ class _InfoRow extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_outline_rounded,
-                      size: 10, color: _PC.textMuted),
+                  Icon(
+                    Icons.lock_outline_rounded,
+                    size: 10,
+                    color: _PC.textMuted,
+                  ),
                   SizedBox(width: 3),
                   Text(
                     'Cố định',
@@ -1370,7 +1395,9 @@ class _MfaRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  enabled ? 'Đã bật — tài khoản được bảo vệ' : 'Chưa bật — khuyến nghị bật',
+                  enabled
+                      ? 'Đã bật — tài khoản được bảo vệ'
+                      : 'Chưa bật — khuyến nghị bật',
                   style: TextStyle(
                     color: enabled ? _PC.green : _PC.textMuted,
                     fontSize: 12,
@@ -1426,11 +1453,7 @@ class _SignOutButton extends StatelessWidget {
       height: 50,
       child: OutlinedButton.icon(
         onPressed: onPressed,
-        icon: const Icon(
-          Icons.logout_rounded,
-          size: 18,
-          color: _PC.primary,
-        ),
+        icon: const Icon(Icons.logout_rounded, size: 18, color: _PC.primary),
         label: const Text(
           'Đăng xuất',
           style: TextStyle(
@@ -1457,10 +1480,7 @@ class _AvatarOptionSheet extends StatelessWidget {
   final VoidCallback onGallery;
   final VoidCallback onCamera;
 
-  const _AvatarOptionSheet({
-    required this.onGallery,
-    required this.onCamera,
-  });
+  const _AvatarOptionSheet({required this.onGallery, required this.onCamera});
 
   @override
   Widget build(BuildContext context) {
