@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:disaster_response_app/features/medical_profile/presentation/medical_setup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb, kReleaseMode;
@@ -360,6 +361,12 @@ abstract final class AppRouter {
           path: RouteNames.aiChat,
           name: RouteNames.nameAiChat,
           builder: (context, state) => const AiChatScreen(),
+        ),
+        GoRoute(
+          path: RouteNames.medicalProfile, // Đã có trong RouteNames[cite: 2]
+          name: RouteNames
+              .nameMedicalProfile, // Thêm dòng này để dùng goNamed/pushNamed[cite: 2]
+          builder: (context, state) => const MedicalSetupScreen(),
         ),
       ],
     ),

@@ -54,7 +54,7 @@ abstract final class RouteNames {
 
   /// OTP verification screen in the profile auth flow ([OtpVerificationScreen]).
   static const String profileOtpVerification = '/profile/otp-verification';
-
+  static const String medicalProfile = '/medical-profile';
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -146,4 +146,5 @@ abstract final class RouteNames {
   static const String nameAdminEventDetail = 'admin-event-detail';
   static const String nameAdminPostCreate = 'admin-post-create';
   static const String nameAdminPostEdit = 'admin-post-edit';
+  static const String nameMedicalProfile = 'medical-profile';
 }
