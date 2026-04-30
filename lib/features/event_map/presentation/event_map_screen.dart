@@ -914,13 +914,17 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   ) {
     if (stations.isEmpty) return null;
 
-    final selectedId = _selectedStationId;
+    final checkedInId = ref.read(currentCheckedInStationProvider);
+    final selectedId = _selectedStationId ?? checkedInId;
+    
     if (selectedId != null) {
       final selected = _findStationById(stations, selectedId);
       if (selected != null) return selected;
 
       // Trạm đã bị xoá/ẩn khỏi dữ liệu hiện tại, quay về chế độ mặc định.
-      _selectedStationId = null;
+      if (_selectedStationId != null) {
+        _selectedStationId = null;
+      }
     }
 
     return _findNearestStation(userLoc, stations);
@@ -990,8 +994,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   }
 
   void _onStationTapped(RescueStation station) {
-    if (_selectedStationId == station.id) return;
-
     setState(() {
       _selectedStationId = station.id;
     });
@@ -1015,6 +1017,15 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _latestStations = stations;
         _computeRouteFromProps(widget.userLocation, stations);
       });
+    });
+
+    ref.listen<String?>(currentCheckedInStationProvider, (previous, next) {
+      if (previous != next) {
+        if (next != null) {
+          _selectedStationId = next;
+        }
+        _computeRouteFromProps(widget.userLocation, _latestStations);
+      }
     });
 
     final rescueStationsAsync = ref.watch(rescueStationsProvider);
