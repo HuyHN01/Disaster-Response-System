@@ -19,7 +19,7 @@ class MedicalProfileController
     state = const AsyncValue.loading();
     // Dùng ref.read để lấy repository thay vì dùng biến cục bộ
     final repository = ref.read(medicalRepositoryProvider);
-    state = await AsyncValue.guard(() => repository.getProfile());
+    state = await AsyncValue.guard(() => repository.getMedicalProfile());
   }
 
   Future<void> saveMedicalInfo(MedicalProfileModel profile) async {

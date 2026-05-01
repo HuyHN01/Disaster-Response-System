@@ -13,13 +13,12 @@ class MedicalProfileModel {
   // Chuyển từ JSON (khi lấy dữ liệu từ Supabase/Firebase) sang Object
   factory MedicalProfileModel.fromJson(Map<String, dynamic> json) {
     return MedicalProfileModel(
-      bloodType: json['blood_type'] ?? '',
+      bloodType: json['blood_type'] ?? 'Chưa rõ',
       medicalConditions: List<String>.from(json['medical_conditions'] ?? []),
       companionCount: json['companion_count'] ?? 0,
       emergencyContact: json['emergency_contact'] ?? '',
     );
   }
-
   // Chuyển từ Object sang Map để lưu lên cơ sở dữ liệu
   Map<String, dynamic> toJson() {
     return {

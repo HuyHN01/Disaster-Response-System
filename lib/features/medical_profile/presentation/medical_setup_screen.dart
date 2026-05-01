@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/medical_profile_controller.dart';
 import '../data/models/medical_profile_model.dart';
+import 'package:flutter/services.dart';
 
 class _PC {
   static const Color primary = Color(0xFFDC2626);
@@ -77,9 +78,24 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
         data: (profile) {
           if (profile != null && !_isInitialized) {
             _selectedBloodType = profile.bloodType;
-            _phoneController.text = profile.emergencyContact;
             _selectedConditions = List.from(profile.medicalConditions);
             _companionCount = profile.companionCount;
+
+            final contacts = profile.emergencyContact.split(', ');
+            _phoneControllers.clear(); // Xóa ô trống mặc định từ initState
+
+            for (var phone in contacts) {
+              if (phone.trim().isNotEmpty) {
+                _phoneControllers.add(
+                  TextEditingController(text: phone.trim()),
+                );
+              }
+            }
+
+            if (_phoneControllers.isEmpty) {
+              _phoneControllers.add(TextEditingController());
+            }
+
             _isInitialized = true;
           }
 
@@ -621,6 +637,11 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
                           Expanded(
                             child: TextField(
                               controller: controller,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(10),
+                              ],
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
@@ -631,7 +652,6 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
                                 ),
                                 contentPadding: EdgeInsets.zero,
                               ),
-                              keyboardType: TextInputType.phone,
                             ),
                           ),
                         ],
@@ -737,27 +757,45 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
   // ── Save Logic ───────────────────────────────────────────────────────────────
 
   void _saveInfo() {
-    final contacts = _phoneControllers
+    // Lọc ra các số điện thoại có nhập dữ liệu (loại bỏ ô trống)
+    final contactList = _phoneControllers
         .map((c) => c.text.trim())
         .where((text) => text.isNotEmpty)
-        .join(', ');
+        .toList();
+
+    // Định nghĩa khuôn mẫu: Phải là số và đúng 10 ký tự
+    final phoneRegex = RegExp(r'^[0-9]{10}$');
+
+    // Kiểm tra từng số trong danh sách
+    for (String phone in contactList) {
+      if (!phoneRegex.hasMatch(phone)) {
+        // Hiển thị thông báo lỗi nếu có số không hợp lệ
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Số điện thoại "$phone" không hợp lệ (phải đúng 10 số)!',
+            ),
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
 
     final model = MedicalProfileModel(
       bloodType: _selectedBloodType ?? 'Chưa rõ',
       medicalConditions: _selectedConditions,
       companionCount: _companionCount,
-      emergencyContact: contacts,
+      emergencyContact: contactList.join(', '), // Gom thành chuỗi để lưu
     );
 
     ref.read(medicalControllerProvider.notifier).saveMedicalInfo(model);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Đã lưu thông tin y tế!'),
-        backgroundColor: const Color(0xFF15803D),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
+      const SnackBar(
+        content: Text('Đã đồng bộ hồ sơ y tế!'),
+        backgroundColor: Colors.green,
       ),
     );
   }
