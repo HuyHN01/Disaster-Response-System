@@ -26,7 +26,7 @@ class MedicalProfileModel {
       'blood_type': bloodType,
       'medical_conditions': medicalConditions,
       'companion_count': companionCount,
-      'emergency_phone': emergencyContact,
+      'emergency_contact': emergencyContact,
     };
   }
 }

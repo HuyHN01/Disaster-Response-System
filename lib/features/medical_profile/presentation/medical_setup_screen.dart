@@ -746,7 +746,7 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
       bloodType: _selectedBloodType ?? 'Chưa rõ',
       medicalConditions: _selectedConditions,
       companionCount: _companionCount,
-      emergencyContact: contacts, // Lưu chuỗi các số điện thoại[cite: 4]
+      emergencyContact: contacts,
     );
 
     ref.read(medicalControllerProvider.notifier).saveMedicalInfo(model);
