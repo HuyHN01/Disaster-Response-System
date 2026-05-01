@@ -153,53 +153,47 @@ class SmsFallbackService {
     }
   }
 
-  /// Hàm chính - Kích hoạt SMS Fallback khi không có mạng
-  /// Hàm này sẽ:
+  /// Hàm chính - Kích hoạt SMS Fallback khi không có mạng.
+  /// Logic các bước:
   /// 1. Kiểm tra mạng
-  /// 2. Lấy vị trí
+  /// 2. Sử dụng vị trí đã lấy sẵn từ controller
   /// 3. Gửi SMS (Android) hoặc mở ứng dụng tin nhắn (iOS)
   Future<bool> activateEmergencyFallback({
     required String userName,
     required String phoneNumber,
+    required double latitude,
+    required double longitude,
     required String description,
   }) async {
     try {
       print('Activating SMS Fallback Service...');
 
-      // Kiểm tra mạng
       final hasNetwork = await hasNetworkConnection();
       if (hasNetwork) {
         print('Network is available. SMS fallback not needed.');
         return false;
       }
 
-      print('No network detected. Proceeding with SMS fallback...');
-
-      // Lấy vị trí hiện tại
-      final position = await getCurrentLocation();
-      if (position == null) {
-        print('Unable to get location');
+      if (latitude == 0.0 && longitude == 0.0) {
+        print('Invalid location data for SMS fallback.');
         return false;
       }
-
-      print(
-          'Location obtained: ${position.latitude}, ${position.longitude}');
 
       // Gửi SMS dựa trên platform
       if (Platform.isAndroid) {
         return await sendEmergencySMS(
           userName: userName,
           phoneNumber: phoneNumber,
-          latitude: position.latitude,
-          longitude: position.longitude,
+          latitude: latitude,
+          longitude: longitude,
           description: description,
         );
       } else if (Platform.isIOS) {
         return await openMessagingApp(
           userName: userName,
           phoneNumber: phoneNumber,
-          latitude: position.latitude,
-          longitude: position.longitude,
+          latitude: latitude,
+          longitude: longitude,
           description: description,
         );
       }

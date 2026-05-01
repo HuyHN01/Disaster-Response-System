@@ -171,8 +171,6 @@ class _SOSScreenState extends ConsumerState<SOSScreen> {
                         sosController.sendSOS(
                           userName: _userNameController.text,
                           phoneNumber: _phoneController.text,
-                          latitude: 0.0, // TODO: Get actual latitude
-                          longitude: 0.0, // TODO: Get actual longitude
                           description: _descriptionController.text,
                         );
                       },
@@ -238,7 +236,7 @@ class _SOSScreenState extends ConsumerState<SOSScreen> {
                     '• Nếu có kết nối mạng: SOS sẽ gửi lên máy chủ\n'
                     '• Nếu không có mạng: Ứng dụng sẽ tự động gửi SMS\n'
                     '• SMS chứa vị trí GPS của bạn\n'
-                    '• Những tin nhắn sẽ được gửi đến 113, 114, 115',
+                    '• Các SMS khẩn cấp sẽ được gửi đến 113, 114, 115',
                     style: TextStyle(fontSize: 12),
                   ),
                 ],
