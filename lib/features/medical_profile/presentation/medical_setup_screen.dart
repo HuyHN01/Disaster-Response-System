@@ -737,12 +737,18 @@ class _MedicalSetupScreenState extends ConsumerState<MedicalSetupScreen> {
   // ── Save Logic ───────────────────────────────────────────────────────────────
 
   void _saveInfo() {
+    final contacts = _phoneControllers
+        .map((c) => c.text.trim())
+        .where((text) => text.isNotEmpty)
+        .join(', ');
+
     final model = MedicalProfileModel(
       bloodType: _selectedBloodType ?? 'Chưa rõ',
       medicalConditions: _selectedConditions,
       companionCount: _companionCount,
-      emergencyContact: _phoneControllers.map((c) => c.text).join(', '),
+      emergencyContact: contacts,
     );
+
     ref.read(medicalControllerProvider.notifier).saveMedicalInfo(model);
 
     ScaffoldMessenger.of(context).showSnackBar(

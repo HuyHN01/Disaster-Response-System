@@ -21,14 +21,12 @@ class MedicalProfileModel {
   }
 
   // Chuyển từ Object sang Map để lưu lên cơ sở dữ liệu
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
-      'bloodType': bloodType,
-      'medicalConditions': medicalConditions,
-      'companionCount': companionCount,
-      'emergencyContact': emergencyContact,
+      'blood_type': bloodType,
+      'medical_conditions': medicalConditions,
+      'companion_count': companionCount,
+      'emergency_contact': emergencyContact,
     };
   }
-
-  
 }

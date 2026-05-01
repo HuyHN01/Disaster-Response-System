@@ -14,7 +14,7 @@ class MedicalRepository {
     // Cập nhật trực tiếp vào document của User để đồng bộ nhanh nhất
     await _db.collection('users').doc(uid).set(
       {
-        'medicalProfile': profile.toMap(),
+        'medicalProfile': profile.toJson(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
@@ -24,7 +24,7 @@ class MedicalRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
   // Lưu hoặc cập nhật hồ sơ y tế
   Future<void> saveProfile(MedicalProfileModel profile) async {
-    final data = profile.toMap();
+    final data = profile.toJson();
 
     final supabaseUser = _supabase.auth.currentUser;
     if (supabaseUser != null) {
