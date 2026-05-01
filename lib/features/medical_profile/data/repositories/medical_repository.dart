@@ -44,17 +44,19 @@ class MedicalRepository {
   }
 
   // Lấy hồ sơ y tế về
-  Future<MedicalProfileModel?> getProfile() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return null;
+  Future<MedicalProfileModel?> getMedicalProfile() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
 
-    final data = await _supabase
-        .from('medical_profiles')
-        .select()
-        .eq('id', user.id)
-        .maybeSingle();
+    final doc = await _db.collection('users').doc(uid).get();
 
-    if (data == null) return null;
-    return MedicalProfileModel.fromJson(data);
+    if (doc.exists && doc.data() != null) {
+      final data = doc.data()!;
+      // Lấy object 'medicalProfile' nằm bên trong document User
+      if (data.containsKey('medicalProfile')) {
+        return MedicalProfileModel.fromJson(data['medicalProfile']);
+      }
+    }
+    return null;
   }
 }
