@@ -35,6 +35,7 @@ import 'package:disaster_response_app/features/event_map/presentation/event_map_
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
+import 'package:disaster_response_app/features/user_mobile/presentation/sos_screen.dart';
 
 import 'route_names.dart';
 
@@ -399,6 +400,12 @@ abstract final class AppRouter {
           },
         ),
       ],
+    ),
+    // ── SOS Emergency Screen ────────────────────────────────────────────
+    GoRoute(
+      path: RouteNames.sos,
+      name: RouteNames.nameSOS,
+      builder: (context, state) => const SOSScreen(),
     ),
   ];
 
