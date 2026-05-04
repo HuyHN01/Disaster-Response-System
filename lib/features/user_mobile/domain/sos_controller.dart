@@ -134,30 +134,50 @@ class SOSController extends StateNotifier<SOSState> {
 
   /// Gửi SOS request
   /// Quy trình:
-  /// 1. Lấy vị trí một lần ở cấp controller
-  /// 2. Lưu dữ liệu vào Drift database
-  /// 3. Kiểm tra mạng. Nếu có -> Gửi lên Firebase
-  /// 4. Nếu không có mạng -> Kích hoạt SMS Fallback
+  /// 1. Nếu đã có tọa độ truyền vào thì dùng trực tiếp
+  /// 2. Nếu chưa có tọa độ thì lấy GPS một lần ở cấp controller
+  /// 3. Lưu dữ liệu vào Drift database
+  /// 4. Kiểm tra mạng. Nếu có -> Gửi lên Firebase
+  /// 5. Nếu không có mạng -> Kích hoạt SMS Fallback
   Future<void> sendSOS({
     required String userName,
     required String phoneNumber,
     required String description,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       state = state.copyWith(status: SOSStatus.loading, message: 'Đang gửi SOS...');
 
-      final position = await _smsFallback.getCurrentLocation();
-      if (position == null) {
+      double lat;
+      double lng;
+      if ((latitude == null) != (longitude == null)) {
         state = state.copyWith(
           status: SOSStatus.error,
           errorMessage:
-              'Không thể xác định vị trí. Vui lòng bật GPS và thử lại.',
+              'Cần truyền đầy đủ latitude và longitude hoặc không truyền cả hai.',
         );
         return;
       }
 
-      final latitude = position.latitude;
-      final longitude = position.longitude;
+      if (latitude != null && longitude != null) {
+        lat = latitude;
+        lng = longitude;
+      } else {
+        final position = await _smsFallback.getCurrentLocation();
+        if (position == null) {
+          state = state.copyWith(
+            status: SOSStatus.error,
+            errorMessage:
+                'Không thể xác định vị trí. Vui lòng bật GPS và thử lại.',
+          );
+          return;
+        }
+
+        lat = position.latitude;
+        lng = position.longitude;
+      }
+
       final createdAt = DateTime.now();
       final postId = 'sos_${createdAt.microsecondsSinceEpoch}';
       final locationId = 'location_$postId';
