@@ -1,5 +1,8 @@
 // lib/features/admin_panel/presentation/admin_map_screen.dart
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import 'dart:ui' as ui;
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
@@ -13,6 +16,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 
 // =============================================================================
 // THEME TOKENS
@@ -65,6 +70,12 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
 
   // Tọa độ hiện tại của Admin
   LatLng? _adminLocation;
+
+  // Routing
+  LatLng? _selectedDestination;
+  String? _selectedMarkerId;
+  List<LatLng> _routePoints = [];
+  bool _isRouting = false;
 
   @override
   void initState() {
@@ -123,8 +134,13 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       }
 
       _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
-
-      _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
+      
+      // Nếu đã có điểm đến mà vừa cập nhật GPS, tính lại đường đi
+      if (_selectedDestination != null && mounted) {
+        final communityReportsAsync = ref.read(communityReportsProvider);
+        final reports = communityReportsAsync.value ?? [];
+        _calculateRoute(reports);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -134,6 +150,107 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // XỬ LÝ ĐƯỜNG ĐI & GOOGLE MAPS
+  // ---------------------------------------------------------------------------
+  Future<void> _calculateRoute(List<CommunityReport> reports) async {
+    if (_adminLocation == null || _selectedDestination == null) return;
+    
+    setState(() {
+      _isRouting = true;
+    });
+
+    try {
+      final points = await OpenRouteService.instance.getRoute(
+        _adminLocation!,
+        _selectedDestination!,
+        avoidPoints: reports.map((r) => LatLng(r.latitude, r.longitude)).toList(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _routePoints = points;
+          _isRouting = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ADMIN MAP] Lỗi gọi API OpenRouteService: $e');
+      if (mounted) {
+        setState(() {
+          // Fallback đường chim bay
+          _routePoints = [_adminLocation!, _selectedDestination!];
+          _isRouting = false;
+        });
+      }
+    }
+  }
+
+  void _setDestinationAndRoute(LatLng dest, {String? markerId}) {
+    setState(() {
+      _selectedDestination = dest;
+      _selectedMarkerId = markerId;
+    });
+
+    if (_adminLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng bật định vị (Locate Me) trước khi lấy đường đi.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    final communityReportsAsync = ref.read(communityReportsProvider);
+    final reports = communityReportsAsync.value ?? [];
+    _calculateRoute(reports);
+  }
+
+  Future<void> _openGoogleMaps() async {
+    if (_adminLocation == null || _selectedDestination == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cần có vị trí của bạn và đánh dấu điểm đến để mở Google Maps.'),
+        ),
+      );
+      return;
+    }
+
+    final startLat = _adminLocation!.latitude;
+    final startLng = _adminLocation!.longitude;
+    final endLat = _selectedDestination!.latitude;
+    final endLng = _selectedDestination!.longitude;
+
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&origin=$startLat,$startLng'
+      '&destination=$endLat,$endLng'
+      '&travelmode=driving',
+    );
+
+    try {
+      final launched = await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không thể mở Google Maps trên thiết bị này.')),
+          );
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[ADMIN MAP] Open Google Maps failed: $e\n$st');
+       if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đã xảy ra lỗi khi mở Google Maps.')),
+          );
+        }
     }
   }
 
@@ -148,6 +265,26 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     final markersAsync = ref.watch(adminMapProvider);
     final communityReportsAsync = ref.watch(communityReportsProvider);
     final communityReports = communityReportsAsync.value ?? const [];
+
+    // Xoá đường đi nếu marker vừa được chọn bị xoá khỏi danh sách
+    if (_selectedMarkerId != null) {
+      bool found = false;
+      if (markersAsync.value?.any((m) => m.postId == _selectedMarkerId) == true) found = true;
+      if (stationList.any((s) => s.id == _selectedMarkerId)) found = true;
+      if (communityReports.any((r) => r.id == _selectedMarkerId)) found = true;
+
+      if (!found) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedDestination = null;
+              _selectedMarkerId = null;
+              _routePoints = [];
+            });
+          }
+        });
+      }
+    }
 
     ref.listen<AsyncValue<List<SosMapMarker>>>(adminMapProvider, (_, next) {
       final markers = next.value;
@@ -177,11 +314,14 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         Positioned.fill(
           child: FlutterMap(
             mapController: _mapCtrl,
-            options: const MapOptions(
+            options: MapOptions(
               initialCenter: _kDefaultCenter,
               initialZoom: _kDefaultZoom,
               minZoom: 4,
               maxZoom: 19,
+              onTap: (tapPosition, latLng) {
+                _setDestinationAndRoute(latLng, markerId: null);
+              },
             ),
             children: [
               TileLayer(
@@ -189,6 +329,19 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
                 userAgentPackageName: 'com.omnidisaster.app',
                 tileProvider: NetworkTileProvider(),
               ),
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      color: Colors.blue,
+                      strokeWidth: 4.0,
+                      pattern: _routePoints.length == 2
+                          ? StrokePattern.dashed(segments: [18, 12])
+                          : StrokePattern.solid(),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   ...markerList.map((m) => _buildMarker(m)),
@@ -196,6 +349,37 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
                     (s) => _buildStationMarker(s),
                   ), // Dùng spread operator (...)
                   ...communityReports.map((r) => _buildCommunityReportMarker(r)),
+
+                  // Vẽ Marker custom nếu người dùng click điểm bất kỳ (không phải thực thể có sẵn)
+                  if (_selectedDestination != null && _selectedMarkerId == null)
+                    Marker(
+                      point: _selectedDestination!,
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.topCenter,
+                      child: GestureDetector(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => _CustomPinDetailSheet(
+                              location: _selectedDestination!,
+                              onRemove: () {
+                                Navigator.of(context).pop();
+                                setState(() {
+                                  _selectedDestination = null;
+                                  _selectedMarkerId = null;
+                                  _routePoints = [];
+                                });
+                              },
+                            ),
+                          );
+                        },
+                        child: const _CustomDestinationPin(),
+                      ),
+                    ),
+
                   // Vẽ thêm Marker Admin nếu đã lấy được vị trí
                   if (_adminLocation != null)
                     Marker(
@@ -253,6 +437,8 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
               _ZoomControls(mapController: _mapCtrl),
               const SizedBox(height: 12),
               _LocateMeButton(onTap: _locateAdmin),
+              const SizedBox(height: 12),
+              _GoogleMapsButton(onTap: _openGoogleMaps),
             ],
           ),
         ),
@@ -281,6 +467,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 56,
       child: GestureDetector(
         onTap: () {
+          _setDestinationAndRoute(LatLng(s.latitude, s.longitude), markerId: s.id);
           showModalBottomSheet(
             context: context,
             backgroundColor: Colors.transparent,
@@ -315,6 +502,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 48,
       child: GestureDetector(
         onTap: () {
+          _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -377,6 +565,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
   }
 
   void _onMarkerTap(SosMapMarker marker) {
+    _setDestinationAndRoute(LatLng(marker.latitude, marker.longitude), markerId: marker.postId);
     setState(() => _activeMarkerId = marker.postId);
     showModalBottomSheet(
       context: context,
@@ -978,6 +1167,33 @@ class _LocateMeButton extends StatelessWidget {
   }
 }
 
+class _GoogleMapsButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _GoogleMapsButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _C.fabBg,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3)),
+        ],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: const SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(Icons.directions_rounded, size: 20, color: Colors.blueAccent),
+        ),
+      ),
+    );
+  }
+}
+
 // =============================================================================
 // HELPER WIDGETS
 // =============================================================================
@@ -1159,7 +1375,7 @@ class _EmptyStateBanner extends StatelessWidget {
 }
 
 // =============================================================================
-// ADMIN LOCATION MARKER (Chấm xanh GPS)
+// ADMIN LOCATION MARKER & CUSTOM PIN
 // =============================================================================
 class _AdminLocationMarker extends StatelessWidget {
   const _AdminLocationMarker();
@@ -1191,6 +1407,166 @@ class _AdminLocationMarker extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CustomDestinationPin extends StatelessWidget {
+  const _CustomDestinationPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: const BoxDecoration(
+            color: Colors.redAccent,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+            ],
+          ),
+          child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+        ),
+        CustomPaint(
+          size: const Size(6, 4),
+          painter: _PinTailPainter(color: Colors.redAccent),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomPinDetailSheet extends StatefulWidget {
+  final LatLng location;
+  final VoidCallback onRemove;
+
+  const _CustomPinDetailSheet({
+    Key? key,
+    required this.location,
+    required this.onRemove,
+  }) : super(key: key);
+
+  @override
+  State<_CustomPinDetailSheet> createState() => _CustomPinDetailSheetState();
+}
+
+class _CustomPinDetailSheetState extends State<_CustomPinDetailSheet> {
+  bool _isLoading = true;
+  String? _address;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAddress();
+  }
+
+  Future<void> _fetchAddress() async {
+    try {
+      final lat = widget.location.latitude;
+      final lon = widget.location.longitude;
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&accept-language=vi-VN',
+      );
+      
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'com.omnidisaster.app'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() {
+            _address = data['display_name'] ?? 'Không tìm thấy thông tin địa chỉ.';
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Lỗi tải địa chỉ: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, color: Colors.redAccent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Vị trí đã chọn',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                 icon: const Icon(Icons.close),
+                 onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text(
+            'Tọa độ: ${widget.location.latitude.toStringAsFixed(6)}, ${widget.location.longitude.toStringAsFixed(6)}',
+            style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          if (_isLoading)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ))
+          else if (_errorMessage != null)
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.red),
+            )
+          else
+            Text(
+              'Địa chỉ: $_address',
+              style: const TextStyle(fontSize: 15, color: Colors.black87),
+            ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: widget.onRemove,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('Xóa vị trí', style: TextStyle(color: Colors.red)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.red),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
