@@ -1,5 +1,8 @@
 // lib/features/admin_panel/presentation/admin_map_screen.dart
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import 'dart:ui' as ui;
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
@@ -70,6 +73,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
 
   // Routing
   LatLng? _selectedDestination;
+  String? _selectedMarkerId;
   List<LatLng> _routePoints = [];
   bool _isRouting = false;
 
@@ -184,8 +188,11 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     }
   }
 
-  void _setDestinationAndRoute(LatLng dest) {
-    setState(() => _selectedDestination = dest);
+  void _setDestinationAndRoute(LatLng dest, {String? markerId}) {
+    setState(() {
+      _selectedDestination = dest;
+      _selectedMarkerId = markerId;
+    });
 
     if (_adminLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -259,6 +266,26 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
     final communityReportsAsync = ref.watch(communityReportsProvider);
     final communityReports = communityReportsAsync.value ?? const [];
 
+    // Xoá đường đi nếu marker vừa được chọn bị xoá khỏi danh sách
+    if (_selectedMarkerId != null) {
+      bool found = false;
+      if (markersAsync.value?.any((m) => m.postId == _selectedMarkerId) == true) found = true;
+      if (stationList.any((s) => s.id == _selectedMarkerId)) found = true;
+      if (communityReports.any((r) => r.id == _selectedMarkerId)) found = true;
+
+      if (!found) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _selectedDestination = null;
+              _selectedMarkerId = null;
+              _routePoints = [];
+            });
+          }
+        });
+      }
+    }
+
     ref.listen<AsyncValue<List<SosMapMarker>>>(adminMapProvider, (_, next) {
       final markers = next.value;
       if (markers != null && markers.isNotEmpty) {
@@ -287,11 +314,14 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         Positioned.fill(
           child: FlutterMap(
             mapController: _mapCtrl,
-            options: const MapOptions(
+            options: MapOptions(
               initialCenter: _kDefaultCenter,
               initialZoom: _kDefaultZoom,
               minZoom: 4,
               maxZoom: 19,
+              onTap: (tapPosition, latLng) {
+                _setDestinationAndRoute(latLng, markerId: null);
+              },
             ),
             children: [
               TileLayer(
@@ -319,6 +349,37 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
                     (s) => _buildStationMarker(s),
                   ), // Dùng spread operator (...)
                   ...communityReports.map((r) => _buildCommunityReportMarker(r)),
+
+                  // Vẽ Marker custom nếu người dùng click điểm bất kỳ (không phải thực thể có sẵn)
+                  if (_selectedDestination != null && _selectedMarkerId == null)
+                    Marker(
+                      point: _selectedDestination!,
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.topCenter,
+                      child: GestureDetector(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => _CustomPinDetailSheet(
+                              location: _selectedDestination!,
+                              onRemove: () {
+                                Navigator.of(context).pop();
+                                setState(() {
+                                  _selectedDestination = null;
+                                  _selectedMarkerId = null;
+                                  _routePoints = [];
+                                });
+                              },
+                            ),
+                          );
+                        },
+                        child: const _CustomDestinationPin(),
+                      ),
+                    ),
+
                   // Vẽ thêm Marker Admin nếu đã lấy được vị trí
                   if (_adminLocation != null)
                     Marker(
@@ -406,7 +467,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 56,
       child: GestureDetector(
         onTap: () {
-          _setDestinationAndRoute(LatLng(s.latitude, s.longitude));
+          _setDestinationAndRoute(LatLng(s.latitude, s.longitude), markerId: s.id);
           showModalBottomSheet(
             context: context,
             backgroundColor: Colors.transparent,
@@ -441,7 +502,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 48,
       child: GestureDetector(
         onTap: () {
-          _setDestinationAndRoute(LatLng(report.latitude, report.longitude));
+          _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -504,7 +565,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
   }
 
   void _onMarkerTap(SosMapMarker marker) {
-    _setDestinationAndRoute(LatLng(marker.latitude, marker.longitude));
+    _setDestinationAndRoute(LatLng(marker.latitude, marker.longitude), markerId: marker.postId);
     setState(() => _activeMarkerId = marker.postId);
     showModalBottomSheet(
       context: context,
@@ -1314,7 +1375,7 @@ class _EmptyStateBanner extends StatelessWidget {
 }
 
 // =============================================================================
-// ADMIN LOCATION MARKER (Chấm xanh GPS)
+// ADMIN LOCATION MARKER & CUSTOM PIN
 // =============================================================================
 class _AdminLocationMarker extends StatelessWidget {
   const _AdminLocationMarker();
@@ -1346,6 +1407,166 @@ class _AdminLocationMarker extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CustomDestinationPin extends StatelessWidget {
+  const _CustomDestinationPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: const BoxDecoration(
+            color: Colors.redAccent,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+            ],
+          ),
+          child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+        ),
+        CustomPaint(
+          size: const Size(6, 4),
+          painter: _PinTailPainter(color: Colors.redAccent),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomPinDetailSheet extends StatefulWidget {
+  final LatLng location;
+  final VoidCallback onRemove;
+
+  const _CustomPinDetailSheet({
+    Key? key,
+    required this.location,
+    required this.onRemove,
+  }) : super(key: key);
+
+  @override
+  State<_CustomPinDetailSheet> createState() => _CustomPinDetailSheetState();
+}
+
+class _CustomPinDetailSheetState extends State<_CustomPinDetailSheet> {
+  bool _isLoading = true;
+  String? _address;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAddress();
+  }
+
+  Future<void> _fetchAddress() async {
+    try {
+      final lat = widget.location.latitude;
+      final lon = widget.location.longitude;
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json&accept-language=vi-VN',
+      );
+      
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'com.omnidisaster.app'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        if (mounted) {
+          setState(() {
+            _address = data['display_name'] ?? 'Không tìm thấy thông tin địa chỉ.';
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Lỗi tải địa chỉ: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, color: Colors.redAccent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Vị trí đã chọn',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                 icon: const Icon(Icons.close),
+                 onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const Divider(),
+          const SizedBox(height: 12),
+          Text(
+            'Tọa độ: ${widget.location.latitude.toStringAsFixed(6)}, ${widget.location.longitude.toStringAsFixed(6)}',
+            style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          if (_isLoading)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ))
+          else if (_errorMessage != null)
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.red),
+            )
+          else
+            Text(
+              'Địa chỉ: $_address',
+              style: const TextStyle(fontSize: 15, color: Colors.black87),
+            ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: widget.onRemove,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text('Xóa vị trí', style: TextStyle(color: Colors.red)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.red),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
