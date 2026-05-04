@@ -386,6 +386,71 @@ class FirebaseSyncService {
     return sosResult;
   }
 
+  /// Completes a 3-step migration for an anonymous user logging in:
+  /// 1. Transfers local 'pending' records ownership to [realUid].
+  /// 2. Pulls old data owned by [realUid] from Firestore and hydrates local DB.
+  /// 3. Pushes newly claimed pending data to Firestore.
+  Future<void> migrateAndSyncUserData(String realUid) async {
+    _log('Migrating anonymous data to real Uid: $realUid');
+    // Step 1: Local Ownership Transfer
+    final tempUids = const ['citizen_01', 'anonymous', 'null', ''];
+
+    // Update Posts - gỡ điều kiện pending, force lại thành pending để kích hoạt update lên Firebase
+    await (_db.update(_db.posts)..where((t) => t.userId.isIn(tempUids)))
+        .write(PostsCompanion(userId: Value(realUid), syncStatus: const Value('pending')));
+
+    // Update CommunityReports
+    await (_db.update(_db.communityReports)..where((t) => t.reportedBy.isIn(tempUids)))
+        .write(CommunityReportsCompanion(reportedBy: Value(realUid), syncStatus: const Value('pending')));
+
+    // Update CheckInLogs
+    await (_db.update(_db.checkInLogs)..where((t) => t.userId.isIn(tempUids)))
+        .write(CheckInLogsCompanion(userId: Value(realUid), syncStatus: const Value('pending')));
+
+    if (!await _isConnected()) {
+      _log('No connection during migration. Steps 2 & 3 skipped.');
+      return;
+    }
+
+    // Step 2: Pull & Hydrate (Old Data)
+    try {
+      // Pull and hydrate posts and associated locations
+      final postsSnapshot = await _firestore.collection(_Collections.posts).where('userId', isEqualTo: realUid).get();
+      for (final doc in postsSnapshot.docs) {
+        final data = doc.data();
+        await _db.into(_db.posts).insertOnConflictUpdate(_firestoreToPostCompanion(doc.id, data));
+        
+        // Also fetch location if exists
+        final locSnapshot = await _firestore.collection(_Collections.locations).where('postId', isEqualTo: doc.id).limit(1).get();
+        if (locSnapshot.docs.isNotEmpty) {
+          final locDoc = locSnapshot.docs.first;
+          await _db.into(_db.locations).insertOnConflictUpdate(_firestoreToLocationCompanion(locDoc.id, locDoc.data(), doc.id));
+        }
+      }
+
+      // Pull and hydrate community reports
+      final reportsSnapshot = await _firestore.collection(_Collections.communityReports).where('reportedBy', isEqualTo: realUid).get();
+      for (final doc in reportsSnapshot.docs) {
+        await _db.into(_db.communityReports).insertOnConflictUpdate(_firestoreToCommunityReportCompanion(docId: doc.id, data: doc.data()));
+      }
+
+      // Pull and hydrate check-in logs
+      final logsSnapshot = await _firestore.collection('check_in_logs').where('userId', isEqualTo: realUid).get();
+      for (final doc in logsSnapshot.docs) {
+        await _db.into(_db.checkInLogs).insertOnConflictUpdate(_firestoreToCheckInLogCompanion(doc.id, doc.data()));
+      }
+    } catch (e, st) {
+      _log('Migration Step 2 (Hydrate) error: $e\n$st');
+    }
+
+    // Step 3: Push & Append (New Data)
+    await syncPendingSOS();
+    await syncPendingCommunityReports();
+    await syncPendingCheckInLogs();
+    
+    _log('Migration complete for Uid: $realUid');
+  }
+
   /// Tears everything down — call when the user signs out or app disposes.
   Future<void> dispose() async {
     await stopListeningToAdminEvents();
@@ -856,6 +921,50 @@ class FirebaseSyncService {
       createdBy: Value((data['createdBy'] as String?)?.trim()),
       lastLoginAt: Value(lastLoginAt),
       mfaEnabled: Value((data['mfaEnabled'] as bool?) ?? false),
+    );
+  }
+
+  PostsCompanion _firestoreToPostCompanion(String docId, Map<String, dynamic> data) {
+    final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+
+    return PostsCompanion.insert(
+      id: docId,
+      eventId: (data['eventId'] as String?) ?? '',
+      userId: (data['userId'] as String?) ?? '',
+      postType: (data['postType'] as String?) ?? 'sos',
+      title: Value((data['title'] as String?)?.trim()),
+      attachmentUrl: Value((data['attachmentUrl'] as String?)?.trim()),
+      attachmentName: Value((data['attachmentName'] as String?)?.trim()),
+      content: (data['content'] as String?) ?? '',
+      isVerified: Value((data['isVerified'] as bool?) ?? false),
+      createdAt: createdAt,
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  LocationsCompanion _firestoreToLocationCompanion(String docId, Map<String, dynamic> data, String postId) {
+    final rawLat = data['latitude'];
+    final rawLng = data['longitude'];
+
+    return LocationsCompanion.insert(
+      id: docId,
+      postId: (data['postId'] as String?) ?? postId,
+      latitude: (rawLat as num?)?.toDouble() ?? 0.0,
+      longitude: (rawLng as num?)?.toDouble() ?? 0.0,
+      addressText: Value((data['addressText'] as String?)?.trim()),
+    );
+  }
+
+  CheckInLogsCompanion _firestoreToCheckInLogCompanion(String docId, Map<String, dynamic> data) {
+    final timestamp = _asDateTime(data['timestamp']) ?? DateTime.now();
+
+    return CheckInLogsCompanion.insert(
+      id: docId,
+      stationId: (data['stationId'] as String?) ?? '',
+      userId: (data['userId'] as String?) ?? '',
+      type: (data['type'] as String?) ?? 'in',
+      timestamp: timestamp,
+      syncStatus: const Value('synced'),
     );
   }
 
