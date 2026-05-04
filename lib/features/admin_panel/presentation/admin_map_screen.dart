@@ -13,6 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 
 // =============================================================================
 // THEME TOKENS
@@ -65,6 +67,11 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
 
   // Tọa độ hiện tại của Admin
   LatLng? _adminLocation;
+
+  // Routing
+  LatLng? _selectedDestination;
+  List<LatLng> _routePoints = [];
+  bool _isRouting = false;
 
   @override
   void initState() {
@@ -123,8 +130,13 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       }
 
       _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
-
-      _mapCtrl.move(LatLng(pos.latitude, pos.longitude), 14.0);
+      
+      // Nếu đã có điểm đến mà vừa cập nhật GPS, tính lại đường đi
+      if (_selectedDestination != null && mounted) {
+        final communityReportsAsync = ref.read(communityReportsProvider);
+        final reports = communityReportsAsync.value ?? [];
+        _calculateRoute(reports);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -134,6 +146,104 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // XỬ LÝ ĐƯỜNG ĐI & GOOGLE MAPS
+  // ---------------------------------------------------------------------------
+  Future<void> _calculateRoute(List<CommunityReport> reports) async {
+    if (_adminLocation == null || _selectedDestination == null) return;
+    
+    setState(() {
+      _isRouting = true;
+    });
+
+    try {
+      final points = await OpenRouteService.instance.getRoute(
+        _adminLocation!,
+        _selectedDestination!,
+        avoidPoints: reports.map((r) => LatLng(r.latitude, r.longitude)).toList(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _routePoints = points;
+          _isRouting = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ADMIN MAP] Lỗi gọi API OpenRouteService: $e');
+      if (mounted) {
+        setState(() {
+          // Fallback đường chim bay
+          _routePoints = [_adminLocation!, _selectedDestination!];
+          _isRouting = false;
+        });
+      }
+    }
+  }
+
+  void _setDestinationAndRoute(LatLng dest) {
+    setState(() => _selectedDestination = dest);
+
+    if (_adminLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng bật định vị (Locate Me) trước khi lấy đường đi.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    final communityReportsAsync = ref.read(communityReportsProvider);
+    final reports = communityReportsAsync.value ?? [];
+    _calculateRoute(reports);
+  }
+
+  Future<void> _openGoogleMaps() async {
+    if (_adminLocation == null || _selectedDestination == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cần có vị trí của bạn và đánh dấu điểm đến để mở Google Maps.'),
+        ),
+      );
+      return;
+    }
+
+    final startLat = _adminLocation!.latitude;
+    final startLng = _adminLocation!.longitude;
+    final endLat = _selectedDestination!.latitude;
+    final endLng = _selectedDestination!.longitude;
+
+    final Uri googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&origin=$startLat,$startLng'
+      '&destination=$endLat,$endLng'
+      '&travelmode=driving',
+    );
+
+    try {
+      final launched = await launchUrl(
+        googleMapsUrl,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không thể mở Google Maps trên thiết bị này.')),
+          );
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[ADMIN MAP] Open Google Maps failed: $e\n$st');
+       if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đã xảy ra lỗi khi mở Google Maps.')),
+          );
+        }
     }
   }
 
@@ -189,6 +299,19 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
                 userAgentPackageName: 'com.omnidisaster.app',
                 tileProvider: NetworkTileProvider(),
               ),
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      color: Colors.blue,
+                      strokeWidth: 4.0,
+                      pattern: _routePoints.length == 2
+                          ? StrokePattern.dashed(segments: [18, 12])
+                          : StrokePattern.solid(),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   ...markerList.map((m) => _buildMarker(m)),
@@ -253,6 +376,8 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
               _ZoomControls(mapController: _mapCtrl),
               const SizedBox(height: 12),
               _LocateMeButton(onTap: _locateAdmin),
+              const SizedBox(height: 12),
+              _GoogleMapsButton(onTap: _openGoogleMaps),
             ],
           ),
         ),
@@ -281,6 +406,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 56,
       child: GestureDetector(
         onTap: () {
+          _setDestinationAndRoute(LatLng(s.latitude, s.longitude));
           showModalBottomSheet(
             context: context,
             backgroundColor: Colors.transparent,
@@ -315,6 +441,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       height: 48,
       child: GestureDetector(
         onTap: () {
+          _setDestinationAndRoute(LatLng(report.latitude, report.longitude));
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -377,6 +504,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
   }
 
   void _onMarkerTap(SosMapMarker marker) {
+    _setDestinationAndRoute(LatLng(marker.latitude, marker.longitude));
     setState(() => _activeMarkerId = marker.postId);
     showModalBottomSheet(
       context: context,
@@ -972,6 +1100,33 @@ class _LocateMeButton extends StatelessWidget {
           width: 42,
           height: 42,
           child: Icon(Icons.my_location_rounded, size: 20, color: _C.userDot),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleMapsButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _GoogleMapsButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _C.fabBg,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: _C.shadow, blurRadius: 12, offset: Offset(0, 3)),
+        ],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: const SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(Icons.directions_rounded, size: 20, color: Colors.blueAccent),
         ),
       ),
     );
