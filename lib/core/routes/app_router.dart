@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:disaster_response_app/features/medical_profile/presentation/medical_setup_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb, kReleaseMode;
@@ -34,6 +35,7 @@ import 'package:disaster_response_app/features/event_map/presentation/event_map_
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_home_screen.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_layout.dart';
 import 'package:disaster_response_app/features/user_mobile/presentation/mobile_profile_screen.dart';
+
 
 import 'route_names.dart';
 
@@ -361,6 +363,12 @@ abstract final class AppRouter {
           name: RouteNames.nameAiChat,
           builder: (context, state) => const AiChatScreen(),
         ),
+        GoRoute(
+          path: RouteNames.medicalProfile, // Đã có trong RouteNames[cite: 2]
+          name: RouteNames
+              .nameMedicalProfile, // Thêm dòng này để dùng goNamed/pushNamed[cite: 2]
+          builder: (context, state) => const MedicalSetupScreen(),
+        ),
       ],
     ),
   ];
@@ -393,6 +401,7 @@ abstract final class AppRouter {
         ),
       ],
     ),
+
   ];
 
   // ─────────────────────────────────────────────────────────────────────────

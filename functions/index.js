@@ -1240,3 +1240,44 @@ exports.sendPostNotification = onDocumentCreated("posts/{postId}", async (event)
     return null;
   }
 });
+// ============== GUEST SOS MERGE ================
+exports.mergeGuestSos = onCall(async (request) => {
+  // Ensure user is verified (logged in).
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError("unauthenticated", "User must be logged in to merge SOS.");
+  }
+  
+  const deviceId = request.data.deviceId;
+  if (!deviceId) {
+    throw new HttpsError("invalid-argument", "Missing deviceId.");
+  }
+
+  const uid = request.auth.uid;
+  
+  const querySnapshot = await db.collection("posts")
+    .where("postType", "==", "sos")
+    .where("deviceId", "==", deviceId)
+    .get();
+
+  if (querySnapshot.empty) {
+    return { success: true, count: 0, message: "No anonymous SOS found." };
+  }
+
+  const batch = db.batch();
+  let count = 0;
+
+  querySnapshot.forEach((doc) => {
+    const data = doc.data();
+    // Only update if it doesn't already have an assigned, valid userId
+    if (!data.userId || data.userId === "") {
+      batch.update(doc.ref, { userId: uid });
+      count++;
+    }
+  });
+
+  if (count > 0) {
+    await batch.commit();
+  }
+
+  return { success: true, count, message: `Merged ${count} anonymous SOS posts.` };
+});

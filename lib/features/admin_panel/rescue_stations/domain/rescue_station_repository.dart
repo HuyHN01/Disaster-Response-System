@@ -33,7 +33,11 @@ class RescueStationRepository {
 
   Stream<List<RescueStation>> watchActiveStations() {
     return (_db.select(_db.rescueStations)
-          ..where((t) => t.deletedAt.isNull() & t.status.equals('active'))
+          ..where(
+            (t) =>
+                t.deletedAt.isNull() &
+                (t.status.equals('active') | t.status.equals('full')),
+          )
           ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
         .watch();
   }
@@ -57,6 +61,30 @@ class RescueStationRepository {
     );
   }
 
+  Future<void> updateOccupancy(String id, int delta) async {
+    final station = await getById(id);
+    if (station == null) return;
+    
+    final currentOccupancy = station.occupancy;
+    final newOccupancy = (currentOccupancy + delta) < 0 ? 0 : (currentOccupancy + delta);
+    
+    String newStatus = station.status;
+    if (station.capacity != null && newOccupancy >= station.capacity!) {
+      newStatus = 'full';
+    } else if (station.capacity != null && newOccupancy < station.capacity! && station.status == 'full') {
+      newStatus = 'active'; // Revert back to active if it's below capacity
+    }
+
+    await (_db.update(_db.rescueStations)..where((t) => t.id.equals(id))).write(
+      RescueStationsCompanion(
+        occupancy: Value(newOccupancy),
+        status: Value(newStatus),
+        syncStatus: const Value('pending'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   Future<void> softDeletePending(String id, DateTime now) async {
     await (_db.update(_db.rescueStations)..where((t) => t.id.equals(id))).write(
       RescueStationsCompanion(
@@ -65,6 +93,37 @@ class RescueStationRepository {
         updatedAt: Value(now),
         syncStatus: const Value('pending'),
       ),
+    );
+  }
+
+  Future<CheckInLog> insertCheckInLog({
+    required String stationId,
+    required String userId,
+    required String type,
+  }) async {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final log = CheckInLog(
+      id: id,
+      stationId: stationId,
+      userId: userId,
+      type: type,
+      timestamp: DateTime.now(),
+      syncStatus: 'pending',
+    );
+    await _db.into(_db.checkInLogs).insert(log);
+    return log;
+  }
+
+  Future<CheckInLog?> getLatestCheckInLog() {
+    return (_db.select(_db.checkInLogs)
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<void> markLogSynced(String logId) async {
+    await (_db.update(_db.checkInLogs)..where((l) => l.id.equals(logId))).write(
+      const CheckInLogsCompanion(syncStatus: Value('synced')),
     );
   }
 }

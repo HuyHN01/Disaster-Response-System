@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 
 class EmailOtpAuthException implements Exception {
   final String message;
@@ -18,6 +21,7 @@ class EmailOtpAuthRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final GoogleSignIn _googleSignIn;
+  final FirebaseSyncService? _syncService;
   bool _isGoogleInitialized = false;
 
   EmailOtpAuthRepository({
@@ -25,12 +29,14 @@ class EmailOtpAuthRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     GoogleSignIn? googleSignIn,
+    FirebaseSyncService? syncService,
   })
     : _functions =
           functions ?? FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
       _auth = auth ?? FirebaseAuth.instance,
       _firestore = firestore ?? FirebaseFirestore.instance,
-      _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+      _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+      _syncService = syncService;
 
   Future<void> sendOtp({required String email}) async {
     final normalizedEmail = email.trim().toLowerCase();
@@ -267,7 +273,18 @@ class EmailOtpAuthRepository {
         'lastLoginAt': now,
         'mfaEnabled': hasMfa,
       };
-      await docRef.set(createPayload, SetOptions(merge: true));
+      
+      try {
+        await docRef.set(createPayload, SetOptions(merge: true));
+      } catch (_) {}
+
+      try {
+        if (_syncService != null) {
+          await _syncService.migrateAndSyncUserData(user.uid);
+        }
+      } catch (_) {}
+      
+      await _mergeGuestSos();
       return;
     }
 
@@ -294,7 +311,30 @@ class EmailOtpAuthRepository {
       updatePayload['email'] = normalizedEmail;
     }
 
-    await docRef.set(updatePayload, SetOptions(merge: true));
+    try {
+      await docRef.set(updatePayload, SetOptions(merge: true));
+    } catch (_) {}
+
+    try {
+      if (_syncService != null) {
+        await _syncService.migrateAndSyncUserData(user.uid);
+      }
+    } catch (_) {}
+
+    await _mergeGuestSos();
+  }
+
+  Future<void> _mergeGuestSos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final deviceId = prefs.getString('guest_device_id');
+      if (deviceId != null) {
+        final callable = _functions.httpsCallable('mergeGuestSos');
+        await callable.call({'deviceId': deviceId});
+      }
+    } catch (e) {
+      debugPrint('Lỗi merge guest SOS: $e');
+    }
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {
@@ -407,10 +447,12 @@ class EmailOtpAuthRepository {
 }
 
 final emailOtpAuthRepositoryProvider = Provider<EmailOtpAuthRepository>((ref) {
+  final syncService = ref.watch(firebaseSyncServiceProvider);
   return EmailOtpAuthRepository(
     functions: FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
     auth: FirebaseAuth.instance,
     firestore: FirebaseFirestore.instance,
     googleSignIn: GoogleSignIn.instance,
+    syncService: syncService,
   );
 });

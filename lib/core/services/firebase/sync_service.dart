@@ -20,6 +20,7 @@ class _Collections {
   static const String disasterEvents = 'disaster_events';
   static const String rescueStations = 'rescue_stations';
   static const String users = 'users';
+  static const String communityReports = 'community_reports';
 }
 
 // =============================================================================
@@ -57,6 +58,8 @@ class FirebaseSyncService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _rescueStationsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _communityReportsSubscription;
   StreamSubscription<dynamic>? _usersSubscription;
 
   FirebaseSyncService({
@@ -147,6 +150,74 @@ class FirebaseSyncService {
     return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
   }
 
+  /// Pushes every local check-in log with `syncStatus == 'pending'`
+  /// up to Firestore and marks it as synced in Drift.
+  Future<SyncResult> syncPendingCheckInLogs() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ logs.',
+      );
+    }
+
+    final pendingLogs = await (_db.select(
+      _db.checkInLogs,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingLogs.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final log in pendingLogs) {
+      try {
+        await _syncSingleCheckInLog(log);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ check_in_log ${log.id}: $e\n$st');
+        failedIds.add(log.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
+  /// Pushes every local community report with `syncStatus == 'pending'`
+  /// up to Firestore and marks it as synced in Drift.
+  Future<SyncResult> syncPendingCommunityReports() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ báo cáo cộng đồng.',
+      );
+    }
+
+    final pendingReports = await (_db.select(
+      _db.communityReports,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingReports.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final report in pendingReports) {
+      try {
+        await _syncSingleCommunityReport(report);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ community_report ${report.id}: $e\\n$st');
+        failedIds.add(report.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
   /// Opens a **realtime** Firestore listener on the `disaster_events`
   /// collection and writes any new/updated documents straight into the
   /// local Drift [DisasterEvents] table.
@@ -204,6 +275,30 @@ class FirebaseSyncService {
   Future<void> stopListeningToRescueStations() async {
     await _rescueStationsSubscription?.cancel();
     _rescueStationsSubscription = null;
+  }
+
+  /// Opens a realtime Firestore listener on `community_reports`.
+  void listenToCommunityReports({
+    void Function(CommunityReport report)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _communityReportsSubscription?.cancel();
+
+    final query = _firestore.collection(_Collections.communityReports);
+
+    _communityReportsSubscription = query.snapshots().listen(
+      (snapshot) => _handleCommunityReportSnapshot(snapshot, onUpsert: onUpsert),
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe community_reports: $error\\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToCommunityReports() async {
+    await _communityReportsSubscription?.cancel();
+    _communityReportsSubscription = null;
   }
 
   /// Opens a realtime Firestore listener on `users`.
@@ -270,23 +365,122 @@ class FirebaseSyncService {
   Future<SyncResult> startSync() async {
     listenToAdminEvents();
     listenToRescueStations();
+    listenToCommunityReports();
     listenToUsers();
 
     final sosResult = await syncPendingSOS();
     final stationResult = await syncPendingRescueStations();
+    final logResult = await syncPendingCheckInLogs();
+    final communityResult = await syncPendingCommunityReports();
 
     if (!stationResult.isSuccess || stationResult.hasPartialFailure) {
       _log('Rescue station sync result: $stationResult');
     }
+    if (!logResult.isSuccess || logResult.hasPartialFailure) {
+      _log('Check-in log sync result: $logResult');
+    }
+    if (!communityResult.isSuccess || communityResult.hasPartialFailure) {
+      _log('Community reports sync result: $communityResult');
+    }
 
     return sosResult;
+  }
+
+  /// Completes a 3-step migration for an anonymous user logging in:
+  /// 1. Transfers local 'pending' records ownership to [realUid].
+  /// 2. Pulls old data owned by [realUid] from Firestore and hydrates local DB.
+  /// 3. Pushes newly claimed pending data to Firestore.
+  Future<void> migrateAndSyncUserData(String realUid) async {
+    _log('Migrating anonymous data to real Uid: $realUid');
+    // Step 1: Local Ownership Transfer
+    final tempUids = const ['citizen_01', 'anonymous', 'null', ''];
+
+    // Update Posts - gỡ điều kiện pending, force lại thành pending để kích hoạt update lên Firebase
+    await (_db.update(_db.posts)..where((t) => t.userId.isIn(tempUids)))
+        .write(PostsCompanion(userId: Value(realUid), syncStatus: const Value('pending')));
+
+    // Update CommunityReports
+    await (_db.update(_db.communityReports)..where((t) => t.reportedBy.isIn(tempUids)))
+        .write(CommunityReportsCompanion(reportedBy: Value(realUid), syncStatus: const Value('pending')));
+
+    // Update CheckInLogs
+    await (_db.update(_db.checkInLogs)..where((t) => t.userId.isIn(tempUids)))
+        .write(CheckInLogsCompanion(userId: Value(realUid), syncStatus: const Value('pending')));
+
+    if (!await _isConnected()) {
+      _log('No connection during migration. Steps 2 & 3 skipped.');
+      return;
+    }
+
+    // Step 2: Pull & Hydrate (Old Data)
+    try {
+      // Pull and hydrate posts and associated locations
+      final postsSnapshot = await _firestore.collection(_Collections.posts).where('userId', isEqualTo: realUid).get();
+      for (final doc in postsSnapshot.docs) {
+        final data = doc.data();
+        await _db.into(_db.posts).insertOnConflictUpdate(_firestoreToPostCompanion(doc.id, data));
+        
+        // Also fetch location if exists
+        final locSnapshot = await _firestore.collection(_Collections.locations).where('postId', isEqualTo: doc.id).limit(1).get();
+        if (locSnapshot.docs.isNotEmpty) {
+          final locDoc = locSnapshot.docs.first;
+          await _db.into(_db.locations).insertOnConflictUpdate(_firestoreToLocationCompanion(locDoc.id, locDoc.data(), doc.id));
+        }
+      }
+
+      // Pull and hydrate community reports
+      final reportsSnapshot = await _firestore.collection(_Collections.communityReports).where('reportedBy', isEqualTo: realUid).get();
+      for (final doc in reportsSnapshot.docs) {
+        await _db.into(_db.communityReports).insertOnConflictUpdate(_firestoreToCommunityReportCompanion(docId: doc.id, data: doc.data()));
+      }
+
+      // Pull and hydrate check-in logs
+      final logsSnapshot = await _firestore.collection('check_in_logs').where('userId', isEqualTo: realUid).get();
+      for (final doc in logsSnapshot.docs) {
+        await _db.into(_db.checkInLogs).insertOnConflictUpdate(_firestoreToCheckInLogCompanion(doc.id, doc.data()));
+      }
+    } catch (e, st) {
+      _log('Migration Step 2 (Hydrate) error: $e\n$st');
+    }
+
+    // Step 3: Push & Append (New Data)
+    await syncPendingSOS();
+    await syncPendingCommunityReports();
+    await syncPendingCheckInLogs();
+    
+    _log('Migration complete for Uid: $realUid');
   }
 
   /// Tears everything down — call when the user signs out or app disposes.
   Future<void> dispose() async {
     await stopListeningToAdminEvents();
     await stopListeningToRescueStations();
+    await stopListeningToCommunityReports();
     await stopListeningToUsers();
+  }
+
+  Future<void> _syncSingleCheckInLog(CheckInLog log) async {
+    final docRef = _firestore.collection('check_in_logs').doc(log.id);
+    await docRef.set(_checkInLogToFirestore(log), SetOptions(merge: true));
+
+    await (_db.update(_db.checkInLogs)..where((l) => l.id.equals(log.id))).write(
+      const CheckInLogsCompanion(syncStatus: Value('synced')),
+    );
+  }
+
+  Future<void> _syncSingleCommunityReport(CommunityReport report) async {
+    final ref = _firestore
+        .collection(_Collections.communityReports)
+        .doc(report.id);
+    await ref.set(_communityReportToFirestore(report), SetOptions(merge: true));
+
+    await (_db.update(
+      _db.communityReports,
+    )..where((s) => s.id.equals(report.id))).write(
+      const CommunityReportsCompanion(
+        syncStatus: Value('synced'),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -434,6 +628,41 @@ class FirebaseSyncService {
     }
   }
 
+  Future<void> _handleCommunityReportSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(CommunityReport report)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await (_db.delete(
+            _db.communityReports,
+          )..where((s) => s.id.equals(change.doc.id))).go();
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incoming = _firestoreToCommunityReportCompanion(
+          docId: change.doc.id,
+          data: data,
+        );
+
+        await _db.into(_db.communityReports).insertOnConflictUpdate(incoming);
+
+        if (onUpsert != null) {
+          final inserted = await (_db.select(
+            _db.communityReports,
+          )..where((s) => s.id.equals(change.doc.id))).getSingleOrNull();
+          if (inserted != null) onUpsert(inserted);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý community_report ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
   Future<void> _handleUsersSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot, {
     void Function(User user)? onUpsert,
@@ -500,6 +729,16 @@ class FirebaseSyncService {
   // PRIVATE — Serialisation helpers
   // ---------------------------------------------------------------------------
 
+  Map<String, dynamic> _checkInLogToFirestore(CheckInLog log) => {
+    'id': log.id,
+    'stationId': log.stationId,
+    'userId': log.userId,
+    'type': log.type,
+    'timestamp': Timestamp.fromDate(log.timestamp),
+    'syncStatus': 'synced',
+    'uploadedAt': FieldValue.serverTimestamp(),
+  };
+
   Map<String, dynamic> _postToFirestore(Post post) => {
     'id': post.id,
     'eventId': post.eventId,
@@ -528,11 +767,24 @@ class FirebaseSyncService {
     'address': s.address,
     'contactPhone': s.contactPhone,
     'capacity': s.capacity,
+    'occupancy': s.occupancy,
     'resourcesJson': s.resourcesJson,
     'status': s.status,
     'createdAt': Timestamp.fromDate(s.createdAt),
     'updatedAt': Timestamp.fromDate(s.updatedAt ?? s.createdAt),
     'deletedAt': s.deletedAt == null ? null : Timestamp.fromDate(s.deletedAt!),
+    'syncStatus': 'synced',
+  };
+
+  Map<String, dynamic> _communityReportToFirestore(CommunityReport r) => {
+    'id': r.id,
+    'type': r.type,
+    'customTypeName': r.customTypeName,
+    'latitude': r.latitude,
+    'longitude': r.longitude,
+    'description': r.description,
+    'reportedBy': r.reportedBy,
+    'createdAt': Timestamp.fromDate(r.createdAt),
     'syncStatus': 'synced',
   };
 
@@ -599,6 +851,7 @@ class FirebaseSyncService {
       address: Value((data['address'] as String?)?.trim()),
       contactPhone: Value((data['contactPhone'] as String?)?.trim()),
       capacity: Value((data['capacity'] as num?)?.toInt()),
+      occupancy: Value((data['occupancy'] as num?)?.toInt() ?? 0),
       resourcesJson: Value(resourcesJson),
       status: Value(
         ((data['status'] as String?)?.trim().isNotEmpty ?? false)
@@ -608,6 +861,36 @@ class FirebaseSyncService {
       createdAt: createdAt,
       updatedAt: Value(updatedAt),
       deletedAt: Value(deletedAt),
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  CommunityReportsCompanion _firestoreToCommunityReportCompanion({
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final now = DateTime.now();
+
+    final rawCreatedAt = data['createdAt'];
+    final createdAt = rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : now;
+
+    final rawLat = data['latitude'];
+    final rawLng = data['longitude'];
+    if (rawLat is! num || rawLng is! num) {
+      throw const FormatException(
+        'CommunityReport thiếu latitude/longitude hợp lệ.',
+      );
+    }
+
+    return CommunityReportsCompanion.insert(
+      id: docId,
+      type: (data['type'] as String?)?.trim() ?? 'other',
+      customTypeName: Value((data['customTypeName'] as String?)?.trim()),
+      latitude: rawLat.toDouble(),
+      longitude: rawLng.toDouble(),
+      description: Value((data['description'] as String?)?.trim()),
+      reportedBy: (data['reportedBy'] as String?)?.trim() ?? '',
+      createdAt: createdAt,
       syncStatus: const Value('synced'),
     );
   }
@@ -638,6 +921,50 @@ class FirebaseSyncService {
       createdBy: Value((data['createdBy'] as String?)?.trim()),
       lastLoginAt: Value(lastLoginAt),
       mfaEnabled: Value((data['mfaEnabled'] as bool?) ?? false),
+    );
+  }
+
+  PostsCompanion _firestoreToPostCompanion(String docId, Map<String, dynamic> data) {
+    final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+
+    return PostsCompanion.insert(
+      id: docId,
+      eventId: (data['eventId'] as String?) ?? '',
+      userId: (data['userId'] as String?) ?? '',
+      postType: (data['postType'] as String?) ?? 'sos',
+      title: Value((data['title'] as String?)?.trim()),
+      attachmentUrl: Value((data['attachmentUrl'] as String?)?.trim()),
+      attachmentName: Value((data['attachmentName'] as String?)?.trim()),
+      content: (data['content'] as String?) ?? '',
+      isVerified: Value((data['isVerified'] as bool?) ?? false),
+      createdAt: createdAt,
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  LocationsCompanion _firestoreToLocationCompanion(String docId, Map<String, dynamic> data, String postId) {
+    final rawLat = data['latitude'];
+    final rawLng = data['longitude'];
+
+    return LocationsCompanion.insert(
+      id: docId,
+      postId: (data['postId'] as String?) ?? postId,
+      latitude: (rawLat as num?)?.toDouble() ?? 0.0,
+      longitude: (rawLng as num?)?.toDouble() ?? 0.0,
+      addressText: Value((data['addressText'] as String?)?.trim()),
+    );
+  }
+
+  CheckInLogsCompanion _firestoreToCheckInLogCompanion(String docId, Map<String, dynamic> data) {
+    final timestamp = _asDateTime(data['timestamp']) ?? DateTime.now();
+
+    return CheckInLogsCompanion.insert(
+      id: docId,
+      stationId: (data['stationId'] as String?) ?? '',
+      userId: (data['userId'] as String?) ?? '',
+      type: (data['type'] as String?) ?? 'in',
+      timestamp: timestamp,
+      syncStatus: const Value('synced'),
     );
   }
 

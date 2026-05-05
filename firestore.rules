@@ -44,7 +44,8 @@ service cloud.firestore {
             'displayName',
             'photoUrl',
             'updatedAt',
-            'lastLoginAt'
+            'lastLoginAt',
+            'medicalProfile'
           ]);
     }
 
@@ -68,7 +69,8 @@ service cloud.firestore {
             'updatedAt',
             'createdBy',
             'lastLoginAt',
-            'mfaEnabled'
+            'mfaEnabled',
+            'medicalProfile'
           ]);
     }
 
@@ -84,7 +86,8 @@ service cloud.firestore {
             'updatedAt',
             'createdBy',
             'lastLoginAt',
-            'mfaEnabled'
+            'mfaEnabled',
+            'medicalProfile'
           ]);
     }
 
@@ -121,6 +124,14 @@ service cloud.firestore {
     }
 
     match /rescue_stations/{docId} {
+      allow read, write: if true;
+    }
+
+    match /check_in_logs/{docId} {
+      allow read, write: if true;
+    }
+
+    match /community_reports/{docId} {
       allow read, write: if true;
     }
   }

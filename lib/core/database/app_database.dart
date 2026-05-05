@@ -89,6 +89,7 @@ class RescueStations extends Table {
   TextColumn get address => text().nullable()();
   TextColumn get contactPhone => text().nullable()();
   IntColumn get capacity => integer().nullable()();
+  IntColumn get occupancy => integer().withDefault(const Constant(0))();
   TextColumn get resourcesJson => text().withDefault(const Constant('{}'))();
   TextColumn get status =>
       text().withDefault(const Constant('active'))(); // active/inactive/full
@@ -97,6 +98,39 @@ class RescueStations extends Table {
   DateTimeColumn get deletedAt => dateTime().nullable()();
   TextColumn get syncStatus =>
       text().withDefault(const Constant('synced'))(); // synced/pending
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('CheckInLog')
+class CheckInLogs extends Table {
+  TextColumn get id => text()();
+  TextColumn get stationId =>
+      text().references(RescueStations, #id, onDelete: KeyAction.cascade)();
+  TextColumn get userId =>
+      text().references(Users, #id, onDelete: KeyAction.cascade)();
+  TextColumn get type => text()(); // 'in' or 'out'
+  DateTimeColumn get timestamp => dateTime()();
+  TextColumn get syncStatus =>
+      text().withDefault(const Constant('pending'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// ============ BẢNG COMMUNITY REPORTS ============
+@DataClassName('CommunityReport')
+class CommunityReports extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // 'fallen_tree', 'flood', 'road_block', 'other'
+  TextColumn get customTypeName => text().nullable()(); // Name for 'other'
+  RealColumn get latitude => real()();
+  RealColumn get longitude => real()();
+  TextColumn get description => text().nullable()();
+  TextColumn get reportedBy => text().references(Users, #id, onDelete: KeyAction.cascade)();
+  DateTimeColumn get createdAt => dateTime()();
+  TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -111,6 +145,8 @@ class RescueStations extends Table {
     Locations,
     Attachments,
     RescueStations,
+    CheckInLogs,
+    CommunityReports,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -120,7 +156,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -191,6 +227,18 @@ FROM users;
   await customStatement('DROP TABLE users;');
   await customStatement('ALTER TABLE users_new RENAME TO users;');
   await customStatement('PRAGMA foreign_keys = ON;');
+      }
+      
+      if (from < 4) {
+        await m.addColumn(rescueStations, rescueStations.occupancy);
+      }
+      
+      if (from < 5) {
+        await m.createTable(checkInLogs);
+      }
+      
+      if (from < 6) {
+        await m.createTable(communityReports);
       }
     },
   );
