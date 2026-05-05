@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'dart:ui' as ui;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 
@@ -501,18 +503,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       width: 40,
       height: 48,
       child: GestureDetector(
-        onTap: () {
-          _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Sự cố: ${report.customTypeName ?? report.type}\n'
-                '${report.description ?? ""}',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
+        onTap: () => _onCommunityReportTap(report),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -562,6 +553,28 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         ),
       ),
     );
+  }
+
+  void _onCommunityReportTap(CommunityReport report) {
+    _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
+    setState(() => _activeMarkerId = report.id);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _CommunityReportDetailSheet(
+        report: report,
+        onResolved: () async {
+          setState(() {
+            _selectedDestination = null;
+            _selectedMarkerId = null;
+            _routePoints.clear();
+          });
+        },
+      ),
+    ).whenComplete(() {
+      if (mounted) setState(() => _activeMarkerId = null);
+    });
   }
 
   void _onMarkerTap(SosMapMarker marker) {
@@ -781,6 +794,33 @@ class _SosDetailSheet extends StatefulWidget {
 
 class _SosDetailSheetState extends State<_SosDetailSheet> {
   bool _verifying = false;
+  bool _loadingUser = false;
+  Map<String, dynamic>? _userProfile;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserProfile();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    final userId = widget.marker.userId;
+    if (userId.isEmpty) return;
+
+    setState(() => _loadingUser = true);
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (doc.exists && mounted) {
+        setState(() => _userProfile = doc.data());
+      }
+    } catch (_) {
+      // Ignored if unable to fetch
+    } finally {
+      if (mounted) {
+        setState(() => _loadingUser = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -933,6 +973,59 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                     ),
                   ],
                 ),
+                if (_loadingUser || _userProfile != null) ...[
+                  const SizedBox(height: 14),
+                  const Divider(color: _C.divider, height: 1),
+                  const SizedBox(height: 14),
+                  if (_loadingUser)
+                    const Center(child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ))
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'THÔNG TIN NGƯỜI DÙNG & Y TẾ',
+                          style: TextStyle(
+                            color: _C.textMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '👤 Tên: ${_userProfile!['displayName'] ?? 'Không rõ'}',
+                          style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                        ),
+                        if (_userProfile!['medicalProfile'] != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '🩸 Nhóm máu: ${_userProfile!['medicalProfile']['blood_type'] ?? 'Chưa cập nhật'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '🩺 Bệnh lý: ${(_userProfile!['medicalProfile']['medical_conditions'] as List?)?.join(', ') ?? 'Không có'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '📞 Khẩn cấp: ${_userProfile!['medicalProfile']['emergency_contact'] ?? 'Chưa cập nhật'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Chưa thiết lập hồ sơ y tế',
+                            style: TextStyle(fontSize: 13, color: _C.textMuted, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ],
+                    ),
+                ],
                 const SizedBox(height: 18),
                 Row(
                   children: [
@@ -1691,3 +1784,214 @@ class _StationDetailSheet extends ConsumerWidget {
     );
   }
 }
+
+class _CommunityReportDetailSheet extends ConsumerStatefulWidget {
+  final CommunityReport report;
+  final VoidCallback onResolved;
+
+  const _CommunityReportDetailSheet({
+    Key? key,
+    required this.report,
+    required this.onResolved,
+  }) : super(key: key);
+
+  @override
+  ConsumerState<_CommunityReportDetailSheet> createState() => _CommunityReportDetailSheetState();
+}
+
+class _CommunityReportDetailSheetState extends ConsumerState<_CommunityReportDetailSheet> {
+  bool _isLoading = false;
+  String _reporterName = 'Đang tìm thông tin...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReporterName();
+  }
+
+  Future<void> _loadReporterName() async {
+    try {
+      final db = ref.read(dbProvider);
+      final reporterId = widget.report.reportedBy;
+      
+      // Thử tìm trong DB local trước
+      final localUser = await (db.select(db.users)..where((u) => u.id.equals(reporterId))).getSingleOrNull();
+      
+      if (localUser != null && localUser.displayName.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _reporterName = localUser.displayName;
+          });
+        }
+        return;
+      }
+
+      // Nếu không có, tìm trên Firestore
+      final docSnap = await FirebaseFirestore.instance.collection('users').doc(reporterId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null && data['displayName'] != null) {
+          if (mounted) {
+            setState(() {
+              _reporterName = data['displayName'] as String;
+            });
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _reporterName = 'Người dùng Ẩn danh';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _reporterName = 'Không rõ ($e)';
+        });
+      }
+    }
+  }
+
+  void _resolveReport() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(communityReportControllerProvider).deleteReport(widget.report.id);
+      if (mounted) {
+        widget.onResolved();
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã đánh dấu xử lý sự cố thành công.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi xử lý: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getReportTypeName(String type) {
+    switch (type) {
+      case 'fallen_tree': return 'Cây đổ';
+      case 'flood': return 'Ngập lụt';
+      case 'road_block': return 'Tắc đường';
+      default: return 'Khác';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = widget.report;
+    final timeStr = DateFormat('HH:mm – dd/MM/yyyy').format(report.createdAt.toLocal());
+    final displayType = _getReportTypeName(report.type);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      report.customTypeName != null && report.customTypeName!.isNotEmpty
+                          ? 'Sự cố: ${report.customTypeName}'
+                          : 'Sự cố: $displayType',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Báo cáo lúc: $timeStr',
+                      style: const TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.grey),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _InfoTile(
+            icon: Icons.person,
+            label: 'Người báo cáo',
+            value: _reporterName,
+          ),
+          const SizedBox(height: 12),
+          _InfoTile(
+            icon: Icons.notes,
+            label: 'Mô tả',
+            value: report.description?.isNotEmpty == true ? report.description! : 'Không có mô tả',
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _resolveReport,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(_isLoading ? 'Đang xử lý...' : 'Đã xử lý'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+

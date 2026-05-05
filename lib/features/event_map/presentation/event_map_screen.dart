@@ -2,6 +2,7 @@
 
 import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
@@ -10,6 +11,7 @@ import 'package:disaster_response_app/features/event_map/domain/event_map_contro
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
+import 'package:disaster_response_app/features/user_mobile/domain/sos_controller.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -1660,7 +1662,7 @@ class _LegendInfoButton extends StatelessWidget {
 // _BottomLegendSheet removed
 
 // =============================================================================
-// SOS CONFIRM DIALOG  — now a ConsumerStatefulWidget, receives real coords
+// SOS CONFIRM DIALOG  — uses SOSController, expandable details form
 // =============================================================================
 class _SosConfirmDialog extends ConsumerStatefulWidget {
   final BuildContext parentContext;
@@ -1679,104 +1681,243 @@ class _SosConfirmDialog extends ConsumerStatefulWidget {
 
 class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
   bool _sending = false;
+  bool _showDetails = false;
+
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillFromProfile();
+  }
+
+  /// Pre-fill name + phone from Firestore user profile if logged in.
+  Future<void> _prefillFromProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data = doc.data()!;
+      final name = (data['displayName'] as String?) ?? '';
+      final phone = (data['phoneNumber'] as String?) ?? '';
+      if (name.isNotEmpty && _nameCtrl.text.isEmpty) _nameCtrl.text = name;
+      if (phone.isNotEmpty && _phoneCtrl.text.isEmpty) _phoneCtrl.text = phone;
+    } catch (_) {
+      // Ignore — fields stay empty
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Listen to SOSController state for loading feedback
+    final sosState = ref.watch(sosControllerProvider);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: const EdgeInsets.all(24),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: _MapColors.sosRed.withOpacity(0.1),
-              shape: BoxShape.circle,
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Icon ──
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: _MapColors.sosRed.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.sos_rounded,
+                color: _MapColors.sosRed,
+                size: 34,
+              ),
             ),
-            child: const Icon(
-              Icons.sos_rounded,
-              color: _MapColors.sosRed,
-              size: 34,
+            const SizedBox(height: 16),
+            const Text(
+              'Xác nhận phát SOS?',
+              style: TextStyle(
+                color: _MapColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Xác nhận phát SOS?',
-            style: TextStyle(
-              color: _MapColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 8),
+            const Text(
+              'Tín hiệu SOS và vị trí của bạn sẽ được gửi đến đội cứu hộ gần nhất ngay lập tức.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _MapColors.textSecondary,
+                fontSize: 13.5,
+                height: 1.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Tín hiệu SOS và vị trí của bạn sẽ được gửi đến đội cứu hộ gần nhất ngay lập tức.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _MapColors.textSecondary,
-              fontSize: 13.5,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _sending
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: const BorderSide(color: _MapColors.divider),
+
+            // ── "Thêm chi tiết" toggle ──
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => setState(() => _showDetails = !_showDetails),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _showDetails
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: _MapColors.sosRed,
+                    size: 20,
                   ),
-                  child: const Text(
-                    'Huỷ',
-                    style: TextStyle(
-                      color: _MapColors.textSecondary,
+                  const SizedBox(width: 4),
+                  Text(
+                    _showDetails ? 'Ẩn chi tiết' : 'Thêm chi tiết',
+                    style: const TextStyle(
+                      color: _MapColors.sosRed,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _sending ? null : () => _submitSOS(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _MapColors.sosRed,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Gửi SOS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                ),
+            ),
+
+            // ── Detail form (expandable) ──
+            if (_showDetails) ...[
+              const SizedBox(height: 14),
+              _buildField(
+                controller: _nameCtrl,
+                label: 'Họ và tên',
+                icon: Icons.person_outline_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _phoneCtrl,
+                label: 'Số điện thoại',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _descCtrl,
+                label: 'Mô tả tình huống',
+                icon: Icons.edit_note_rounded,
+                maxLines: 3,
               ),
             ],
-          ),
-        ],
+
+            // ── Action buttons ──
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _sending
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: const BorderSide(color: _MapColors.divider),
+                    ),
+                    child: const Text(
+                      'Huỷ',
+                      style: TextStyle(
+                        color: _MapColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _sending ? null : () => _submitSOS(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _MapColors.sosRed,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Gửi SOS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: const TextStyle(fontSize: 14, color: _MapColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          fontSize: 13,
+          color: _MapColors.textSecondary,
+        ),
+        prefixIcon: Icon(icon, size: 20, color: _MapColors.textSecondary),
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _MapColors.sosRed, width: 1.5),
+        ),
       ),
     );
   }
@@ -1786,10 +1927,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
 
     final messenger = ScaffoldMessenger.of(widget.parentContext);
 
-    // ── 1. Resolve coordinates ─────────────────────────────────────────────
-    // Parent already has a GPS fix → use it directly.
-    // Otherwise try one more _determinePosition() in case the user just
-    // granted permission inside the dialog.
+    // ── 1. Resolve coordinates ───────────────────────────────────────────
     LatLng coords;
     try {
       if (widget.currentLocation != null) {
@@ -1799,76 +1937,70 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
         coords = LatLng(pos.latitude, pos.longitude);
       }
     } catch (_) {
-      // Last resort: never drop the SOS silently.
       coords = _kFallbackLocation;
     }
 
-    // Close dialog before async DB work so UI feels snappy
+    // ── 2. Resolve user input (or defaults) ──────────────────────────────
+    final userName = _nameCtrl.text.trim().isNotEmpty
+        ? _nameCtrl.text.trim()
+        : 'Người dân';
+    final phoneNumber = _phoneCtrl.text.trim();
+    final description = _descCtrl.text.trim().isNotEmpty
+        ? _descCtrl.text.trim()
+        : 'Tôi đang cần cứu hộ khẩn cấp!';
+
+    // Close dialog before async work so UI feels snappy
     Navigator.of(dialogContext).pop();
 
-    final db = ref.read(dbProvider);
-    final postId = DateTime.now().millisecondsSinceEpoch.toString();
-    final locId = 'loc_$postId';
-
-    // ── 2. Save Post to Drift (offline-first) ──────────────────────────────
-    await db
-        .into(db.posts)
-        .insert(
-          PostsCompanion.insert(
-            id: postId,
-            eventId: 'current_event_id',
-            userId: 'citizen_01',
-            postType: 'sos',
-            content: 'Tôi đang cần cứu hộ khẩn cấp!',
-            createdAt: DateTime.now(),
-            syncStatus: const drift.Value('pending'),
-          ),
+    // ── 3. Delegate to SOSController ─────────────────────────────────────
+    await ref.read(sosControllerProvider.notifier).sendSOS(
+          userName: userName,
+          phoneNumber: phoneNumber,
+          description: description,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
         );
 
-    // ── 3. Save real GPS coordinates to Drift ──────────────────────────────
-    await db
-        .into(db.locations)
-        .insert(
-          LocationsCompanion.insert(
-            id: locId,
-            postId: postId,
-            latitude: coords.latitude, // ← real GPS lat
-            longitude: coords.longitude, // ← real GPS lng
-          ),
-        );
+    // ── 4. Show result snackbar ──────────────────────────────────────────
+    final state = ref.read(sosControllerProvider);
+    final isSuccess = state.status == SOSStatus.success;
+    final isFallback = state.status == SOSStatus.fallbackActivated;
 
-    // ── 4. Immediately try to push to Firebase ─────────────────────────────
-    final syncService = ref.read(firebaseSyncServiceProvider);
-    final result = await syncService.syncPendingSOS();
+    String snackText;
+    Color snackColor;
+    IconData snackIcon;
 
-    // ── 5. Show result snackbar ────────────────────────────────────────────
+    if (isSuccess) {
+      snackText = 'Đã gửi SOS! '
+          '(${coords.latitude.toStringAsFixed(5)}, '
+          '${coords.longitude.toStringAsFixed(5)})';
+      snackColor = Colors.green.shade600;
+      snackIcon = Icons.check_circle_rounded;
+    } else if (isFallback) {
+      snackText = 'SMS khẩn cấp đã được gửi thành công!';
+      snackColor = Colors.orange.shade700;
+      snackIcon = Icons.sms_rounded;
+    } else {
+      snackText = state.errorMessage ?? 'Đã lưu offline. Sẽ gửi khi có mạng!';
+      snackColor = Colors.orange.shade700;
+      snackIcon = Icons.cloud_off_rounded;
+    }
+
     messenger.showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(
-              result.isSuccess
-                  ? Icons.check_circle_rounded
-                  : Icons.cloud_off_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
+            Icon(snackIcon, color: Colors.white, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                result.isSuccess
-                    ? 'Đã gửi SOS! '
-                          '(${coords.latitude.toStringAsFixed(5)}, '
-                          '${coords.longitude.toStringAsFixed(5)})'
-                    : 'Đã lưu offline. Sẽ gửi khi có mạng!',
+                snackText,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-        backgroundColor: result.isSuccess
-            ? Colors.green.shade600
-            : Colors.orange.shade700,
+        backgroundColor: snackColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
       ),
