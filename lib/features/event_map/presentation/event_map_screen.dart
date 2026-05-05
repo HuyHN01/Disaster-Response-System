@@ -1809,6 +1809,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
     final db = ref.read(dbProvider);
     final postId = DateTime.now().millisecondsSinceEpoch.toString();
     final locId = 'loc_$postId';
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     // ── 2. Save Post to Drift (offline-first) ──────────────────────────────
     await db
@@ -1817,7 +1818,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
           PostsCompanion.insert(
             id: postId,
             eventId: 'current_event_id',
-            userId: 'citizen_01',
+            userId: uid,
             postType: 'sos',
             content: 'Tôi đang cần cứu hộ khẩn cấp!',
             createdAt: DateTime.now(),

@@ -1003,17 +1003,17 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                         if (_userProfile!['medicalProfile'] != null) ...[
                           const SizedBox(height: 4),
                           Text(
-                            '🩸 Nhóm máu: ${_userProfile!['medicalProfile']['bloodType'] ?? 'Chưa cập nhật'}',
+                            '🩸 Nhóm máu: ${_userProfile!['medicalProfile']['blood_type'] ?? 'Chưa cập nhật'}',
                             style: const TextStyle(fontSize: 13, color: _C.textPrimary),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '🩺 Bệnh lý: ${(_userProfile!['medicalProfile']['medicalConditions'] as List?)?.join(', ') ?? 'Không có'}',
+                            '🩺 Bệnh lý: ${(_userProfile!['medicalProfile']['medical_conditions'] as List?)?.join(', ') ?? 'Không có'}',
                             style: const TextStyle(fontSize: 13, color: _C.textPrimary),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '📞 Khẩn cấp: ${_userProfile!['medicalProfile']['emergencyContact'] ?? 'Chưa cập nhật'}',
+                            '📞 Khẩn cấp: ${_userProfile!['medicalProfile']['emergency_contact'] ?? 'Chưa cập nhật'}',
                             style: const TextStyle(fontSize: 13, color: _C.textPrimary),
                           ),
                         ] else ...[
