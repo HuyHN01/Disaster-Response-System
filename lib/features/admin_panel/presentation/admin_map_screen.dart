@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'dart:ui' as ui;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
+import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 
@@ -1719,6 +1721,58 @@ class _CommunityReportDetailSheet extends ConsumerStatefulWidget {
 
 class _CommunityReportDetailSheetState extends ConsumerState<_CommunityReportDetailSheet> {
   bool _isLoading = false;
+  String _reporterName = 'Đang tìm thông tin...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReporterName();
+  }
+
+  Future<void> _loadReporterName() async {
+    try {
+      final db = ref.read(dbProvider);
+      final reporterId = widget.report.reportedBy;
+      
+      // Thử tìm trong DB local trước
+      final localUser = await (db.select(db.users)..where((u) => u.id.equals(reporterId))).getSingleOrNull();
+      
+      if (localUser != null && localUser.displayName.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _reporterName = localUser.displayName;
+          });
+        }
+        return;
+      }
+
+      // Nếu không có, tìm trên Firestore
+      final docSnap = await FirebaseFirestore.instance.collection('users').doc(reporterId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null && data['displayName'] != null) {
+          if (mounted) {
+            setState(() {
+              _reporterName = data['displayName'] as String;
+            });
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _reporterName = 'Người dùng Ẩn danh';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _reporterName = 'Không rõ ($e)';
+        });
+      }
+    }
+  }
 
   void _resolveReport() async {
     setState(() => _isLoading = true);
@@ -1815,8 +1869,8 @@ class _CommunityReportDetailSheetState extends ConsumerState<_CommunityReportDet
           const SizedBox(height: 20),
           _InfoTile(
             icon: Icons.person,
-            label: 'Người báo cáo (ID)',
-            value: report.reportedBy,
+            label: 'Người báo cáo',
+            value: _reporterName,
           ),
           const SizedBox(height: 12),
           _InfoTile(
