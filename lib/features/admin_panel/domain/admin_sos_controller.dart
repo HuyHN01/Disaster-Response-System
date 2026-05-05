@@ -12,7 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // =============================================================================
 class SosPost {
   final String id;
-  final String userId;
+  final String userId; // Keep for UID.
+  final String? deviceId; // Added deviceId
   final String eventId;
   final String content;
   final String syncStatus;
@@ -22,6 +23,7 @@ class SosPost {
   const SosPost({
     required this.id,
     required this.userId,
+    this.deviceId,
     required this.eventId,
     required this.content,
     required this.syncStatus,
@@ -37,6 +39,7 @@ class SosPost {
     return SosPost(
       id: doc.id,
       userId: (data['userId'] as String?) ?? '',
+      deviceId: data['deviceId'] as String?,
       eventId: (data['eventId'] as String?) ?? '',
       content: (data['content'] as String?) ?? '',
       syncStatus: (data['syncStatus'] as String?) ?? 'synced',

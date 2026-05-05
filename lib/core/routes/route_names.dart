@@ -49,12 +49,15 @@ abstract final class RouteNames {
   /// User mobile profile screen ([MobileProfileScreen]).
   static const String profile = '/profile';
 
+  /// Emergency SOS screen ([SOSScreen]).
+  static const String sos = '/sos';
+
   /// Email input screen in the profile auth flow ([EmailInputScreen]).
   static const String profileEmailInput = '/profile/email-input';
 
   /// OTP verification screen in the profile auth flow ([OtpVerificationScreen]).
   static const String profileOtpVerification = '/profile/otp-verification';
-
+  static const String medicalProfile = '/medical-profile';
   // ── Admin / Web ───────────────────────────────────────────────────────────
 
   /// Admin dashboard ([EventDashboardScreen]) — rendered inside the admin ShellRoute.
@@ -133,6 +136,7 @@ abstract final class RouteNames {
   static const String nameEventMap = 'event-map';
   static const String nameAiChat = 'ai-chat';
   static const String nameProfile = 'profile';
+  static const String nameSOS = 'sos';
   static const String nameProfileEmailInput = 'profile-email-input';
   static const String nameProfileOtpVerification = 'profile-otp-verification';
   static const String nameAdminLogin = 'admin-login';
@@ -146,4 +150,5 @@ abstract final class RouteNames {
   static const String nameAdminEventDetail = 'admin-event-detail';
   static const String nameAdminPostCreate = 'admin-post-create';
   static const String nameAdminPostEdit = 'admin-post-edit';
+  static const String nameMedicalProfile = 'medical-profile';
 }

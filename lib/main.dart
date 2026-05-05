@@ -61,6 +61,7 @@ class OmniDisasterApp extends ConsumerWidget {
     syncService.listenToRescueStations(
       onUpsert: (_) => ref.invalidate(rescueStationControllerProvider),
     );
+    syncService.listenToCommunityReports();
     syncService.listenToUsers();
 
     return MaterialApp.router(

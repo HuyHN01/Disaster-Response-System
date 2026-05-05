@@ -2609,6 +2609,18 @@ class $RescueStationsTable extends RescueStations
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _occupancyMeta = const VerificationMeta(
+    'occupancy',
+  );
+  @override
+  late final GeneratedColumn<int> occupancy = GeneratedColumn<int>(
+    'occupancy',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _resourcesJsonMeta = const VerificationMeta(
     'resourcesJson',
   );
@@ -2685,6 +2697,7 @@ class $RescueStationsTable extends RescueStations
     address,
     contactPhone,
     capacity,
+    occupancy,
     resourcesJson,
     status,
     createdAt,
@@ -2752,6 +2765,12 @@ class $RescueStationsTable extends RescueStations
       context.handle(
         _capacityMeta,
         capacity.isAcceptableOrUnknown(data['capacity']!, _capacityMeta),
+      );
+    }
+    if (data.containsKey('occupancy')) {
+      context.handle(
+        _occupancyMeta,
+        occupancy.isAcceptableOrUnknown(data['occupancy']!, _occupancyMeta),
       );
     }
     if (data.containsKey('resources_json')) {
@@ -2832,6 +2851,10 @@ class $RescueStationsTable extends RescueStations
         DriftSqlType.int,
         data['${effectivePrefix}capacity'],
       ),
+      occupancy: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}occupancy'],
+      )!,
       resourcesJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}resources_json'],
@@ -2873,6 +2896,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String? address;
   final String? contactPhone;
   final int? capacity;
+  final int occupancy;
   final String resourcesJson;
   final String status;
   final DateTime createdAt;
@@ -2887,6 +2911,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     this.address,
     this.contactPhone,
     this.capacity,
+    required this.occupancy,
     required this.resourcesJson,
     required this.status,
     required this.createdAt,
@@ -2910,6 +2935,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     if (!nullToAbsent || capacity != null) {
       map['capacity'] = Variable<int>(capacity);
     }
+    map['occupancy'] = Variable<int>(occupancy);
     map['resources_json'] = Variable<String>(resourcesJson);
     map['status'] = Variable<String>(status);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -2938,6 +2964,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       capacity: capacity == null && nullToAbsent
           ? const Value.absent()
           : Value(capacity),
+      occupancy: Value(occupancy),
       resourcesJson: Value(resourcesJson),
       status: Value(status),
       createdAt: Value(createdAt),
@@ -2964,6 +2991,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       address: serializer.fromJson<String?>(json['address']),
       contactPhone: serializer.fromJson<String?>(json['contactPhone']),
       capacity: serializer.fromJson<int?>(json['capacity']),
+      occupancy: serializer.fromJson<int>(json['occupancy']),
       resourcesJson: serializer.fromJson<String>(json['resourcesJson']),
       status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2983,6 +3011,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       'address': serializer.toJson<String?>(address),
       'contactPhone': serializer.toJson<String?>(contactPhone),
       'capacity': serializer.toJson<int?>(capacity),
+      'occupancy': serializer.toJson<int>(occupancy),
       'resourcesJson': serializer.toJson<String>(resourcesJson),
       'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -3000,6 +3029,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     Value<String?> address = const Value.absent(),
     Value<String?> contactPhone = const Value.absent(),
     Value<int?> capacity = const Value.absent(),
+    int? occupancy,
     String? resourcesJson,
     String? status,
     DateTime? createdAt,
@@ -3014,6 +3044,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     address: address.present ? address.value : this.address,
     contactPhone: contactPhone.present ? contactPhone.value : this.contactPhone,
     capacity: capacity.present ? capacity.value : this.capacity,
+    occupancy: occupancy ?? this.occupancy,
     resourcesJson: resourcesJson ?? this.resourcesJson,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
@@ -3032,6 +3063,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           ? data.contactPhone.value
           : this.contactPhone,
       capacity: data.capacity.present ? data.capacity.value : this.capacity,
+      occupancy: data.occupancy.present ? data.occupancy.value : this.occupancy,
       resourcesJson: data.resourcesJson.present
           ? data.resourcesJson.value
           : this.resourcesJson,
@@ -3055,6 +3087,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           ..write('address: $address, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('capacity: $capacity, ')
+          ..write('occupancy: $occupancy, ')
           ..write('resourcesJson: $resourcesJson, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
@@ -3074,6 +3107,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     address,
     contactPhone,
     capacity,
+    occupancy,
     resourcesJson,
     status,
     createdAt,
@@ -3092,6 +3126,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
           other.address == this.address &&
           other.contactPhone == this.contactPhone &&
           other.capacity == this.capacity &&
+          other.occupancy == this.occupancy &&
           other.resourcesJson == this.resourcesJson &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
@@ -3108,6 +3143,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<String?> address;
   final Value<String?> contactPhone;
   final Value<int?> capacity;
+  final Value<int> occupancy;
   final Value<String> resourcesJson;
   final Value<String> status;
   final Value<DateTime> createdAt;
@@ -3123,6 +3159,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     this.address = const Value.absent(),
     this.contactPhone = const Value.absent(),
     this.capacity = const Value.absent(),
+    this.occupancy = const Value.absent(),
     this.resourcesJson = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -3139,6 +3176,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     this.address = const Value.absent(),
     this.contactPhone = const Value.absent(),
     this.capacity = const Value.absent(),
+    this.occupancy = const Value.absent(),
     this.resourcesJson = const Value.absent(),
     this.status = const Value.absent(),
     required DateTime createdAt,
@@ -3159,6 +3197,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     Expression<String>? address,
     Expression<String>? contactPhone,
     Expression<int>? capacity,
+    Expression<int>? occupancy,
     Expression<String>? resourcesJson,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
@@ -3175,6 +3214,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
       if (address != null) 'address': address,
       if (contactPhone != null) 'contact_phone': contactPhone,
       if (capacity != null) 'capacity': capacity,
+      if (occupancy != null) 'occupancy': occupancy,
       if (resourcesJson != null) 'resources_json': resourcesJson,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
@@ -3193,6 +3233,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     Value<String?>? address,
     Value<String?>? contactPhone,
     Value<int?>? capacity,
+    Value<int>? occupancy,
     Value<String>? resourcesJson,
     Value<String>? status,
     Value<DateTime>? createdAt,
@@ -3209,6 +3250,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
       address: address ?? this.address,
       contactPhone: contactPhone ?? this.contactPhone,
       capacity: capacity ?? this.capacity,
+      occupancy: occupancy ?? this.occupancy,
       resourcesJson: resourcesJson ?? this.resourcesJson,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -3242,6 +3284,9 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     }
     if (capacity.present) {
       map['capacity'] = Variable<int>(capacity.value);
+    }
+    if (occupancy.present) {
+      map['occupancy'] = Variable<int>(occupancy.value);
     }
     if (resourcesJson.present) {
       map['resources_json'] = Variable<String>(resourcesJson.value);
@@ -3277,11 +3322,1001 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
           ..write('address: $address, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('capacity: $capacity, ')
+          ..write('occupancy: $occupancy, ')
           ..write('resourcesJson: $resourcesJson, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CheckInLogsTable extends CheckInLogs
+    with TableInfo<$CheckInLogsTable, CheckInLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CheckInLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stationIdMeta = const VerificationMeta(
+    'stationId',
+  );
+  @override
+  late final GeneratedColumn<String> stationId = GeneratedColumn<String>(
+    'station_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES rescue_stations (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _timestampMeta = const VerificationMeta(
+    'timestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
+    'timestamp',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    stationId,
+    userId,
+    type,
+    timestamp,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'check_in_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CheckInLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('station_id')) {
+      context.handle(
+        _stationIdMeta,
+        stationId.isAcceptableOrUnknown(data['station_id']!, _stationIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stationIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('timestamp')) {
+      context.handle(
+        _timestampMeta,
+        timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_timestampMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CheckInLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CheckInLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      stationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      timestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}timestamp'],
+      )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $CheckInLogsTable createAlias(String alias) {
+    return $CheckInLogsTable(attachedDatabase, alias);
+  }
+}
+
+class CheckInLog extends DataClass implements Insertable<CheckInLog> {
+  final String id;
+  final String stationId;
+  final String userId;
+  final String type;
+  final DateTime timestamp;
+  final String syncStatus;
+  const CheckInLog({
+    required this.id,
+    required this.stationId,
+    required this.userId,
+    required this.type,
+    required this.timestamp,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['station_id'] = Variable<String>(stationId);
+    map['user_id'] = Variable<String>(userId);
+    map['type'] = Variable<String>(type);
+    map['timestamp'] = Variable<DateTime>(timestamp);
+    map['sync_status'] = Variable<String>(syncStatus);
+    return map;
+  }
+
+  CheckInLogsCompanion toCompanion(bool nullToAbsent) {
+    return CheckInLogsCompanion(
+      id: Value(id),
+      stationId: Value(stationId),
+      userId: Value(userId),
+      type: Value(type),
+      timestamp: Value(timestamp),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory CheckInLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CheckInLog(
+      id: serializer.fromJson<String>(json['id']),
+      stationId: serializer.fromJson<String>(json['stationId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      type: serializer.fromJson<String>(json['type']),
+      timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'stationId': serializer.toJson<String>(stationId),
+      'userId': serializer.toJson<String>(userId),
+      'type': serializer.toJson<String>(type),
+      'timestamp': serializer.toJson<DateTime>(timestamp),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+    };
+  }
+
+  CheckInLog copyWith({
+    String? id,
+    String? stationId,
+    String? userId,
+    String? type,
+    DateTime? timestamp,
+    String? syncStatus,
+  }) => CheckInLog(
+    id: id ?? this.id,
+    stationId: stationId ?? this.stationId,
+    userId: userId ?? this.userId,
+    type: type ?? this.type,
+    timestamp: timestamp ?? this.timestamp,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  CheckInLog copyWithCompanion(CheckInLogsCompanion data) {
+    return CheckInLog(
+      id: data.id.present ? data.id.value : this.id,
+      stationId: data.stationId.present ? data.stationId.value : this.stationId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      type: data.type.present ? data.type.value : this.type,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CheckInLog(')
+          ..write('id: $id, ')
+          ..write('stationId: $stationId, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, stationId, userId, type, timestamp, syncStatus);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CheckInLog &&
+          other.id == this.id &&
+          other.stationId == this.stationId &&
+          other.userId == this.userId &&
+          other.type == this.type &&
+          other.timestamp == this.timestamp &&
+          other.syncStatus == this.syncStatus);
+}
+
+class CheckInLogsCompanion extends UpdateCompanion<CheckInLog> {
+  final Value<String> id;
+  final Value<String> stationId;
+  final Value<String> userId;
+  final Value<String> type;
+  final Value<DateTime> timestamp;
+  final Value<String> syncStatus;
+  final Value<int> rowid;
+  const CheckInLogsCompanion({
+    this.id = const Value.absent(),
+    this.stationId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.type = const Value.absent(),
+    this.timestamp = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CheckInLogsCompanion.insert({
+    required String id,
+    required String stationId,
+    required String userId,
+    required String type,
+    required DateTime timestamp,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       stationId = Value(stationId),
+       userId = Value(userId),
+       type = Value(type),
+       timestamp = Value(timestamp);
+  static Insertable<CheckInLog> custom({
+    Expression<String>? id,
+    Expression<String>? stationId,
+    Expression<String>? userId,
+    Expression<String>? type,
+    Expression<DateTime>? timestamp,
+    Expression<String>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (stationId != null) 'station_id': stationId,
+      if (userId != null) 'user_id': userId,
+      if (type != null) 'type': type,
+      if (timestamp != null) 'timestamp': timestamp,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CheckInLogsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? stationId,
+    Value<String>? userId,
+    Value<String>? type,
+    Value<DateTime>? timestamp,
+    Value<String>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return CheckInLogsCompanion(
+      id: id ?? this.id,
+      stationId: stationId ?? this.stationId,
+      userId: userId ?? this.userId,
+      type: type ?? this.type,
+      timestamp: timestamp ?? this.timestamp,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (stationId.present) {
+      map['station_id'] = Variable<String>(stationId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (timestamp.present) {
+      map['timestamp'] = Variable<DateTime>(timestamp.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CheckInLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('stationId: $stationId, ')
+          ..write('userId: $userId, ')
+          ..write('type: $type, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CommunityReportsTable extends CommunityReports
+    with TableInfo<$CommunityReportsTable, CommunityReport> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CommunityReportsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _customTypeNameMeta = const VerificationMeta(
+    'customTypeName',
+  );
+  @override
+  late final GeneratedColumn<String> customTypeName = GeneratedColumn<String>(
+    'custom_type_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latitudeMeta = const VerificationMeta(
+    'latitude',
+  );
+  @override
+  late final GeneratedColumn<double> latitude = GeneratedColumn<double>(
+    'latitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _longitudeMeta = const VerificationMeta(
+    'longitude',
+  );
+  @override
+  late final GeneratedColumn<double> longitude = GeneratedColumn<double>(
+    'longitude',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reportedByMeta = const VerificationMeta(
+    'reportedBy',
+  );
+  @override
+  late final GeneratedColumn<String> reportedBy = GeneratedColumn<String>(
+    'reported_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    type,
+    customTypeName,
+    latitude,
+    longitude,
+    description,
+    reportedBy,
+    createdAt,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'community_reports';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CommunityReport> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('custom_type_name')) {
+      context.handle(
+        _customTypeNameMeta,
+        customTypeName.isAcceptableOrUnknown(
+          data['custom_type_name']!,
+          _customTypeNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latitude')) {
+      context.handle(
+        _latitudeMeta,
+        latitude.isAcceptableOrUnknown(data['latitude']!, _latitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_latitudeMeta);
+    }
+    if (data.containsKey('longitude')) {
+      context.handle(
+        _longitudeMeta,
+        longitude.isAcceptableOrUnknown(data['longitude']!, _longitudeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_longitudeMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reported_by')) {
+      context.handle(
+        _reportedByMeta,
+        reportedBy.isAcceptableOrUnknown(data['reported_by']!, _reportedByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reportedByMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CommunityReport map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CommunityReport(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      customTypeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_type_name'],
+      ),
+      latitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}latitude'],
+      )!,
+      longitude: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}longitude'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      reportedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reported_by'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $CommunityReportsTable createAlias(String alias) {
+    return $CommunityReportsTable(attachedDatabase, alias);
+  }
+}
+
+class CommunityReport extends DataClass implements Insertable<CommunityReport> {
+  final String id;
+  final String type;
+  final String? customTypeName;
+  final double latitude;
+  final double longitude;
+  final String? description;
+  final String reportedBy;
+  final DateTime createdAt;
+  final String syncStatus;
+  const CommunityReport({
+    required this.id,
+    required this.type,
+    this.customTypeName,
+    required this.latitude,
+    required this.longitude,
+    this.description,
+    required this.reportedBy,
+    required this.createdAt,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || customTypeName != null) {
+      map['custom_type_name'] = Variable<String>(customTypeName);
+    }
+    map['latitude'] = Variable<double>(latitude);
+    map['longitude'] = Variable<double>(longitude);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['reported_by'] = Variable<String>(reportedBy);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['sync_status'] = Variable<String>(syncStatus);
+    return map;
+  }
+
+  CommunityReportsCompanion toCompanion(bool nullToAbsent) {
+    return CommunityReportsCompanion(
+      id: Value(id),
+      type: Value(type),
+      customTypeName: customTypeName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTypeName),
+      latitude: Value(latitude),
+      longitude: Value(longitude),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      reportedBy: Value(reportedBy),
+      createdAt: Value(createdAt),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory CommunityReport.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CommunityReport(
+      id: serializer.fromJson<String>(json['id']),
+      type: serializer.fromJson<String>(json['type']),
+      customTypeName: serializer.fromJson<String?>(json['customTypeName']),
+      latitude: serializer.fromJson<double>(json['latitude']),
+      longitude: serializer.fromJson<double>(json['longitude']),
+      description: serializer.fromJson<String?>(json['description']),
+      reportedBy: serializer.fromJson<String>(json['reportedBy']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'type': serializer.toJson<String>(type),
+      'customTypeName': serializer.toJson<String?>(customTypeName),
+      'latitude': serializer.toJson<double>(latitude),
+      'longitude': serializer.toJson<double>(longitude),
+      'description': serializer.toJson<String?>(description),
+      'reportedBy': serializer.toJson<String>(reportedBy),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+    };
+  }
+
+  CommunityReport copyWith({
+    String? id,
+    String? type,
+    Value<String?> customTypeName = const Value.absent(),
+    double? latitude,
+    double? longitude,
+    Value<String?> description = const Value.absent(),
+    String? reportedBy,
+    DateTime? createdAt,
+    String? syncStatus,
+  }) => CommunityReport(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    customTypeName: customTypeName.present
+        ? customTypeName.value
+        : this.customTypeName,
+    latitude: latitude ?? this.latitude,
+    longitude: longitude ?? this.longitude,
+    description: description.present ? description.value : this.description,
+    reportedBy: reportedBy ?? this.reportedBy,
+    createdAt: createdAt ?? this.createdAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  CommunityReport copyWithCompanion(CommunityReportsCompanion data) {
+    return CommunityReport(
+      id: data.id.present ? data.id.value : this.id,
+      type: data.type.present ? data.type.value : this.type,
+      customTypeName: data.customTypeName.present
+          ? data.customTypeName.value
+          : this.customTypeName,
+      latitude: data.latitude.present ? data.latitude.value : this.latitude,
+      longitude: data.longitude.present ? data.longitude.value : this.longitude,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      reportedBy: data.reportedBy.present
+          ? data.reportedBy.value
+          : this.reportedBy,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CommunityReport(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('description: $description, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    type,
+    customTypeName,
+    latitude,
+    longitude,
+    description,
+    reportedBy,
+    createdAt,
+    syncStatus,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CommunityReport &&
+          other.id == this.id &&
+          other.type == this.type &&
+          other.customTypeName == this.customTypeName &&
+          other.latitude == this.latitude &&
+          other.longitude == this.longitude &&
+          other.description == this.description &&
+          other.reportedBy == this.reportedBy &&
+          other.createdAt == this.createdAt &&
+          other.syncStatus == this.syncStatus);
+}
+
+class CommunityReportsCompanion extends UpdateCompanion<CommunityReport> {
+  final Value<String> id;
+  final Value<String> type;
+  final Value<String?> customTypeName;
+  final Value<double> latitude;
+  final Value<double> longitude;
+  final Value<String?> description;
+  final Value<String> reportedBy;
+  final Value<DateTime> createdAt;
+  final Value<String> syncStatus;
+  final Value<int> rowid;
+  const CommunityReportsCompanion({
+    this.id = const Value.absent(),
+    this.type = const Value.absent(),
+    this.customTypeName = const Value.absent(),
+    this.latitude = const Value.absent(),
+    this.longitude = const Value.absent(),
+    this.description = const Value.absent(),
+    this.reportedBy = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CommunityReportsCompanion.insert({
+    required String id,
+    required String type,
+    this.customTypeName = const Value.absent(),
+    required double latitude,
+    required double longitude,
+    this.description = const Value.absent(),
+    required String reportedBy,
+    required DateTime createdAt,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       type = Value(type),
+       latitude = Value(latitude),
+       longitude = Value(longitude),
+       reportedBy = Value(reportedBy),
+       createdAt = Value(createdAt);
+  static Insertable<CommunityReport> custom({
+    Expression<String>? id,
+    Expression<String>? type,
+    Expression<String>? customTypeName,
+    Expression<double>? latitude,
+    Expression<double>? longitude,
+    Expression<String>? description,
+    Expression<String>? reportedBy,
+    Expression<DateTime>? createdAt,
+    Expression<String>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (customTypeName != null) 'custom_type_name': customTypeName,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (description != null) 'description': description,
+      if (reportedBy != null) 'reported_by': reportedBy,
+      if (createdAt != null) 'created_at': createdAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CommunityReportsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? type,
+    Value<String?>? customTypeName,
+    Value<double>? latitude,
+    Value<double>? longitude,
+    Value<String?>? description,
+    Value<String>? reportedBy,
+    Value<DateTime>? createdAt,
+    Value<String>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return CommunityReportsCompanion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      customTypeName: customTypeName ?? this.customTypeName,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      description: description ?? this.description,
+      reportedBy: reportedBy ?? this.reportedBy,
+      createdAt: createdAt ?? this.createdAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (customTypeName.present) {
+      map['custom_type_name'] = Variable<String>(customTypeName.value);
+    }
+    if (latitude.present) {
+      map['latitude'] = Variable<double>(latitude.value);
+    }
+    if (longitude.present) {
+      map['longitude'] = Variable<double>(longitude.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (reportedBy.present) {
+      map['reported_by'] = Variable<String>(reportedBy.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CommunityReportsCompanion(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('latitude: $latitude, ')
+          ..write('longitude: $longitude, ')
+          ..write('description: $description, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('createdAt: $createdAt, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3298,6 +4333,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $LocationsTable locations = $LocationsTable(this);
   late final $AttachmentsTable attachments = $AttachmentsTable(this);
   late final $RescueStationsTable rescueStations = $RescueStationsTable(this);
+  late final $CheckInLogsTable checkInLogs = $CheckInLogsTable(this);
+  late final $CommunityReportsTable communityReports = $CommunityReportsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3309,7 +4348,33 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     locations,
     attachments,
     rescueStations,
+    checkInLogs,
+    communityReports,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'rescue_stations',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('check_in_logs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('check_in_logs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'users',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('community_reports', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$UsersTableCreateCompanionBuilder =
@@ -3363,6 +4428,47 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_postsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CheckInLogsTable, List<CheckInLog>>
+  _checkInLogsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.checkInLogs,
+    aliasName: $_aliasNameGenerator(db.users.id, db.checkInLogs.userId),
+  );
+
+  $$CheckInLogsTableProcessedTableManager get checkInLogsRefs {
+    final manager = $$CheckInLogsTableTableManager(
+      $_db,
+      $_db.checkInLogs,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_checkInLogsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CommunityReportsTable, List<CommunityReport>>
+  _communityReportsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.communityReports,
+    aliasName: $_aliasNameGenerator(
+      db.users.id,
+      db.communityReports.reportedBy,
+    ),
+  );
+
+  $$CommunityReportsTableProcessedTableManager get communityReportsRefs {
+    final manager = $$CommunityReportsTableTableManager(
+      $_db,
+      $_db.communityReports,
+    ).filter((f) => f.reportedBy.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _communityReportsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3453,6 +4559,56 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$PostsTableFilterComposer(
             $db: $db,
             $table: $db.posts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> checkInLogsRefs(
+    Expression<bool> Function($$CheckInLogsTableFilterComposer f) f,
+  ) {
+    final $$CheckInLogsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableFilterComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> communityReportsRefs(
+    Expression<bool> Function($$CommunityReportsTableFilterComposer f) f,
+  ) {
+    final $$CommunityReportsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.communityReports,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CommunityReportsTableFilterComposer(
+            $db: $db,
+            $table: $db.communityReports,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3608,6 +4764,56 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> checkInLogsRefs<T extends Object>(
+    Expression<T> Function($$CheckInLogsTableAnnotationComposer a) f,
+  ) {
+    final $$CheckInLogsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> communityReportsRefs<T extends Object>(
+    Expression<T> Function($$CommunityReportsTableAnnotationComposer a) f,
+  ) {
+    final $$CommunityReportsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.communityReports,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CommunityReportsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.communityReports,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -3623,7 +4829,11 @@ class $$UsersTableTableManager
           $$UsersTableUpdateCompanionBuilder,
           (User, $$UsersTableReferences),
           User,
-          PrefetchHooks Function({bool postsRefs})
+          PrefetchHooks Function({
+            bool postsRefs,
+            bool checkInLogsRefs,
+            bool communityReportsRefs,
+          })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
     : super(
@@ -3702,29 +4912,81 @@ class $$UsersTableTableManager
                     (e.readTable(table), $$UsersTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({postsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (postsRefs) db.posts],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (postsRefs)
-                    await $_getPrefetchedData<User, $UsersTable, Post>(
-                      currentTable: table,
-                      referencedTable: $$UsersTableReferences._postsRefsTable(
-                        db,
-                      ),
-                      managerFromTypedResult: (p0) =>
-                          $$UsersTableReferences(db, table, p0).postsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.userId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({
+                postsRefs = false,
+                checkInLogsRefs = false,
+                communityReportsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (postsRefs) db.posts,
+                    if (checkInLogsRefs) db.checkInLogs,
+                    if (communityReportsRefs) db.communityReports,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (postsRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Post>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._postsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(db, table, p0).postsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (checkInLogsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          CheckInLog
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._checkInLogsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).checkInLogsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (communityReportsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          CommunityReport
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._communityReportsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).communityReportsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.reportedBy == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -3741,7 +5003,11 @@ typedef $$UsersTableProcessedTableManager =
       $$UsersTableUpdateCompanionBuilder,
       (User, $$UsersTableReferences),
       User,
-      PrefetchHooks Function({bool postsRefs})
+      PrefetchHooks Function({
+        bool postsRefs,
+        bool checkInLogsRefs,
+        bool communityReportsRefs,
+      })
     >;
 typedef $$DisasterEventsTableCreateCompanionBuilder =
     DisasterEventsCompanion Function({
@@ -5435,6 +6701,7 @@ typedef $$RescueStationsTableCreateCompanionBuilder =
       Value<String?> address,
       Value<String?> contactPhone,
       Value<int?> capacity,
+      Value<int> occupancy,
       Value<String> resourcesJson,
       Value<String> status,
       required DateTime createdAt,
@@ -5452,6 +6719,7 @@ typedef $$RescueStationsTableUpdateCompanionBuilder =
       Value<String?> address,
       Value<String?> contactPhone,
       Value<int?> capacity,
+      Value<int> occupancy,
       Value<String> resourcesJson,
       Value<String> status,
       Value<DateTime> createdAt,
@@ -5460,6 +6728,36 @@ typedef $$RescueStationsTableUpdateCompanionBuilder =
       Value<String> syncStatus,
       Value<int> rowid,
     });
+
+final class $$RescueStationsTableReferences
+    extends BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation> {
+  $$RescueStationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<$CheckInLogsTable, List<CheckInLog>>
+  _checkInLogsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.checkInLogs,
+    aliasName: $_aliasNameGenerator(
+      db.rescueStations.id,
+      db.checkInLogs.stationId,
+    ),
+  );
+
+  $$CheckInLogsTableProcessedTableManager get checkInLogsRefs {
+    final manager = $$CheckInLogsTableTableManager(
+      $_db,
+      $_db.checkInLogs,
+    ).filter((f) => f.stationId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_checkInLogsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$RescueStationsTableFilterComposer
     extends Composer<_$AppDatabase, $RescueStationsTable> {
@@ -5505,6 +6803,11 @@ class $$RescueStationsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get occupancy => $composableBuilder(
+    column: $table.occupancy,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get resourcesJson => $composableBuilder(
     column: $table.resourcesJson,
     builder: (column) => ColumnFilters(column),
@@ -5534,6 +6837,31 @@ class $$RescueStationsTableFilterComposer
     column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> checkInLogsRefs(
+    Expression<bool> Function($$CheckInLogsTableFilterComposer f) f,
+  ) {
+    final $$CheckInLogsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.stationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableFilterComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$RescueStationsTableOrderingComposer
@@ -5577,6 +6905,11 @@ class $$RescueStationsTableOrderingComposer
 
   ColumnOrderings<int> get capacity => $composableBuilder(
     column: $table.capacity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get occupancy => $composableBuilder(
+    column: $table.occupancy,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5643,6 +6976,9 @@ class $$RescueStationsTableAnnotationComposer
   GeneratedColumn<int> get capacity =>
       $composableBuilder(column: $table.capacity, builder: (column) => column);
 
+  GeneratedColumn<int> get occupancy =>
+      $composableBuilder(column: $table.occupancy, builder: (column) => column);
+
   GeneratedColumn<String> get resourcesJson => $composableBuilder(
     column: $table.resourcesJson,
     builder: (column) => column,
@@ -5664,6 +7000,31 @@ class $$RescueStationsTableAnnotationComposer
     column: $table.syncStatus,
     builder: (column) => column,
   );
+
+  Expression<T> checkInLogsRefs<T extends Object>(
+    Expression<T> Function($$CheckInLogsTableAnnotationComposer a) f,
+  ) {
+    final $$CheckInLogsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.checkInLogs,
+      getReferencedColumn: (t) => t.stationId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CheckInLogsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.checkInLogs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$RescueStationsTableTableManager
@@ -5677,12 +7038,9 @@ class $$RescueStationsTableTableManager
           $$RescueStationsTableAnnotationComposer,
           $$RescueStationsTableCreateCompanionBuilder,
           $$RescueStationsTableUpdateCompanionBuilder,
-          (
-            RescueStation,
-            BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation>,
-          ),
+          (RescueStation, $$RescueStationsTableReferences),
           RescueStation,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool checkInLogsRefs})
         > {
   $$RescueStationsTableTableManager(
     _$AppDatabase db,
@@ -5706,6 +7064,7 @@ class $$RescueStationsTableTableManager
                 Value<String?> address = const Value.absent(),
                 Value<String?> contactPhone = const Value.absent(),
                 Value<int?> capacity = const Value.absent(),
+                Value<int> occupancy = const Value.absent(),
                 Value<String> resourcesJson = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5721,6 +7080,7 @@ class $$RescueStationsTableTableManager
                 address: address,
                 contactPhone: contactPhone,
                 capacity: capacity,
+                occupancy: occupancy,
                 resourcesJson: resourcesJson,
                 status: status,
                 createdAt: createdAt,
@@ -5738,6 +7098,7 @@ class $$RescueStationsTableTableManager
                 Value<String?> address = const Value.absent(),
                 Value<String?> contactPhone = const Value.absent(),
                 Value<int?> capacity = const Value.absent(),
+                Value<int> occupancy = const Value.absent(),
                 Value<String> resourcesJson = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 required DateTime createdAt,
@@ -5753,6 +7114,7 @@ class $$RescueStationsTableTableManager
                 address: address,
                 contactPhone: contactPhone,
                 capacity: capacity,
+                occupancy: occupancy,
                 resourcesJson: resourcesJson,
                 status: status,
                 createdAt: createdAt,
@@ -5762,9 +7124,43 @@ class $$RescueStationsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$RescueStationsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({checkInLogsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (checkInLogsRefs) db.checkInLogs],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (checkInLogsRefs)
+                    await $_getPrefetchedData<
+                      RescueStation,
+                      $RescueStationsTable,
+                      CheckInLog
+                    >(
+                      currentTable: table,
+                      referencedTable: $$RescueStationsTableReferences
+                          ._checkInLogsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$RescueStationsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).checkInLogsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.stationId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -5779,12 +7175,845 @@ typedef $$RescueStationsTableProcessedTableManager =
       $$RescueStationsTableAnnotationComposer,
       $$RescueStationsTableCreateCompanionBuilder,
       $$RescueStationsTableUpdateCompanionBuilder,
-      (
-        RescueStation,
-        BaseReferences<_$AppDatabase, $RescueStationsTable, RescueStation>,
-      ),
+      (RescueStation, $$RescueStationsTableReferences),
       RescueStation,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool checkInLogsRefs})
+    >;
+typedef $$CheckInLogsTableCreateCompanionBuilder =
+    CheckInLogsCompanion Function({
+      required String id,
+      required String stationId,
+      required String userId,
+      required String type,
+      required DateTime timestamp,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$CheckInLogsTableUpdateCompanionBuilder =
+    CheckInLogsCompanion Function({
+      Value<String> id,
+      Value<String> stationId,
+      Value<String> userId,
+      Value<String> type,
+      Value<DateTime> timestamp,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$CheckInLogsTableReferences
+    extends BaseReferences<_$AppDatabase, $CheckInLogsTable, CheckInLog> {
+  $$CheckInLogsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $RescueStationsTable _stationIdTable(_$AppDatabase db) =>
+      db.rescueStations.createAlias(
+        $_aliasNameGenerator(db.checkInLogs.stationId, db.rescueStations.id),
+      );
+
+  $$RescueStationsTableProcessedTableManager get stationId {
+    final $_column = $_itemColumn<String>('station_id')!;
+
+    final manager = $$RescueStationsTableTableManager(
+      $_db,
+      $_db.rescueStations,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_stationIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $UsersTable _userIdTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.checkInLogs.userId, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<String>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CheckInLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$RescueStationsTableFilterComposer get stationId {
+    final $$RescueStationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableFilterComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$RescueStationsTableOrderingComposer get stationId {
+    final $$RescueStationsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableOrderingComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CheckInLogsTable> {
+  $$CheckInLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get timestamp =>
+      $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$RescueStationsTableAnnotationComposer get stationId {
+    final $$RescueStationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.stationId,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CheckInLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CheckInLogsTable,
+          CheckInLog,
+          $$CheckInLogsTableFilterComposer,
+          $$CheckInLogsTableOrderingComposer,
+          $$CheckInLogsTableAnnotationComposer,
+          $$CheckInLogsTableCreateCompanionBuilder,
+          $$CheckInLogsTableUpdateCompanionBuilder,
+          (CheckInLog, $$CheckInLogsTableReferences),
+          CheckInLog,
+          PrefetchHooks Function({bool stationId, bool userId})
+        > {
+  $$CheckInLogsTableTableManager(_$AppDatabase db, $CheckInLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CheckInLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CheckInLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CheckInLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> stationId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<DateTime> timestamp = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CheckInLogsCompanion(
+                id: id,
+                stationId: stationId,
+                userId: userId,
+                type: type,
+                timestamp: timestamp,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String stationId,
+                required String userId,
+                required String type,
+                required DateTime timestamp,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CheckInLogsCompanion.insert(
+                id: id,
+                stationId: stationId,
+                userId: userId,
+                type: type,
+                timestamp: timestamp,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CheckInLogsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({stationId = false, userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (stationId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.stationId,
+                                referencedTable: $$CheckInLogsTableReferences
+                                    ._stationIdTable(db),
+                                referencedColumn: $$CheckInLogsTableReferences
+                                    ._stationIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$CheckInLogsTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$CheckInLogsTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CheckInLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CheckInLogsTable,
+      CheckInLog,
+      $$CheckInLogsTableFilterComposer,
+      $$CheckInLogsTableOrderingComposer,
+      $$CheckInLogsTableAnnotationComposer,
+      $$CheckInLogsTableCreateCompanionBuilder,
+      $$CheckInLogsTableUpdateCompanionBuilder,
+      (CheckInLog, $$CheckInLogsTableReferences),
+      CheckInLog,
+      PrefetchHooks Function({bool stationId, bool userId})
+    >;
+typedef $$CommunityReportsTableCreateCompanionBuilder =
+    CommunityReportsCompanion Function({
+      required String id,
+      required String type,
+      Value<String?> customTypeName,
+      required double latitude,
+      required double longitude,
+      Value<String?> description,
+      required String reportedBy,
+      required DateTime createdAt,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$CommunityReportsTableUpdateCompanionBuilder =
+    CommunityReportsCompanion Function({
+      Value<String> id,
+      Value<String> type,
+      Value<String?> customTypeName,
+      Value<double> latitude,
+      Value<double> longitude,
+      Value<String?> description,
+      Value<String> reportedBy,
+      Value<DateTime> createdAt,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$CommunityReportsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CommunityReportsTable, CommunityReport> {
+  $$CommunityReportsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $UsersTable _reportedByTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.communityReports.reportedBy, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get reportedBy {
+    final $_column = $_itemColumn<String>('reported_by')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_reportedByTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CommunityReportsTableFilterComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get reportedBy {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get reportedBy {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CommunityReportsTable> {
+  $$CommunityReportsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get reportedBy {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CommunityReportsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CommunityReportsTable,
+          CommunityReport,
+          $$CommunityReportsTableFilterComposer,
+          $$CommunityReportsTableOrderingComposer,
+          $$CommunityReportsTableAnnotationComposer,
+          $$CommunityReportsTableCreateCompanionBuilder,
+          $$CommunityReportsTableUpdateCompanionBuilder,
+          (CommunityReport, $$CommunityReportsTableReferences),
+          CommunityReport,
+          PrefetchHooks Function({bool reportedBy})
+        > {
+  $$CommunityReportsTableTableManager(
+    _$AppDatabase db,
+    $CommunityReportsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CommunityReportsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CommunityReportsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CommunityReportsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String?> customTypeName = const Value.absent(),
+                Value<double> latitude = const Value.absent(),
+                Value<double> longitude = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String> reportedBy = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CommunityReportsCompanion(
+                id: id,
+                type: type,
+                customTypeName: customTypeName,
+                latitude: latitude,
+                longitude: longitude,
+                description: description,
+                reportedBy: reportedBy,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String type,
+                Value<String?> customTypeName = const Value.absent(),
+                required double latitude,
+                required double longitude,
+                Value<String?> description = const Value.absent(),
+                required String reportedBy,
+                required DateTime createdAt,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CommunityReportsCompanion.insert(
+                id: id,
+                type: type,
+                customTypeName: customTypeName,
+                latitude: latitude,
+                longitude: longitude,
+                description: description,
+                reportedBy: reportedBy,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CommunityReportsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({reportedBy = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (reportedBy) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.reportedBy,
+                                referencedTable:
+                                    $$CommunityReportsTableReferences
+                                        ._reportedByTable(db),
+                                referencedColumn:
+                                    $$CommunityReportsTableReferences
+                                        ._reportedByTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CommunityReportsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CommunityReportsTable,
+      CommunityReport,
+      $$CommunityReportsTableFilterComposer,
+      $$CommunityReportsTableOrderingComposer,
+      $$CommunityReportsTableAnnotationComposer,
+      $$CommunityReportsTableCreateCompanionBuilder,
+      $$CommunityReportsTableUpdateCompanionBuilder,
+      (CommunityReport, $$CommunityReportsTableReferences),
+      CommunityReport,
+      PrefetchHooks Function({bool reportedBy})
     >;
 
 class $AppDatabaseManager {
@@ -5802,4 +8031,8 @@ class $AppDatabaseManager {
       $$AttachmentsTableTableManager(_db, _db.attachments);
   $$RescueStationsTableTableManager get rescueStations =>
       $$RescueStationsTableTableManager(_db, _db.rescueStations);
+  $$CheckInLogsTableTableManager get checkInLogs =>
+      $$CheckInLogsTableTableManager(_db, _db.checkInLogs);
+  $$CommunityReportsTableTableManager get communityReports =>
+      $$CommunityReportsTableTableManager(_db, _db.communityReports);
 }

@@ -2,19 +2,29 @@
 
 import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
+import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
+import 'package:disaster_response_app/features/user_mobile/domain/sos_controller.dart';
 import 'package:drift/drift.dart' as drift;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// Provider to track the currently checked-in station ID across the map screen
+final currentCheckedInStationProvider = StateProvider<String?>((ref) => null);
 
 // =============================================================================
 // THEME TOKENS  (unchanged)
@@ -165,10 +175,9 @@ class _EventMapScreenState extends State<EventMapScreen>
   _LocErrCode? _locationErrCode;
 
   // ── UI state ─────────────────────────────────────────────────────────────
-  bool _legendExpanded = true;
-
   // ── Routing state (for external Google Maps directions) ──────────────────
   LatLng? _routeDestination;
+  RescueStation? _targetStation;
 
   @override
   void initState() {
@@ -307,12 +316,15 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
-  void _onRouteDestinationChanged(LatLng? destination) {
-    if (_isSameLatLng(_routeDestination, destination)) return;
+  void _onRouteDestinationChanged(LatLng? destination, RescueStation? station) {
+    if (_isSameLatLng(_routeDestination, destination) &&
+        _targetStation?.id == station?.id)
+      return;
     if (!mounted) return;
 
     setState(() {
       _routeDestination = destination;
+      _targetStation = station;
     });
   }
 
@@ -402,6 +414,101 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
+  void _showLegendDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Chú thích bản đồ',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _legendDialogItem(
+              color: _MapColors.userDot,
+              icon: Icons.location_on_rounded,
+              label: 'Vị trí hiện tại của bạn',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: _MapColors.rescueGreen,
+              icon: Icons.medical_services_rounded,
+              label: 'Trạm cứu trợ',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: Colors.orange.shade700,
+              icon: Icons.warning_rounded,
+              label: 'Cộng đồng báo cáo',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: _MapColors.sosRed,
+              customWidget: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: _MapColors.sosRed,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text(
+                    '!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              label: 'Vị trí phát tín hiệu SOS',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendDialogItem({
+    required Color color,
+    required String label,
+    IconData? icon,
+    Widget? customWidget,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: customWidget ?? Icon(icon, color: color, size: 18),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: _MapColors.textPrimary),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // BUILD
   // ---------------------------------------------------------------------------
@@ -422,7 +529,6 @@ class _EventMapScreenState extends State<EventMapScreen>
                 mapController: _mapController,
                 pulseAnim: _pulseAnim,
                 userLocation: effectiveLocation,
-                sosLocation: _mockSosLocation(effectiveLocation),
                 onRouteTargetChanged: _onRouteDestinationChanged,
               ),
             ),
@@ -448,12 +554,22 @@ class _EventMapScreenState extends State<EventMapScreen>
               top: topPadding + 10,
               left: 14,
               right: 14,
+
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _FloatingBackButton(),
                   const Spacer(),
-                  _ZoomControls(mapController: _mapController),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ZoomControls(mapController: _mapController),
+                      const SizedBox(height: 12),
+                      _LegendInfoButton(
+                        onTap: () => _showLegendDialog(context),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -461,32 +577,30 @@ class _EventMapScreenState extends State<EventMapScreen>
             // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
-              bottom: _legendExpanded ? 328 : 204,
+              bottom: _targetStation != null ? 350 : 100,
               child: _LocateMeButton(onTap: _locateMe),
             ),
 
-            // ── Directions button ────────────────────────────────────────
-            Positioned(
-              right: 14,
-              bottom: _legendExpanded ? 272 : 148,
-              child: _DirectionsButton(
-                onTap: _routeDestination == null
-                    ? null
-                    : _openGoogleMapsDirections,
-              ),
-            ),
+            // Removed _DirectionsButton
 
-            // ── Bottom Legend + SOS Sheet ────────────────────────────────
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _BottomLegendSheet(
-                expanded: _legendExpanded,
-                onToggle: () =>
-                    setState(() => _legendExpanded = !_legendExpanded),
-                onSosTap: _onSosTapped,
+            // ── Selected Station Details ────────────────────────────────
+            if (_targetStation != null)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 110,
+                child: _StationDetailsCard(
+                  station: _targetStation!,
+                  onNavigate: _openGoogleMapsDirections,
+                  onClose: () => setState(() => _targetStation = null),
+                ),
               ),
+
+            // ── Floating Action Buttons (SOS & Info) ────────────────────
+            Positioned(
+              left: 14,
+              bottom: 30,
+              child: _SosFloatingButton(onTap: _onSosTapped),
             ),
           ],
         ),
@@ -624,14 +738,12 @@ class _MapLayer extends ConsumerStatefulWidget {
   final MapController mapController;
   final Animation<double> pulseAnim;
   final LatLng userLocation;
-  final LatLng sosLocation;
-  final ValueChanged<LatLng?> onRouteTargetChanged;
+  final void Function(LatLng?, RescueStation?) onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
     required this.pulseAnim,
     required this.userLocation,
-    required this.sosLocation,
     required this.onRouteTargetChanged,
   });
 
@@ -666,6 +778,9 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   /// true nếu đang dùng fallback đường chim bay (do API lỗi).
   bool _isFallback = false;
 
+  List<CommunityReport> _latestReports = const [];
+  String _reportsFingerprint = '';
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -676,8 +791,19 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     initial.whenData((stations) {
       _latestStations = stations;
       _stationsFingerprint = _fingerprintStations(stations);
-      _computeRouteFromProps(widget.userLocation, stations);
+      _computeRouteFromProps(widget.userLocation, stations, _latestReports);
     });
+
+    _initCheckInState();
+  }
+
+  Future<void> _initCheckInState() async {
+    final repo = ref.read(rescueStationRepositoryProvider);
+    final latestLog = await repo.getLatestCheckInLog();
+    if (latestLog != null && latestLog.type == 'in') {
+      ref.read(currentCheckedInStationProvider.notifier).state =
+          latestLog.stationId;
+    }
   }
 
   @override
@@ -696,7 +822,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         20; // mét
 
     if (locationChanged) {
-      _computeRouteFromProps(widget.userLocation, _latestStations);
+      _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
     }
   }
 
@@ -710,6 +836,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   Future<void> _computeRouteFromProps(
     LatLng userLoc,
     List<RescueStation> stations,
+    List<CommunityReport> reports,
   ) async {
     // ── Bước 1: Chọn trạm đích (ưu tiên trạm user chọn, fallback gần nhất) ──
     final destination = _resolveTargetStation(userLoc, stations);
@@ -722,13 +849,45 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         _routeLoading = false;
         _isFallback = false;
       });
-      widget.onRouteTargetChanged(null);
+      widget.onRouteTargetChanged(null, null);
       return;
     }
 
-    final destinationPoint = LatLng(destination.latitude, destination.longitude);
+    final destinationPoint = LatLng(
+      destination.latitude,
+      destination.longitude,
+    );
+
+    // Tối ưu hóa: Nếu trạm đích và vị trí bắt đầu/kết thúc không thay đổi đáng kể,
+    // ta chỉ cập nhật đối tượng station cho UI mà không cần fetch lại route.
+    final bool isSameStation = destination.id == _routeStationId;
+    final bool hasExistingRoute = _routePoints.isNotEmpty;
+    final bool startValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          userLoc.latitude,
+          userLoc.longitude,
+          _routePoints.first.latitude,
+          _routePoints.first.longitude,
+        ) <
+        20;
+    final bool endValid =
+        hasExistingRoute &&
+        Geolocator.distanceBetween(
+          destinationPoint.latitude,
+          destinationPoint.longitude,
+          _routePoints.last.latitude,
+          _routePoints.last.longitude,
+        ) <
+        5;
+
+    if (isSameStation && startValid && endValid) {
+      widget.onRouteTargetChanged(destinationPoint, destination);
+      return;
+    }
+
     _routeStationId = destination.id;
-    widget.onRouteTargetChanged(destinationPoint);
+    widget.onRouteTargetChanged(destinationPoint, destination);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -742,6 +901,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       final points = await OpenRouteService.instance.getRoute(
         userLoc,
         destinationPoint,
+        avoidPoints: reports.map((r) => LatLng(r.latitude, r.longitude)).toList(),
       );
 
       if (!mounted) return;
@@ -768,13 +928,17 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   ) {
     if (stations.isEmpty) return null;
 
-    final selectedId = _selectedStationId;
+    final checkedInId = ref.read(currentCheckedInStationProvider);
+    final selectedId = _selectedStationId ?? checkedInId;
+    
     if (selectedId != null) {
       final selected = _findStationById(stations, selectedId);
       if (selected != null) return selected;
 
       // Trạm đã bị xoá/ẩn khỏi dữ liệu hiện tại, quay về chế độ mặc định.
-      _selectedStationId = null;
+      if (_selectedStationId != null) {
+        _selectedStationId = null;
+      }
     }
 
     return _findNearestStation(userLoc, stations);
@@ -834,20 +998,53 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   String _fingerprintStations(List<RescueStation> stations) {
     final keys =
         stations
-            .map((s) => '${s.id}:${s.latitude}:${s.longitude}:${s.status}')
+            .map(
+              (s) =>
+                  '${s.id}:${s.latitude}:${s.longitude}:${s.status}:${s.occupancy}',
+            )
             .toList()
           ..sort();
     return keys.join('|');
   }
 
   void _onStationTapped(RescueStation station) {
-    if (_selectedStationId == station.id) return;
-
     setState(() {
       _selectedStationId = station.id;
     });
 
-    _computeRouteFromProps(widget.userLocation, _latestStations);
+    _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
+  }
+
+  String _fingerprintReports(List<CommunityReport> reports) {
+    final keys = reports.map((r) => '${r.id}:${r.latitude}:${r.longitude}').toList()..sort();
+    return keys.join('|');
+  }
+
+  void _showCommunityReportDialog(LatLng location, {CommunityReport? existingReport}) {
+    showDialog(
+      context: context,
+      builder: (_) => _CommunityReportDialog(
+        location: location,
+        parentRef: ref,
+        existingReport: existingReport,
+      ),
+    );
+  }
+
+  void _showCommunityReportDetailsDialog(CommunityReport report) {
+    showDialog(
+      context: context,
+      builder: (_) => _CommunityReportDetailsDialog(
+        report: report,
+        parentRef: ref,
+        onEdit: () {
+          _showCommunityReportDialog(
+            LatLng(report.latitude, report.longitude),
+            existingReport: report,
+          );
+        },
+      ),
+    );
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -864,8 +1061,28 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
 
         _stationsFingerprint = nextFingerprint;
         _latestStations = stations;
-        _computeRouteFromProps(widget.userLocation, stations);
+        _computeRouteFromProps(widget.userLocation, stations, _latestReports);
       });
+    });
+
+    ref.listen<AsyncValue<List<CommunityReport>>>(communityReportsProvider, (previous, next) {
+      next.whenData((reports) {
+        final nextFingerprint = _fingerprintReports(reports);
+        if (nextFingerprint == _reportsFingerprint) return;
+
+        _reportsFingerprint = nextFingerprint;
+        _latestReports = reports;
+        _computeRouteFromProps(widget.userLocation, _latestStations, reports);
+      });
+    });
+
+    ref.listen<String?>(currentCheckedInStationProvider, (previous, next) {
+      if (previous != next) {
+        if (next != null) {
+          _selectedStationId = next;
+        }
+        _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
+      }
     });
 
     final rescueStationsAsync = ref.watch(rescueStationsProvider);
@@ -875,6 +1092,15 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         return stations;
       },
       orElse: () => _latestStations,
+    );
+
+    final reportsAsync = ref.watch(communityReportsProvider);
+    final communityReports = reportsAsync.maybeWhen(
+      data: (reports) {
+        _latestReports = reports;
+        return reports;
+      },
+      orElse: () => _latestReports,
     );
 
     final hasRoute = _routePoints.length >= 2;
@@ -892,6 +1118,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
             ),
+            onLongPress: (tapPosition, point) => _showCommunityReportDialog(point),
           ),
           children: [
             // ── 1. Tile layer — OpenStreetMap ──────────────────────────
@@ -921,14 +1148,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             // ── 3. Marker layer — SAU PolylineLayer ───────────────────
             MarkerLayer(
               markers: [
-                // ── Mock SOS signal ────────────────────────────────────
-                Marker(
-                  point: widget.sosLocation,
-                  width: 56,
-                  height: 56,
-                  child: _SosMarker(),
-                ),
-
                 // ── Rescue stations — trạm đích hiện tại highlight to hơn ──
                 for (final station in rescueStations)
                   Marker(
@@ -939,7 +1158,20 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                       onTap: () => _onStationTapped(station),
                       child: _RescueMarker(
                         selected: station.id == _routeStationId,
+                        isFull: station.status == 'full',
                       ),
+                    ),
+                  ),
+
+                // ── Community Reports ──────────────────────────────────────────
+                for (final report in communityReports)
+                  Marker(
+                    point: LatLng(report.latitude, report.longitude),
+                    width: 40,
+                    height: 40,
+                    child: GestureDetector(
+                      onTap: () => _showCommunityReportDetailsDialog(report),
+                      child: _CommunityReportMarker(report: report),
                     ),
                   ),
 
@@ -972,7 +1204,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             right: 12,
             child: _RouteFallbackChip(
               onRetry: () =>
-                  _computeRouteFromProps(widget.userLocation, _latestStations),
+                  _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports),
             ),
           ),
       ],
@@ -1159,11 +1391,14 @@ class _SosMarker extends StatelessWidget {
 // ── Rescue Station: Green cross ───────────────────────────────────────────────
 class _RescueMarker extends StatelessWidget {
   final bool selected;
+  final bool isFull;
 
-  const _RescueMarker({this.selected = false});
+  const _RescueMarker({this.selected = false, this.isFull = false});
 
   @override
   Widget build(BuildContext context) {
+    final color = isFull ? Colors.orange.shade700 : _MapColors.rescueGreen;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1171,11 +1406,13 @@ class _RescueMarker extends StatelessWidget {
           width: selected ? 42 : 38,
           height: selected ? 42 : 38,
           decoration: BoxDecoration(
-            color: _MapColors.rescueGreen,
+            color: color,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.rescueGreen.withOpacity(selected ? 0.55 : 0.4),
+                color: color.withOpacity(
+                  selected ? 0.55 : 0.4,
+                ),
                 blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
@@ -1189,7 +1426,7 @@ class _RescueMarker extends StatelessWidget {
         ),
         CustomPaint(
           size: const Size(10, 6),
-          painter: _PinTailPainter(color: _MapColors.rescueGreen),
+          painter: _PinTailPainter(color: color),
         ),
       ],
     );
@@ -1351,34 +1588,69 @@ class _LocateMeButton extends StatelessWidget {
 }
 
 // =============================================================================
-// DIRECTIONS BUTTON — Chỉ đường đến địa điểm được chọn
+// FLOATING ACTION BUTTONS (SOS & INFO)
 // =============================================================================
-class _DirectionsButton extends StatelessWidget {
-  final VoidCallback? onTap;
+class _SosFloatingButton extends StatelessWidget {
+  final VoidCallback onTap;
 
-  const _DirectionsButton({required this.onTap});
-
-  bool get _isEnabled => onTap != null;
+  const _SosFloatingButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: _isEnabled ? _MapColors.fabBg : Colors.grey.shade200,
+      color: _MapColors.sosRed,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 6,
+      shadowColor: _MapColors.sosRed.withOpacity(0.5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.sos_rounded, color: Colors.white, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'Phát SOS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendInfoButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _LegendInfoButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _MapColors.fabBg,
       borderRadius: BorderRadius.circular(12),
       elevation: 4,
       shadowColor: _MapColors.shadow,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: SizedBox(
+        child: const SizedBox(
           width: 44,
           height: 44,
           child: Icon(
-            Icons.directions_rounded,
-            size: 21,
-            color: _isEnabled
-                ? const Color(0xFF4285F4)
-                : _MapColors.textSecondary.withOpacity(0.6),
+            Icons.info_outline_rounded,
+            size: 24,
+            color: _MapColors.textPrimary,
           ),
         ),
       ),
@@ -1386,254 +1658,11 @@ class _DirectionsButton extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// BOTTOM LEGEND SHEET  (unchanged)
-// =============================================================================
-class _BottomLegendSheet extends StatelessWidget {
-  final bool expanded;
-  final VoidCallback onToggle;
-  final VoidCallback onSosTap;
-
-  const _BottomLegendSheet({
-    required this.expanded,
-    required this.onToggle,
-    required this.onSosTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: _MapColors.cardBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: _MapColors.shadow,
-            blurRadius: 24,
-            offset: Offset(0, -6),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onTap: onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: _MapColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.layers_rounded,
-                        size: 18,
-                        color: _MapColors.textSecondary,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Chú thích bản đồ',
-                        style: TextStyle(
-                          color: _MapColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      AnimatedRotation(
-                        turns: expanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: const Icon(
-                          Icons.expand_less_rounded,
-                          size: 22,
-                          color: _MapColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            child: expanded
-                ? _LegendContent(onSosTap: onSosTap)
-                : const SizedBox(height: 4),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendContent extends StatelessWidget {
-  final VoidCallback onSosTap;
-  const _LegendContent({required this.onSosTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        16 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _LegendItem(
-                color: _MapColors.userDot,
-                icon: Icons.location_on_rounded,
-                label: 'Vị trí bạn',
-              ),
-              const SizedBox(width: 12),
-              _LegendItem(
-                color: _MapColors.sosRed,
-                label: 'Tín hiệu SOS',
-                customWidget: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: _MapColors.sosRed,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              _LegendItem(
-                color: _MapColors.rescueGreen,
-                icon: Icons.medical_services_rounded,
-                label: 'Trạm cứu trợ',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: _MapColors.divider, height: 1),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFDC2626).withOpacity(0.4),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: onSosTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(
-                  Icons.sos_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                label: const Text(
-                  'Phát tín hiệu SOS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Single legend item ────────────────────────────────────────────────────────
-class _LegendItem extends StatelessWidget {
-  final Color color;
-  final IconData? icon;
-  final String label;
-  final Widget? customWidget;
-
-  const _LegendItem({
-    required this.color,
-    this.icon,
-    required this.label,
-    this.customWidget,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            customWidget ?? Icon(icon, color: color, size: 18),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// DirectionsButton removed
+// _BottomLegendSheet removed
 
 // =============================================================================
-// SOS CONFIRM DIALOG  — now a ConsumerStatefulWidget, receives real coords
+// SOS CONFIRM DIALOG  — uses SOSController, expandable details form
 // =============================================================================
 class _SosConfirmDialog extends ConsumerStatefulWidget {
   final BuildContext parentContext;
@@ -1652,104 +1681,243 @@ class _SosConfirmDialog extends ConsumerStatefulWidget {
 
 class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
   bool _sending = false;
+  bool _showDetails = false;
+
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillFromProfile();
+  }
+
+  /// Pre-fill name + phone from Firestore user profile if logged in.
+  Future<void> _prefillFromProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data = doc.data()!;
+      final name = (data['displayName'] as String?) ?? '';
+      final phone = (data['phoneNumber'] as String?) ?? '';
+      if (name.isNotEmpty && _nameCtrl.text.isEmpty) _nameCtrl.text = name;
+      if (phone.isNotEmpty && _phoneCtrl.text.isEmpty) _phoneCtrl.text = phone;
+    } catch (_) {
+      // Ignore — fields stay empty
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Listen to SOSController state for loading feedback
+    final sosState = ref.watch(sosControllerProvider);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: const EdgeInsets.all(24),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: _MapColors.sosRed.withOpacity(0.1),
-              shape: BoxShape.circle,
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Icon ──
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: _MapColors.sosRed.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.sos_rounded,
+                color: _MapColors.sosRed,
+                size: 34,
+              ),
             ),
-            child: const Icon(
-              Icons.sos_rounded,
-              color: _MapColors.sosRed,
-              size: 34,
+            const SizedBox(height: 16),
+            const Text(
+              'Xác nhận phát SOS?',
+              style: TextStyle(
+                color: _MapColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Xác nhận phát SOS?',
-            style: TextStyle(
-              color: _MapColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 8),
+            const Text(
+              'Tín hiệu SOS và vị trí của bạn sẽ được gửi đến đội cứu hộ gần nhất ngay lập tức.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _MapColors.textSecondary,
+                fontSize: 13.5,
+                height: 1.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Tín hiệu SOS và vị trí của bạn sẽ được gửi đến đội cứu hộ gần nhất ngay lập tức.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _MapColors.textSecondary,
-              fontSize: 13.5,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _sending
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: const BorderSide(color: _MapColors.divider),
+
+            // ── "Thêm chi tiết" toggle ──
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () => setState(() => _showDetails = !_showDetails),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _showDetails
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: _MapColors.sosRed,
+                    size: 20,
                   ),
-                  child: const Text(
-                    'Huỷ',
-                    style: TextStyle(
-                      color: _MapColors.textSecondary,
+                  const SizedBox(width: 4),
+                  Text(
+                    _showDetails ? 'Ẩn chi tiết' : 'Thêm chi tiết',
+                    style: const TextStyle(
+                      color: _MapColors.sosRed,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _sending ? null : () => _submitSOS(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _MapColors.sosRed,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Gửi SOS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                ),
+            ),
+
+            // ── Detail form (expandable) ──
+            if (_showDetails) ...[
+              const SizedBox(height: 14),
+              _buildField(
+                controller: _nameCtrl,
+                label: 'Họ và tên',
+                icon: Icons.person_outline_rounded,
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _phoneCtrl,
+                label: 'Số điện thoại',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _descCtrl,
+                label: 'Mô tả tình huống',
+                icon: Icons.edit_note_rounded,
+                maxLines: 3,
               ),
             ],
-          ),
-        ],
+
+            // ── Action buttons ──
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _sending
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: const BorderSide(color: _MapColors.divider),
+                    ),
+                    child: const Text(
+                      'Huỷ',
+                      style: TextStyle(
+                        color: _MapColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _sending ? null : () => _submitSOS(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _MapColors.sosRed,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Gửi SOS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: const TextStyle(fontSize: 14, color: _MapColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          fontSize: 13,
+          color: _MapColors.textSecondary,
+        ),
+        prefixIcon: Icon(icon, size: 20, color: _MapColors.textSecondary),
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _MapColors.sosRed, width: 1.5),
+        ),
       ),
     );
   }
@@ -1759,10 +1927,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
 
     final messenger = ScaffoldMessenger.of(widget.parentContext);
 
-    // ── 1. Resolve coordinates ─────────────────────────────────────────────
-    // Parent already has a GPS fix → use it directly.
-    // Otherwise try one more _determinePosition() in case the user just
-    // granted permission inside the dialog.
+    // ── 1. Resolve coordinates ───────────────────────────────────────────
     LatLng coords;
     try {
       if (widget.currentLocation != null) {
@@ -1772,79 +1937,674 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
         coords = LatLng(pos.latitude, pos.longitude);
       }
     } catch (_) {
-      // Last resort: never drop the SOS silently.
       coords = _kFallbackLocation;
     }
 
-    // Close dialog before async DB work so UI feels snappy
+    // ── 2. Resolve user input (or defaults) ──────────────────────────────
+    final userName = _nameCtrl.text.trim().isNotEmpty
+        ? _nameCtrl.text.trim()
+        : 'Người dân';
+    final phoneNumber = _phoneCtrl.text.trim();
+    final description = _descCtrl.text.trim().isNotEmpty
+        ? _descCtrl.text.trim()
+        : 'Tôi đang cần cứu hộ khẩn cấp!';
+
+    // Close dialog before async work so UI feels snappy
     Navigator.of(dialogContext).pop();
 
-    final db = ref.read(dbProvider);
-    final postId = DateTime.now().millisecondsSinceEpoch.toString();
-    final locId = 'loc_$postId';
-
-    // ── 2. Save Post to Drift (offline-first) ──────────────────────────────
-    await db
-        .into(db.posts)
-        .insert(
-          PostsCompanion.insert(
-            id: postId,
-            eventId: 'current_event_id',
-            userId: 'citizen_01',
-            postType: 'sos',
-            content: 'Tôi đang cần cứu hộ khẩn cấp!',
-            createdAt: DateTime.now(),
-            syncStatus: const drift.Value('pending'),
-          ),
+    // ── 3. Delegate to SOSController ─────────────────────────────────────
+    await ref.read(sosControllerProvider.notifier).sendSOS(
+          userName: userName,
+          phoneNumber: phoneNumber,
+          description: description,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
         );
 
-    // ── 3. Save real GPS coordinates to Drift ──────────────────────────────
-    await db
-        .into(db.locations)
-        .insert(
-          LocationsCompanion.insert(
-            id: locId,
-            postId: postId,
-            latitude: coords.latitude, // ← real GPS lat
-            longitude: coords.longitude, // ← real GPS lng
-          ),
-        );
+    // ── 4. Show result snackbar ──────────────────────────────────────────
+    final state = ref.read(sosControllerProvider);
+    final isSuccess = state.status == SOSStatus.success;
+    final isFallback = state.status == SOSStatus.fallbackActivated;
 
-    // ── 4. Immediately try to push to Firebase ─────────────────────────────
-    final syncService = ref.read(firebaseSyncServiceProvider);
-    final result = await syncService.syncPendingSOS();
+    String snackText;
+    Color snackColor;
+    IconData snackIcon;
 
-    // ── 5. Show result snackbar ────────────────────────────────────────────
+    if (isSuccess) {
+      snackText = 'Đã gửi SOS! '
+          '(${coords.latitude.toStringAsFixed(5)}, '
+          '${coords.longitude.toStringAsFixed(5)})';
+      snackColor = Colors.green.shade600;
+      snackIcon = Icons.check_circle_rounded;
+    } else if (isFallback) {
+      snackText = 'SMS khẩn cấp đã được gửi thành công!';
+      snackColor = Colors.orange.shade700;
+      snackIcon = Icons.sms_rounded;
+    } else {
+      snackText = state.errorMessage ?? 'Đã lưu offline. Sẽ gửi khi có mạng!';
+      snackColor = Colors.orange.shade700;
+      snackIcon = Icons.cloud_off_rounded;
+    }
+
     messenger.showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(
-              result.isSuccess
-                  ? Icons.check_circle_rounded
-                  : Icons.cloud_off_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
+            Icon(snackIcon, color: Colors.white, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                result.isSuccess
-                    ? 'Đã gửi SOS! '
-                          '(${coords.latitude.toStringAsFixed(5)}, '
-                          '${coords.longitude.toStringAsFixed(5)})'
-                    : 'Đã lưu offline. Sẽ gửi khi có mạng!',
+                snackText,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-        backgroundColor: result.isSuccess
-            ? Colors.green.shade600
-            : Colors.orange.shade700,
+        backgroundColor: snackColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
       ),
+    );
+  }
+}
+
+// =============================================================================
+// STATION DETAILS CARD
+// =============================================================================
+class _StationDetailsCard extends ConsumerStatefulWidget {
+  final RescueStation station;
+  final VoidCallback onNavigate;
+  final VoidCallback onClose;
+
+  const _StationDetailsCard({
+    required this.station,
+    required this.onNavigate,
+    required this.onClose,
+  });
+
+  @override
+  ConsumerState<_StationDetailsCard> createState() =>
+      _StationDetailsCardState();
+}
+
+class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
+  bool _isLoading = false;
+
+  Future<void> _handleCheckInOut() async {
+    final currentCheckedInId = ref.read(currentCheckedInStationProvider);
+    final isCheckedInHere = currentCheckedInId == widget.station.id;
+
+    setState(() => _isLoading = true);
+    try {
+      if (isCheckedInHere) {
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkOut(widget.station.id);
+        ref.read(currentCheckedInStationProvider.notifier).state = null;
+      } else {
+        if (currentCheckedInId != null) {
+          await ref
+              .read(rescueStationControllerProvider.notifier)
+              .checkOut(currentCheckedInId);
+        }
+        await ref
+            .read(rescueStationControllerProvider.notifier)
+            .checkIn(widget.station.id);
+        ref.read(currentCheckedInStationProvider.notifier).state =
+            widget.station.id;
+
+        widget.onNavigate();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Luôn lấy dữ liệu mới nhất từ provider để đảm bảo tính thời gian thực (occupancy, status...)
+    final stationsAsync = ref.watch(rescueStationsProvider);
+    final station = stationsAsync.maybeWhen(
+      data: (list) => list.firstWhere(
+        (s) => s.id == widget.station.id,
+        orElse: () => widget.station,
+      ),
+      orElse: () => widget.station,
+    );
+
+    final currentCheckedInId = ref.watch(currentCheckedInStationProvider);
+    final isCheckedInHere = currentCheckedInId == station.id;
+
+    final isFull = station.status == 'full';
+    final canCheckIn = !isFull || isCheckedInHere;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: _MapColors.shadow,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      station.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _MapColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sức chứa: ${station.occupancy}/${station.capacity?.toString() ?? "∞"}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _MapColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isFull
+                      ? Colors.orange.shade100
+                      : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  isFull ? 'Đã đầy' : 'Còn chỗ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isFull
+                        ? Colors.orange.shade800
+                        : Colors.green.shade800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: widget.onClose,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 20,
+                    color: _MapColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (!isFull || isCheckedInHere)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleCheckInOut,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isCheckedInHere
+                      ? Colors.grey.shade400
+                      : _MapColors.rescueGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        isCheckedInHere ? 'Rời khỏi trạm' : 'Đến trạm này',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT MARKER
+// =============================================================================
+class _CommunityReportMarker extends StatelessWidget {
+  final CommunityReport report;
+
+  const _CommunityReportMarker({required this.report});
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon;
+    switch (report.type) {
+      case 'fallen_tree':
+        icon = Icons.park_rounded;
+        break;
+      case 'flood':
+        icon = Icons.water_drop_rounded;
+        break;
+      case 'road_block':
+        icon = Icons.remove_road_rounded;
+        break;
+      default:
+        icon = Icons.warning_rounded;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.orange.shade700,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.orange.shade700.withOpacity(0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 18,
+          ),
+        ),
+        CustomPaint(
+          size: const Size(8, 5),
+          painter: _PinTailPainter(color: Colors.orange.shade700),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT DIALOG
+// =============================================================================
+class _CommunityReportDialog extends StatefulWidget {
+  final LatLng location;
+  final WidgetRef parentRef;
+  final CommunityReport? existingReport;
+
+  const _CommunityReportDialog({
+    required this.location,
+    required this.parentRef,
+    this.existingReport,
+  });
+
+  @override
+  State<_CommunityReportDialog> createState() => _CommunityReportDialogState();
+}
+
+class _CommunityReportDialogState extends State<_CommunityReportDialog> {
+  String _selectedType = 'fallen_tree';
+  final _customTypeController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingReport != null) {
+      final report = widget.existingReport!;
+      final types = ['fallen_tree', 'flood', 'road_block', 'other'];
+      if (types.contains(report.type)) {
+        _selectedType = report.type;
+      } else {
+        _selectedType = 'other';
+      }
+      _customTypeController.text = report.customTypeName ?? '';
+      _descriptionController.text = report.description ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _customTypeController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitReport() async {
+    if (_selectedType == 'other' && _customTypeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập tên loại sự cố khác.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final controller = widget.parentRef.read(communityReportControllerProvider);
+      
+      if (widget.existingReport != null) {
+        await controller.updateReport(
+          reportId: widget.existingReport!.id,
+          type: _selectedType,
+          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          description: _descriptionController.text.trim(),
+        );
+      } else {
+        await controller.addReport(
+          latitude: widget.location.latitude,
+          longitude: widget.location.longitude,
+          type: _selectedType,
+          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          description: _descriptionController.text.trim(),
+        );
+      }
+      
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.existingReport != null ? 'Cập nhật thành công!' : 'Cảm ơn bạn! Báo cáo sự cố đã được ghi nhận.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: const [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+          SizedBox(width: 8),
+          Text(
+            'Báo cáo sự cố',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Loại sự cố:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedType,
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'fallen_tree', child: Text('Cây đổ')),
+                DropdownMenuItem(value: 'flood', child: Text('Ngập sâu')),
+                DropdownMenuItem(value: 'road_block', child: Text('Tắc đường / Sạt lở')),
+                DropdownMenuItem(value: 'other', child: Text('Khác...')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedType = val);
+              },
+            ),
+            if (_selectedType == 'other') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customTypeController,
+                decoration: InputDecoration(
+                  labelText: 'Tên sự cố',
+                  hintText: 'Vd: Sập cầu, Cháy nhà...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text(
+              'Mô tả thêm (Tùy chọn):',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _descriptionController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Nhập thông tin chi tiết...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _submitReport,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : Text(widget.existingReport != null ? 'Cập nhật' : 'Báo cáo', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// COMMUNITY REPORT DETAILS DIALOG
+// =============================================================================
+class _CommunityReportDetailsDialog extends StatefulWidget {
+  final CommunityReport report;
+  final WidgetRef parentRef;
+  final VoidCallback onEdit;
+
+  const _CommunityReportDetailsDialog({
+    required this.report,
+    required this.parentRef,
+    required this.onEdit,
+  });
+
+  @override
+  State<_CommunityReportDetailsDialog> createState() => _CommunityReportDetailsDialogState();
+}
+
+class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDialog> {
+  bool _isDeleting = false;
+
+  Future<void> _deleteReport() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: const Text('Bạn có chắc chắn muốn xóa báo cáo này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      final controller = widget.parentRef.read(communityReportControllerProvider);
+      await controller.deleteReport(widget.report.id);
+      
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã xóa báo cáo.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi khi xóa: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isOwner = currentUser != null && widget.report.reportedBy == currentUser.uid;
+
+    IconData icon;
+    String typeLabel;
+    switch (widget.report.type) {
+      case 'fallen_tree':
+        icon = Icons.park_rounded;
+        typeLabel = 'Cây đổ';
+        break;
+      case 'flood':
+        icon = Icons.water_drop_rounded;
+        typeLabel = 'Ngập sâu';
+        break;
+      case 'road_block':
+        icon = Icons.remove_road_rounded;
+        typeLabel = 'Tắc đường / Sạt lở';
+        break;
+      default:
+        icon = Icons.warning_rounded;
+        typeLabel = widget.report.customTypeName ?? 'Khác';
+    }
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.orange.shade700, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              typeLabel,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.report.description?.isNotEmpty == true) ...[
+              const Text(
+                'Mô tả:',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.report.description!,
+                style: const TextStyle(fontSize: 15),
+              ),
+              const SizedBox(height: 16),
+            ],
+            const Text(
+              'Người báo cáo:',
+              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            Text(isOwner ? 'Bạn' : 'Cộng đồng'),
+          ],
+        ),
+      ),
+      actions: [
+        if (isOwner) ...[
+          TextButton(
+            onPressed: _isDeleting ? null : _deleteReport,
+            child: _isDeleting
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+          TextButton(
+            onPressed: _isDeleting ? null : () {
+              Navigator.of(context).pop();
+              widget.onEdit();
+            },
+            child: const Text('Sửa', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+        TextButton(
+          onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
+          child: Text(isOwner ? 'Đóng' : 'OK', style: const TextStyle(color: Colors.grey)),
+        ),
+      ],
     );
   }
 }
