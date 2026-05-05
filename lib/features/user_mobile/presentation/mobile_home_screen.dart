@@ -107,7 +107,7 @@ class MobileHomeScreen extends ConsumerWidget {
                     iconColor: _MobileColors.menuSOS,
                     bgColor: _MobileColors.menuSOSBg,
                     onTap: () {
-                      context.pushNamed(RouteNames.nameSOS);
+                      context.pushNamed(RouteNames.nameEventMap);
                     },
                     isUrgent: true,
                   ),
