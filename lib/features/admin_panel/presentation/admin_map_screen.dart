@@ -501,18 +501,7 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
       width: 40,
       height: 48,
       child: GestureDetector(
-        onTap: () {
-          _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Sự cố: ${report.customTypeName ?? report.type}\n'
-                '${report.description ?? ""}',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
+        onTap: () => _onCommunityReportTap(report),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -562,6 +551,28 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen>
         ),
       ),
     );
+  }
+
+  void _onCommunityReportTap(CommunityReport report) {
+    _setDestinationAndRoute(LatLng(report.latitude, report.longitude), markerId: report.id);
+    setState(() => _activeMarkerId = report.id);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _CommunityReportDetailSheet(
+        report: report,
+        onResolved: () async {
+          setState(() {
+            _selectedDestination = null;
+            _selectedMarkerId = null;
+            _routePoints.clear();
+          });
+        },
+      ),
+    ).whenComplete(() {
+      if (mounted) setState(() => _activeMarkerId = null);
+    });
   }
 
   void _onMarkerTap(SosMapMarker marker) {
@@ -1691,3 +1702,162 @@ class _StationDetailSheet extends ConsumerWidget {
     );
   }
 }
+
+class _CommunityReportDetailSheet extends ConsumerStatefulWidget {
+  final CommunityReport report;
+  final VoidCallback onResolved;
+
+  const _CommunityReportDetailSheet({
+    Key? key,
+    required this.report,
+    required this.onResolved,
+  }) : super(key: key);
+
+  @override
+  ConsumerState<_CommunityReportDetailSheet> createState() => _CommunityReportDetailSheetState();
+}
+
+class _CommunityReportDetailSheetState extends ConsumerState<_CommunityReportDetailSheet> {
+  bool _isLoading = false;
+
+  void _resolveReport() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(communityReportControllerProvider).deleteReport(widget.report.id);
+      if (mounted) {
+        widget.onResolved();
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã đánh dấu xử lý sự cố thành công.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi xử lý: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getReportTypeName(String type) {
+    switch (type) {
+      case 'fallen_tree': return 'Cây đổ';
+      case 'flood': return 'Ngập lụt';
+      case 'road_block': return 'Tắc đường';
+      default: return 'Khác';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = widget.report;
+    final timeStr = DateFormat('HH:mm – dd/MM/yyyy').format(report.createdAt.toLocal());
+    final displayType = _getReportTypeName(report.type);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      report.customTypeName != null && report.customTypeName!.isNotEmpty
+                          ? 'Sự cố: ${report.customTypeName}'
+                          : 'Sự cố: $displayType',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Báo cáo lúc: $timeStr',
+                      style: const TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.grey),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _InfoTile(
+            icon: Icons.person,
+            label: 'Người báo cáo (ID)',
+            value: report.reportedBy,
+          ),
+          const SizedBox(height: 12),
+          _InfoTile(
+            icon: Icons.notes,
+            label: 'Mô tả',
+            value: report.description?.isNotEmpty == true ? report.description! : 'Không có mô tả',
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _resolveReport,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(_isLoading ? 'Đang xử lý...' : 'Đã xử lý'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+
