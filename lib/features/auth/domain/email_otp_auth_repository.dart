@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 
 class EmailOtpAuthException implements Exception {
@@ -282,6 +284,7 @@ class EmailOtpAuthRepository {
         }
       } catch (_) {}
       
+      await _mergeGuestSos();
       return;
     }
 
@@ -317,6 +320,21 @@ class EmailOtpAuthRepository {
         await _syncService.migrateAndSyncUserData(user.uid);
       }
     } catch (_) {}
+
+    await _mergeGuestSos();
+  }
+
+  Future<void> _mergeGuestSos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final deviceId = prefs.getString('guest_device_id');
+      if (deviceId != null) {
+        final callable = _functions.httpsCallable('mergeGuestSos');
+        await callable.call({'deviceId': deviceId});
+      }
+    } catch (e) {
+      debugPrint('Lỗi merge guest SOS: $e');
+    }
   }
 
   String _mapCallableError(FirebaseFunctionsException error) {

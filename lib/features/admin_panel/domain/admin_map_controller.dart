@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // =============================================================================
 class SosMapMarker {
   final String postId;
+  final String userId; // Added userId
   final String content;
   final DateTime createdAt;
   final double latitude;
@@ -17,6 +18,7 @@ class SosMapMarker {
 
   const SosMapMarker({
     required this.postId,
+    required this.userId,
     required this.content,
     required this.createdAt,
     required this.latitude,
@@ -25,7 +27,7 @@ class SosMapMarker {
 
   @override
   String toString() =>
-      'SosMapMarker(id: $postId, lat: $latitude, lng: $longitude)';
+      'SosMapMarker(id: $postId, userId: $userId, lat: $latitude, lng: $longitude)';
 }
 
 // =============================================================================
@@ -92,6 +94,7 @@ class AdminMapController extends StreamNotifier<List<SosMapMarker>> {
 
         markers.add(SosMapMarker(
           postId: doc.id,
+          userId: (data['userId'] as String?) ?? '',
           content:
               (data['content'] as String?) ?? '(Không có nội dung)',
           createdAt: createdAt,

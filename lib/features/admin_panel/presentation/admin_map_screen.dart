@@ -794,6 +794,33 @@ class _SosDetailSheet extends StatefulWidget {
 
 class _SosDetailSheetState extends State<_SosDetailSheet> {
   bool _verifying = false;
+  bool _loadingUser = false;
+  Map<String, dynamic>? _userProfile;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserProfile();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    final userId = widget.marker.userId;
+    if (userId.isEmpty) return;
+
+    setState(() => _loadingUser = true);
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      if (doc.exists && mounted) {
+        setState(() => _userProfile = doc.data());
+      }
+    } catch (_) {
+      // Ignored if unable to fetch
+    } finally {
+      if (mounted) {
+        setState(() => _loadingUser = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -946,6 +973,59 @@ class _SosDetailSheetState extends State<_SosDetailSheet> {
                     ),
                   ],
                 ),
+                if (_loadingUser || _userProfile != null) ...[
+                  const SizedBox(height: 14),
+                  const Divider(color: _C.divider, height: 1),
+                  const SizedBox(height: 14),
+                  if (_loadingUser)
+                    const Center(child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ))
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'THÔNG TIN NGƯỜI DÙNG & Y TẾ',
+                          style: TextStyle(
+                            color: _C.textMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '👤 Tên: ${_userProfile!['displayName'] ?? 'Không rõ'}',
+                          style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                        ),
+                        if (_userProfile!['medicalProfile'] != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '🩸 Nhóm máu: ${_userProfile!['medicalProfile']['bloodType'] ?? 'Chưa cập nhật'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '🩺 Bệnh lý: ${(_userProfile!['medicalProfile']['medicalConditions'] as List?)?.join(', ') ?? 'Không có'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '📞 Khẩn cấp: ${_userProfile!['medicalProfile']['emergencyContact'] ?? 'Chưa cập nhật'}',
+                            style: const TextStyle(fontSize: 13, color: _C.textPrimary),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Chưa thiết lập hồ sơ y tế',
+                            style: TextStyle(fontSize: 13, color: _C.textMuted, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ],
+                    ),
+                ],
                 const SizedBox(height: 18),
                 Row(
                   children: [

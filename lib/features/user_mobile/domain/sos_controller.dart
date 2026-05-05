@@ -1,4 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/sms_fallback_service.dart';
@@ -63,10 +66,11 @@ class SOSController extends StateNotifier<SOSState> {
     required double longitude,
     required DateTime createdAt,
   }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final post = PostsCompanion(
       id: Value(postId),
       eventId: const Value('sos'),
-      userId: Value(phoneNumber),
+      userId: Value(uid),
       postType: const Value('sos'),
       title: const Value('SOS khẩn cấp'),
       content: Value(description),
@@ -89,6 +93,16 @@ class SOSController extends StateNotifier<SOSState> {
     });
   }
 
+  Future<String> _getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? deviceId = prefs.getString('guest_device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await prefs.setString('guest_device_id', deviceId);
+    }
+    return deviceId;
+  }
+
   Future<void> _uploadToFirebase({
     required String postId,
     required String locationId,
@@ -99,8 +113,12 @@ class SOSController extends StateNotifier<SOSState> {
     required double longitude,
     required DateTime createdAt,
   }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final deviceId = await _getDeviceId();
+
     final postData = {
-      'userId': phoneNumber,
+      'userId': uid,
+      'deviceId': deviceId,
       'eventId': 'sos',
       'postType': 'sos',
       'title': 'SOS khẩn cấp',
@@ -111,6 +129,7 @@ class SOSController extends StateNotifier<SOSState> {
       'latitude': latitude,
       'longitude': longitude,
       'phoneNumber': phoneNumber,
+      'userName': userName, // Optional: save name directly to post
     };
 
     final locationData = {

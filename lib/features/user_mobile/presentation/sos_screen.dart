@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:disaster_response_app/features/user_mobile/domain/sos_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,34 @@ class _SOSScreenState extends ConsumerState<SOSScreen> {
   final _userNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _prefillUserData();
+  }
+
+  Future<void> _prefillUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+            
+        if (mounted) {
+          final data = doc.data();
+          setState(() {
+            _userNameController.text = data?['displayName'] ?? user.displayName ?? '';
+            _phoneController.text = data?['phoneNumber'] ?? user.phoneNumber ?? '';
+          });
+        }
+      } catch (e) {
+        debugPrint('Error fetching user data: $e');
+      }
+    }
+  }
 
   @override
   void dispose() {
