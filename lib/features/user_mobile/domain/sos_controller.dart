@@ -188,8 +188,8 @@ class SOSController extends StateNotifier<SOSState> {
         userName: userName,
         phoneNumber: phoneNumber,
         description: description,
-        latitude: latitude,
-        longitude: longitude,
+        latitude: lat,
+        longitude: lng,
         createdAt: createdAt,
       );
 
@@ -201,8 +201,8 @@ class SOSController extends StateNotifier<SOSState> {
           userName: userName,
           phoneNumber: phoneNumber,
           description: description,
-          latitude: latitude,
-          longitude: longitude,
+          latitude: lat,
+          longitude: lng,
           createdAt: createdAt,
         );
 
@@ -221,8 +221,8 @@ class SOSController extends StateNotifier<SOSState> {
       final smsSent = await _smsFallback.activateEmergencyFallback(
         userName: userName,
         phoneNumber: phoneNumber,
-        latitude: latitude,
-        longitude: longitude,
+        latitude: lat,
+        longitude: lng,
         description: description,
       );
 
