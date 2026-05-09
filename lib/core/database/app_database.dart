@@ -136,6 +136,24 @@ class CommunityReports extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// ============ BẢNG THỐNG KÊ THIỆT HẠI SỰ KIỆN (SNAPSHOT) ============
+@DataClassName('EventDamageStat')
+class EventDamageStats extends Table {
+  TextColumn get id => text()();
+  TextColumn get eventId => text().references(DisasterEvents, #id, onDelete: KeyAction.cascade)();
+  IntColumn get deaths => integer().withDefault(const Constant(0))();
+  IntColumn get missing => integer().withDefault(const Constant(0))();
+  IntColumn get injured => integer().withDefault(const Constant(0))();
+  IntColumn get damagedHouses => integer().withDefault(const Constant(0))();
+  RealColumn get propertyDamage => real().withDefault(const Constant(0.0))();
+  DateTimeColumn get reportedAt => dateTime()();
+  TextColumn get reportedBy => text().references(Users, #id)();
+  TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // ============ APP DATABASE ============
 @DriftDatabase(
   tables: [
@@ -147,6 +165,7 @@ class CommunityReports extends Table {
     RescueStations,
     CheckInLogs,
     CommunityReports,
+    EventDamageStats,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -156,7 +175,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -239,6 +258,10 @@ FROM users;
       
       if (from < 6) {
         await m.createTable(communityReports);
+      }
+      
+      if (from < 7) {
+        await m.createTable(eventDamageStats);
       }
     },
   );
