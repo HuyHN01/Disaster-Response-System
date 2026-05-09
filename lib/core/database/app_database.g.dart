@@ -4324,6 +4324,622 @@ class CommunityReportsCompanion extends UpdateCompanion<CommunityReport> {
   }
 }
 
+class $EventDamageStatsTable extends EventDamageStats
+    with TableInfo<$EventDamageStatsTable, EventDamageStat> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EventDamageStatsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _eventIdMeta = const VerificationMeta(
+    'eventId',
+  );
+  @override
+  late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
+    'event_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES disaster_events (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _deathsMeta = const VerificationMeta('deaths');
+  @override
+  late final GeneratedColumn<int> deaths = GeneratedColumn<int>(
+    'deaths',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _missingMeta = const VerificationMeta(
+    'missing',
+  );
+  @override
+  late final GeneratedColumn<int> missing = GeneratedColumn<int>(
+    'missing',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _injuredMeta = const VerificationMeta(
+    'injured',
+  );
+  @override
+  late final GeneratedColumn<int> injured = GeneratedColumn<int>(
+    'injured',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _damagedHousesMeta = const VerificationMeta(
+    'damagedHouses',
+  );
+  @override
+  late final GeneratedColumn<int> damagedHouses = GeneratedColumn<int>(
+    'damaged_houses',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _propertyDamageMeta = const VerificationMeta(
+    'propertyDamage',
+  );
+  @override
+  late final GeneratedColumn<double> propertyDamage = GeneratedColumn<double>(
+    'property_damage',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _reportedAtMeta = const VerificationMeta(
+    'reportedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> reportedAt = GeneratedColumn<DateTime>(
+    'reported_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reportedByMeta = const VerificationMeta(
+    'reportedBy',
+  );
+  @override
+  late final GeneratedColumn<String> reportedBy = GeneratedColumn<String>(
+    'reported_by',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    eventId,
+    deaths,
+    missing,
+    injured,
+    damagedHouses,
+    propertyDamage,
+    reportedAt,
+    reportedBy,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'event_damage_stats';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EventDamageStat> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('event_id')) {
+      context.handle(
+        _eventIdMeta,
+        eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventIdMeta);
+    }
+    if (data.containsKey('deaths')) {
+      context.handle(
+        _deathsMeta,
+        deaths.isAcceptableOrUnknown(data['deaths']!, _deathsMeta),
+      );
+    }
+    if (data.containsKey('missing')) {
+      context.handle(
+        _missingMeta,
+        missing.isAcceptableOrUnknown(data['missing']!, _missingMeta),
+      );
+    }
+    if (data.containsKey('injured')) {
+      context.handle(
+        _injuredMeta,
+        injured.isAcceptableOrUnknown(data['injured']!, _injuredMeta),
+      );
+    }
+    if (data.containsKey('damaged_houses')) {
+      context.handle(
+        _damagedHousesMeta,
+        damagedHouses.isAcceptableOrUnknown(
+          data['damaged_houses']!,
+          _damagedHousesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('property_damage')) {
+      context.handle(
+        _propertyDamageMeta,
+        propertyDamage.isAcceptableOrUnknown(
+          data['property_damage']!,
+          _propertyDamageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reported_at')) {
+      context.handle(
+        _reportedAtMeta,
+        reportedAt.isAcceptableOrUnknown(data['reported_at']!, _reportedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reportedAtMeta);
+    }
+    if (data.containsKey('reported_by')) {
+      context.handle(
+        _reportedByMeta,
+        reportedBy.isAcceptableOrUnknown(data['reported_by']!, _reportedByMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reportedByMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EventDamageStat map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EventDamageStat(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      eventId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event_id'],
+      )!,
+      deaths: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deaths'],
+      )!,
+      missing: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}missing'],
+      )!,
+      injured: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}injured'],
+      )!,
+      damagedHouses: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}damaged_houses'],
+      )!,
+      propertyDamage: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}property_damage'],
+      )!,
+      reportedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}reported_at'],
+      )!,
+      reportedBy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reported_by'],
+      )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $EventDamageStatsTable createAlias(String alias) {
+    return $EventDamageStatsTable(attachedDatabase, alias);
+  }
+}
+
+class EventDamageStat extends DataClass implements Insertable<EventDamageStat> {
+  final String id;
+  final String eventId;
+  final int deaths;
+  final int missing;
+  final int injured;
+  final int damagedHouses;
+  final double propertyDamage;
+  final DateTime reportedAt;
+  final String reportedBy;
+  final String syncStatus;
+  const EventDamageStat({
+    required this.id,
+    required this.eventId,
+    required this.deaths,
+    required this.missing,
+    required this.injured,
+    required this.damagedHouses,
+    required this.propertyDamage,
+    required this.reportedAt,
+    required this.reportedBy,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['event_id'] = Variable<String>(eventId);
+    map['deaths'] = Variable<int>(deaths);
+    map['missing'] = Variable<int>(missing);
+    map['injured'] = Variable<int>(injured);
+    map['damaged_houses'] = Variable<int>(damagedHouses);
+    map['property_damage'] = Variable<double>(propertyDamage);
+    map['reported_at'] = Variable<DateTime>(reportedAt);
+    map['reported_by'] = Variable<String>(reportedBy);
+    map['sync_status'] = Variable<String>(syncStatus);
+    return map;
+  }
+
+  EventDamageStatsCompanion toCompanion(bool nullToAbsent) {
+    return EventDamageStatsCompanion(
+      id: Value(id),
+      eventId: Value(eventId),
+      deaths: Value(deaths),
+      missing: Value(missing),
+      injured: Value(injured),
+      damagedHouses: Value(damagedHouses),
+      propertyDamage: Value(propertyDamage),
+      reportedAt: Value(reportedAt),
+      reportedBy: Value(reportedBy),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory EventDamageStat.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EventDamageStat(
+      id: serializer.fromJson<String>(json['id']),
+      eventId: serializer.fromJson<String>(json['eventId']),
+      deaths: serializer.fromJson<int>(json['deaths']),
+      missing: serializer.fromJson<int>(json['missing']),
+      injured: serializer.fromJson<int>(json['injured']),
+      damagedHouses: serializer.fromJson<int>(json['damagedHouses']),
+      propertyDamage: serializer.fromJson<double>(json['propertyDamage']),
+      reportedAt: serializer.fromJson<DateTime>(json['reportedAt']),
+      reportedBy: serializer.fromJson<String>(json['reportedBy']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'eventId': serializer.toJson<String>(eventId),
+      'deaths': serializer.toJson<int>(deaths),
+      'missing': serializer.toJson<int>(missing),
+      'injured': serializer.toJson<int>(injured),
+      'damagedHouses': serializer.toJson<int>(damagedHouses),
+      'propertyDamage': serializer.toJson<double>(propertyDamage),
+      'reportedAt': serializer.toJson<DateTime>(reportedAt),
+      'reportedBy': serializer.toJson<String>(reportedBy),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+    };
+  }
+
+  EventDamageStat copyWith({
+    String? id,
+    String? eventId,
+    int? deaths,
+    int? missing,
+    int? injured,
+    int? damagedHouses,
+    double? propertyDamage,
+    DateTime? reportedAt,
+    String? reportedBy,
+    String? syncStatus,
+  }) => EventDamageStat(
+    id: id ?? this.id,
+    eventId: eventId ?? this.eventId,
+    deaths: deaths ?? this.deaths,
+    missing: missing ?? this.missing,
+    injured: injured ?? this.injured,
+    damagedHouses: damagedHouses ?? this.damagedHouses,
+    propertyDamage: propertyDamage ?? this.propertyDamage,
+    reportedAt: reportedAt ?? this.reportedAt,
+    reportedBy: reportedBy ?? this.reportedBy,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  EventDamageStat copyWithCompanion(EventDamageStatsCompanion data) {
+    return EventDamageStat(
+      id: data.id.present ? data.id.value : this.id,
+      eventId: data.eventId.present ? data.eventId.value : this.eventId,
+      deaths: data.deaths.present ? data.deaths.value : this.deaths,
+      missing: data.missing.present ? data.missing.value : this.missing,
+      injured: data.injured.present ? data.injured.value : this.injured,
+      damagedHouses: data.damagedHouses.present
+          ? data.damagedHouses.value
+          : this.damagedHouses,
+      propertyDamage: data.propertyDamage.present
+          ? data.propertyDamage.value
+          : this.propertyDamage,
+      reportedAt: data.reportedAt.present
+          ? data.reportedAt.value
+          : this.reportedAt,
+      reportedBy: data.reportedBy.present
+          ? data.reportedBy.value
+          : this.reportedBy,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EventDamageStat(')
+          ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
+          ..write('deaths: $deaths, ')
+          ..write('missing: $missing, ')
+          ..write('injured: $injured, ')
+          ..write('damagedHouses: $damagedHouses, ')
+          ..write('propertyDamage: $propertyDamage, ')
+          ..write('reportedAt: $reportedAt, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    eventId,
+    deaths,
+    missing,
+    injured,
+    damagedHouses,
+    propertyDamage,
+    reportedAt,
+    reportedBy,
+    syncStatus,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EventDamageStat &&
+          other.id == this.id &&
+          other.eventId == this.eventId &&
+          other.deaths == this.deaths &&
+          other.missing == this.missing &&
+          other.injured == this.injured &&
+          other.damagedHouses == this.damagedHouses &&
+          other.propertyDamage == this.propertyDamage &&
+          other.reportedAt == this.reportedAt &&
+          other.reportedBy == this.reportedBy &&
+          other.syncStatus == this.syncStatus);
+}
+
+class EventDamageStatsCompanion extends UpdateCompanion<EventDamageStat> {
+  final Value<String> id;
+  final Value<String> eventId;
+  final Value<int> deaths;
+  final Value<int> missing;
+  final Value<int> injured;
+  final Value<int> damagedHouses;
+  final Value<double> propertyDamage;
+  final Value<DateTime> reportedAt;
+  final Value<String> reportedBy;
+  final Value<String> syncStatus;
+  final Value<int> rowid;
+  const EventDamageStatsCompanion({
+    this.id = const Value.absent(),
+    this.eventId = const Value.absent(),
+    this.deaths = const Value.absent(),
+    this.missing = const Value.absent(),
+    this.injured = const Value.absent(),
+    this.damagedHouses = const Value.absent(),
+    this.propertyDamage = const Value.absent(),
+    this.reportedAt = const Value.absent(),
+    this.reportedBy = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EventDamageStatsCompanion.insert({
+    required String id,
+    required String eventId,
+    this.deaths = const Value.absent(),
+    this.missing = const Value.absent(),
+    this.injured = const Value.absent(),
+    this.damagedHouses = const Value.absent(),
+    this.propertyDamage = const Value.absent(),
+    required DateTime reportedAt,
+    required String reportedBy,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       eventId = Value(eventId),
+       reportedAt = Value(reportedAt),
+       reportedBy = Value(reportedBy);
+  static Insertable<EventDamageStat> custom({
+    Expression<String>? id,
+    Expression<String>? eventId,
+    Expression<int>? deaths,
+    Expression<int>? missing,
+    Expression<int>? injured,
+    Expression<int>? damagedHouses,
+    Expression<double>? propertyDamage,
+    Expression<DateTime>? reportedAt,
+    Expression<String>? reportedBy,
+    Expression<String>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (eventId != null) 'event_id': eventId,
+      if (deaths != null) 'deaths': deaths,
+      if (missing != null) 'missing': missing,
+      if (injured != null) 'injured': injured,
+      if (damagedHouses != null) 'damaged_houses': damagedHouses,
+      if (propertyDamage != null) 'property_damage': propertyDamage,
+      if (reportedAt != null) 'reported_at': reportedAt,
+      if (reportedBy != null) 'reported_by': reportedBy,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EventDamageStatsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? eventId,
+    Value<int>? deaths,
+    Value<int>? missing,
+    Value<int>? injured,
+    Value<int>? damagedHouses,
+    Value<double>? propertyDamage,
+    Value<DateTime>? reportedAt,
+    Value<String>? reportedBy,
+    Value<String>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return EventDamageStatsCompanion(
+      id: id ?? this.id,
+      eventId: eventId ?? this.eventId,
+      deaths: deaths ?? this.deaths,
+      missing: missing ?? this.missing,
+      injured: injured ?? this.injured,
+      damagedHouses: damagedHouses ?? this.damagedHouses,
+      propertyDamage: propertyDamage ?? this.propertyDamage,
+      reportedAt: reportedAt ?? this.reportedAt,
+      reportedBy: reportedBy ?? this.reportedBy,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (eventId.present) {
+      map['event_id'] = Variable<String>(eventId.value);
+    }
+    if (deaths.present) {
+      map['deaths'] = Variable<int>(deaths.value);
+    }
+    if (missing.present) {
+      map['missing'] = Variable<int>(missing.value);
+    }
+    if (injured.present) {
+      map['injured'] = Variable<int>(injured.value);
+    }
+    if (damagedHouses.present) {
+      map['damaged_houses'] = Variable<int>(damagedHouses.value);
+    }
+    if (propertyDamage.present) {
+      map['property_damage'] = Variable<double>(propertyDamage.value);
+    }
+    if (reportedAt.present) {
+      map['reported_at'] = Variable<DateTime>(reportedAt.value);
+    }
+    if (reportedBy.present) {
+      map['reported_by'] = Variable<String>(reportedBy.value);
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EventDamageStatsCompanion(')
+          ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
+          ..write('deaths: $deaths, ')
+          ..write('missing: $missing, ')
+          ..write('injured: $injured, ')
+          ..write('damagedHouses: $damagedHouses, ')
+          ..write('propertyDamage: $propertyDamage, ')
+          ..write('reportedAt: $reportedAt, ')
+          ..write('reportedBy: $reportedBy, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4335,6 +4951,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RescueStationsTable rescueStations = $RescueStationsTable(this);
   late final $CheckInLogsTable checkInLogs = $CheckInLogsTable(this);
   late final $CommunityReportsTable communityReports = $CommunityReportsTable(
+    this,
+  );
+  late final $EventDamageStatsTable eventDamageStats = $EventDamageStatsTable(
     this,
   );
   @override
@@ -4350,6 +4969,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     rescueStations,
     checkInLogs,
     communityReports,
+    eventDamageStats,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4373,6 +4993,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('community_reports', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'disaster_events',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('event_damage_stats', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -4468,6 +5095,29 @@ final class $$UsersTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _communityReportsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$EventDamageStatsTable, List<EventDamageStat>>
+  _eventDamageStatsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.eventDamageStats,
+    aliasName: $_aliasNameGenerator(
+      db.users.id,
+      db.eventDamageStats.reportedBy,
+    ),
+  );
+
+  $$EventDamageStatsTableProcessedTableManager get eventDamageStatsRefs {
+    final manager = $$EventDamageStatsTableTableManager(
+      $_db,
+      $_db.eventDamageStats,
+    ).filter((f) => f.reportedBy.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _eventDamageStatsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -4609,6 +5259,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$CommunityReportsTableFilterComposer(
             $db: $db,
             $table: $db.communityReports,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> eventDamageStatsRefs(
+    Expression<bool> Function($$EventDamageStatsTableFilterComposer f) f,
+  ) {
+    final $$EventDamageStatsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.eventDamageStats,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventDamageStatsTableFilterComposer(
+            $db: $db,
+            $table: $db.eventDamageStats,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4814,6 +5489,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> eventDamageStatsRefs<T extends Object>(
+    Expression<T> Function($$EventDamageStatsTableAnnotationComposer a) f,
+  ) {
+    final $$EventDamageStatsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.eventDamageStats,
+      getReferencedColumn: (t) => t.reportedBy,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventDamageStatsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.eventDamageStats,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -4833,6 +5533,7 @@ class $$UsersTableTableManager
             bool postsRefs,
             bool checkInLogsRefs,
             bool communityReportsRefs,
+            bool eventDamageStatsRefs,
           })
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
@@ -4917,6 +5618,7 @@ class $$UsersTableTableManager
                 postsRefs = false,
                 checkInLogsRefs = false,
                 communityReportsRefs = false,
+                eventDamageStatsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -4924,6 +5626,7 @@ class $$UsersTableTableManager
                     if (postsRefs) db.posts,
                     if (checkInLogsRefs) db.checkInLogs,
                     if (communityReportsRefs) db.communityReports,
+                    if (eventDamageStatsRefs) db.eventDamageStats,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4983,6 +5686,27 @@ class $$UsersTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (eventDamageStatsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          EventDamageStat
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._eventDamageStatsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).eventDamageStatsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.reportedBy == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5007,6 +5731,7 @@ typedef $$UsersTableProcessedTableManager =
         bool postsRefs,
         bool checkInLogsRefs,
         bool communityReportsRefs,
+        bool eventDamageStatsRefs,
       })
     >;
 typedef $$DisasterEventsTableCreateCompanionBuilder =
@@ -5052,6 +5777,29 @@ final class $$DisasterEventsTableReferences
     ).filter((f) => f.eventId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_postsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$EventDamageStatsTable, List<EventDamageStat>>
+  _eventDamageStatsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.eventDamageStats,
+    aliasName: $_aliasNameGenerator(
+      db.disasterEvents.id,
+      db.eventDamageStats.eventId,
+    ),
+  );
+
+  $$EventDamageStatsTableProcessedTableManager get eventDamageStatsRefs {
+    final manager = $$EventDamageStatsTableTableManager(
+      $_db,
+      $_db.eventDamageStats,
+    ).filter((f) => f.eventId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _eventDamageStatsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5113,6 +5861,31 @@ class $$DisasterEventsTableFilterComposer
           }) => $$PostsTableFilterComposer(
             $db: $db,
             $table: $db.posts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> eventDamageStatsRefs(
+    Expression<bool> Function($$EventDamageStatsTableFilterComposer f) f,
+  ) {
+    final $$EventDamageStatsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.eventDamageStats,
+      getReferencedColumn: (t) => t.eventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventDamageStatsTableFilterComposer(
+            $db: $db,
+            $table: $db.eventDamageStats,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5214,6 +5987,31 @@ class $$DisasterEventsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> eventDamageStatsRefs<T extends Object>(
+    Expression<T> Function($$EventDamageStatsTableAnnotationComposer a) f,
+  ) {
+    final $$EventDamageStatsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.eventDamageStats,
+      getReferencedColumn: (t) => t.eventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventDamageStatsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.eventDamageStats,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$DisasterEventsTableTableManager
@@ -5229,7 +6027,7 @@ class $$DisasterEventsTableTableManager
           $$DisasterEventsTableUpdateCompanionBuilder,
           (DisasterEvent, $$DisasterEventsTableReferences),
           DisasterEvent,
-          PrefetchHooks Function({bool postsRefs})
+          PrefetchHooks Function({bool postsRefs, bool eventDamageStatsRefs})
         > {
   $$DisasterEventsTableTableManager(
     _$AppDatabase db,
@@ -5288,36 +6086,63 @@ class $$DisasterEventsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({postsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (postsRefs) db.posts],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (postsRefs)
-                    await $_getPrefetchedData<
-                      DisasterEvent,
-                      $DisasterEventsTable,
-                      Post
-                    >(
-                      currentTable: table,
-                      referencedTable: $$DisasterEventsTableReferences
-                          ._postsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$DisasterEventsTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).postsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.eventId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({postsRefs = false, eventDamageStatsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (postsRefs) db.posts,
+                    if (eventDamageStatsRefs) db.eventDamageStats,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (postsRefs)
+                        await $_getPrefetchedData<
+                          DisasterEvent,
+                          $DisasterEventsTable,
+                          Post
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DisasterEventsTableReferences
+                              ._postsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DisasterEventsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).postsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.eventId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (eventDamageStatsRefs)
+                        await $_getPrefetchedData<
+                          DisasterEvent,
+                          $DisasterEventsTable,
+                          EventDamageStat
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DisasterEventsTableReferences
+                              ._eventDamageStatsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DisasterEventsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).eventDamageStatsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.eventId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -5334,7 +6159,7 @@ typedef $$DisasterEventsTableProcessedTableManager =
       $$DisasterEventsTableUpdateCompanionBuilder,
       (DisasterEvent, $$DisasterEventsTableReferences),
       DisasterEvent,
-      PrefetchHooks Function({bool postsRefs})
+      PrefetchHooks Function({bool postsRefs, bool eventDamageStatsRefs})
     >;
 typedef $$PostsTableCreateCompanionBuilder =
     PostsCompanion Function({
@@ -8015,6 +8840,526 @@ typedef $$CommunityReportsTableProcessedTableManager =
       CommunityReport,
       PrefetchHooks Function({bool reportedBy})
     >;
+typedef $$EventDamageStatsTableCreateCompanionBuilder =
+    EventDamageStatsCompanion Function({
+      required String id,
+      required String eventId,
+      Value<int> deaths,
+      Value<int> missing,
+      Value<int> injured,
+      Value<int> damagedHouses,
+      Value<double> propertyDamage,
+      required DateTime reportedAt,
+      required String reportedBy,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$EventDamageStatsTableUpdateCompanionBuilder =
+    EventDamageStatsCompanion Function({
+      Value<String> id,
+      Value<String> eventId,
+      Value<int> deaths,
+      Value<int> missing,
+      Value<int> injured,
+      Value<int> damagedHouses,
+      Value<double> propertyDamage,
+      Value<DateTime> reportedAt,
+      Value<String> reportedBy,
+      Value<String> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$EventDamageStatsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $EventDamageStatsTable, EventDamageStat> {
+  $$EventDamageStatsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $DisasterEventsTable _eventIdTable(_$AppDatabase db) =>
+      db.disasterEvents.createAlias(
+        $_aliasNameGenerator(db.eventDamageStats.eventId, db.disasterEvents.id),
+      );
+
+  $$DisasterEventsTableProcessedTableManager get eventId {
+    final $_column = $_itemColumn<String>('event_id')!;
+
+    final manager = $$DisasterEventsTableTableManager(
+      $_db,
+      $_db.disasterEvents,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_eventIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $UsersTable _reportedByTable(_$AppDatabase db) => db.users.createAlias(
+    $_aliasNameGenerator(db.eventDamageStats.reportedBy, db.users.id),
+  );
+
+  $$UsersTableProcessedTableManager get reportedBy {
+    final $_column = $_itemColumn<String>('reported_by')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_reportedByTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$EventDamageStatsTableFilterComposer
+    extends Composer<_$AppDatabase, $EventDamageStatsTable> {
+  $$EventDamageStatsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deaths => $composableBuilder(
+    column: $table.deaths,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get missing => $composableBuilder(
+    column: $table.missing,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get injured => $composableBuilder(
+    column: $table.injured,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get damagedHouses => $composableBuilder(
+    column: $table.damagedHouses,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get propertyDamage => $composableBuilder(
+    column: $table.propertyDamage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get reportedAt => $composableBuilder(
+    column: $table.reportedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$DisasterEventsTableFilterComposer get eventId {
+    final $$DisasterEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableFilterComposer get reportedBy {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EventDamageStatsTableOrderingComposer
+    extends Composer<_$AppDatabase, $EventDamageStatsTable> {
+  $$EventDamageStatsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deaths => $composableBuilder(
+    column: $table.deaths,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get missing => $composableBuilder(
+    column: $table.missing,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get injured => $composableBuilder(
+    column: $table.injured,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get damagedHouses => $composableBuilder(
+    column: $table.damagedHouses,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get propertyDamage => $composableBuilder(
+    column: $table.propertyDamage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get reportedAt => $composableBuilder(
+    column: $table.reportedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$DisasterEventsTableOrderingComposer get eventId {
+    final $$DisasterEventsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableOrderingComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableOrderingComposer get reportedBy {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EventDamageStatsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EventDamageStatsTable> {
+  $$EventDamageStatsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get deaths =>
+      $composableBuilder(column: $table.deaths, builder: (column) => column);
+
+  GeneratedColumn<int> get missing =>
+      $composableBuilder(column: $table.missing, builder: (column) => column);
+
+  GeneratedColumn<int> get injured =>
+      $composableBuilder(column: $table.injured, builder: (column) => column);
+
+  GeneratedColumn<int> get damagedHouses => $composableBuilder(
+    column: $table.damagedHouses,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get propertyDamage => $composableBuilder(
+    column: $table.propertyDamage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get reportedAt => $composableBuilder(
+    column: $table.reportedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$DisasterEventsTableAnnotationComposer get eventId {
+    final $$DisasterEventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$UsersTableAnnotationComposer get reportedBy {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.reportedBy,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EventDamageStatsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EventDamageStatsTable,
+          EventDamageStat,
+          $$EventDamageStatsTableFilterComposer,
+          $$EventDamageStatsTableOrderingComposer,
+          $$EventDamageStatsTableAnnotationComposer,
+          $$EventDamageStatsTableCreateCompanionBuilder,
+          $$EventDamageStatsTableUpdateCompanionBuilder,
+          (EventDamageStat, $$EventDamageStatsTableReferences),
+          EventDamageStat,
+          PrefetchHooks Function({bool eventId, bool reportedBy})
+        > {
+  $$EventDamageStatsTableTableManager(
+    _$AppDatabase db,
+    $EventDamageStatsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EventDamageStatsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$EventDamageStatsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$EventDamageStatsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> eventId = const Value.absent(),
+                Value<int> deaths = const Value.absent(),
+                Value<int> missing = const Value.absent(),
+                Value<int> injured = const Value.absent(),
+                Value<int> damagedHouses = const Value.absent(),
+                Value<double> propertyDamage = const Value.absent(),
+                Value<DateTime> reportedAt = const Value.absent(),
+                Value<String> reportedBy = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EventDamageStatsCompanion(
+                id: id,
+                eventId: eventId,
+                deaths: deaths,
+                missing: missing,
+                injured: injured,
+                damagedHouses: damagedHouses,
+                propertyDamage: propertyDamage,
+                reportedAt: reportedAt,
+                reportedBy: reportedBy,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String eventId,
+                Value<int> deaths = const Value.absent(),
+                Value<int> missing = const Value.absent(),
+                Value<int> injured = const Value.absent(),
+                Value<int> damagedHouses = const Value.absent(),
+                Value<double> propertyDamage = const Value.absent(),
+                required DateTime reportedAt,
+                required String reportedBy,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EventDamageStatsCompanion.insert(
+                id: id,
+                eventId: eventId,
+                deaths: deaths,
+                missing: missing,
+                injured: injured,
+                damagedHouses: damagedHouses,
+                propertyDamage: propertyDamage,
+                reportedAt: reportedAt,
+                reportedBy: reportedBy,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$EventDamageStatsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({eventId = false, reportedBy = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (eventId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.eventId,
+                                referencedTable:
+                                    $$EventDamageStatsTableReferences
+                                        ._eventIdTable(db),
+                                referencedColumn:
+                                    $$EventDamageStatsTableReferences
+                                        ._eventIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (reportedBy) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.reportedBy,
+                                referencedTable:
+                                    $$EventDamageStatsTableReferences
+                                        ._reportedByTable(db),
+                                referencedColumn:
+                                    $$EventDamageStatsTableReferences
+                                        ._reportedByTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$EventDamageStatsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EventDamageStatsTable,
+      EventDamageStat,
+      $$EventDamageStatsTableFilterComposer,
+      $$EventDamageStatsTableOrderingComposer,
+      $$EventDamageStatsTableAnnotationComposer,
+      $$EventDamageStatsTableCreateCompanionBuilder,
+      $$EventDamageStatsTableUpdateCompanionBuilder,
+      (EventDamageStat, $$EventDamageStatsTableReferences),
+      EventDamageStat,
+      PrefetchHooks Function({bool eventId, bool reportedBy})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8035,4 +9380,6 @@ class $AppDatabaseManager {
       $$CheckInLogsTableTableManager(_db, _db.checkInLogs);
   $$CommunityReportsTableTableManager get communityReports =>
       $$CommunityReportsTableTableManager(_db, _db.communityReports);
+  $$EventDamageStatsTableTableManager get eventDamageStats =>
+      $$EventDamageStatsTableTableManager(_db, _db.eventDamageStats);
 }

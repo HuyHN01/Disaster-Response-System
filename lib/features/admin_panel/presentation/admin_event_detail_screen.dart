@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/damage_stats_repository.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/admin_post_editor_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -264,10 +265,9 @@ class AdminEventDetailScreen extends ConsumerWidget {
           // ── Header (tên sự kiện, trạng thái, nút đóng) ──────────────────
           _Header(event: event, ref: ref),
 
-          // ── Stats row — realtime SOS + bài đăng ─────────────────────────
-          _EventStatsRow(event: event),
+          // ── Damage stats ────────────────────────────────────────────────
+          _DamageStatsSection(event: event),
 
-          // ── Danh sách bài đăng ──────────────────────────────────────────
           Expanded(
             child: postsAsync.when(
               loading: () =>
@@ -281,6 +281,519 @@ class AdminEventDetailScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: _WriteFab(event: event),
+    );
+  }
+}
+
+// =============================================================================
+// DAMAGE STATS SECTION — hiển thị thống kê thiệt hại mới nhất
+// =============================================================================
+class _DamageStatsSection extends ConsumerWidget {
+  final DisasterEvent event;
+  const _DamageStatsSection({required this.event});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statAsync = ref.watch(latestDamageStatProvider(event.id));
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: _DC.cardBg,
+        border: Border(bottom: BorderSide(color: _DC.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Tiêu đề + Action buttons ──────────────────────────────────
+          Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: _DC.brandRedBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.assessment_rounded,
+                    color: _DC.brandRed, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Thống kê thiệt hại',
+                style: TextStyle(
+                  color: _DC.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              // Nút xem lịch sử
+              if (statAsync.value != null)
+                _ActionButton(
+                  icon: Icons.history_rounded,
+                  label: 'Lịch sử',
+                  onTap: () => _showHistory(context, event.id),
+                ),
+              const SizedBox(width: 6),
+              // Nút cập nhật
+              _ActionButton(
+                icon: Icons.add_chart_rounded,
+                label: 'Cập nhật',
+                onTap: () => _showInputDialog(context, ref, event.id),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // ── Nội dung stats ─────────────────────────────────────────────
+          statAsync.when(
+            loading: () => const SizedBox(
+              height: 60,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (e, _) => Text('Lỗi: $e',
+                style: const TextStyle(color: _DC.brandRed, fontSize: 12)),
+            data: (stat) => stat == null
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Chưa có dữ liệu thống kê. Nhấn "Cập nhật" để thêm.',
+                      style: TextStyle(color: _DC.textMuted, fontSize: 13),
+                    ),
+                  )
+                : _DamageStatsGrid(stat: stat),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInputDialog(BuildContext context, WidgetRef ref, String eventId) {
+    showDialog(
+      context: context,
+      builder: (_) => _DamageStatsInputDialog(eventId: eventId, ref: ref),
+    );
+  }
+
+  void _showHistory(BuildContext context, String eventId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DamageStatsHistorySheet(eventId: eventId),
+    );
+  }
+}
+
+// =============================================================================
+// DAMAGE STATS GRID — 2×3 grid hiển thị 6 chỉ số
+// =============================================================================
+class _DamageStatsGrid extends StatelessWidget {
+  final EventDamageStat stat;
+  const _DamageStatsGrid({required this.stat});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0', 'vi_VN');
+    final fmtD = NumberFormat('#,##0.0', 'vi_VN');
+    final dateStr = DateFormat('HH:mm – dd/MM/yyyy').format(stat.reportedAt.toLocal());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _MiniStat(icon: Icons.person_off_rounded, label: 'Tử vong',
+                value: fmt.format(stat.deaths), color: _DC.brandRed),
+            _MiniStat(icon: Icons.search_off_rounded, label: 'Mất tích',
+                value: fmt.format(stat.missing), color: _DC.amber),
+            _MiniStat(icon: Icons.personal_injury_rounded, label: 'Bị thương',
+                value: fmt.format(stat.injured), color: _DC.sosOrange),
+            _MiniStat(icon: Icons.roofing_rounded, label: 'Nhà hư hại',
+                value: fmt.format(stat.damagedHouses), color: _DC.blue),
+            _MiniStat(icon: Icons.attach_money_rounded, label: 'Tài sản (tỷ đ)',
+                value: fmtD.format(stat.propertyDamage), color: _DC.green),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Cập nhật lúc $dateStr',
+          style: const TextStyle(color: _DC.textMuted, fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  const _MiniStat({required this.icon, required this.label,
+      required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 130,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _DC.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _DC.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TextStyle(
+                  color: _DC.textPrimary, fontSize: 15,
+                  fontWeight: FontWeight.w800)),
+                Text(label, style: const TextStyle(
+                  color: _DC.textSecondary, fontSize: 10)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DAMAGE STATS INPUT DIALOG — Form nhập thống kê thiệt hại (Insert-Only)
+// =============================================================================
+class _DamageStatsInputDialog extends StatefulWidget {
+  final String eventId;
+  final WidgetRef ref;
+  const _DamageStatsInputDialog({required this.eventId, required this.ref});
+
+  @override
+  State<_DamageStatsInputDialog> createState() => _DamageStatsInputDialogState();
+}
+
+class _DamageStatsInputDialogState extends State<_DamageStatsInputDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _deathsC = TextEditingController(text: '0');
+  final _missingC = TextEditingController(text: '0');
+  final _injuredC = TextEditingController(text: '0');
+  final _housesC = TextEditingController(text: '0');
+  final _propertyC = TextEditingController(text: '0');
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _deathsC.dispose(); _missingC.dispose(); _injuredC.dispose();
+    _housesC.dispose(); _propertyC.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(
+        children: [
+          Icon(Icons.add_chart_rounded, color: _DC.brandRed, size: 22),
+          SizedBox(width: 8),
+          Text('Cập nhật Thống kê Thiệt hại',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        ],
+      ),
+      content: SizedBox(
+        width: 400,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Mỗi lần cập nhật sẽ tạo một bản ghi mới (không ghi đè dữ liệu cũ).',
+                  style: TextStyle(color: _DC.textMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                _buildField(_deathsC, 'Số người tử vong', Icons.person_off_rounded),
+                _buildField(_missingC, 'Số người mất tích', Icons.search_off_rounded),
+                _buildField(_injuredC, 'Số người bị thương', Icons.personal_injury_rounded),
+                _buildField(_housesC, 'Số nhà hư hại/tốc mái', Icons.roofing_rounded),
+                _buildDoubleField(_propertyC, 'Tổng tài sản thiệt hại (tỷ đồng)', Icons.attach_money_rounded),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Huỷ', style: TextStyle(color: _DC.textSecondary)),
+        ),
+        ElevatedButton(
+          onPressed: _submitting ? null : _submit,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _DC.brandRed, elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: _submitting
+              ? const SizedBox(width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Lưu thống kê', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildField(TextEditingController c, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: c,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20, color: _DC.textSecondary),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+        validator: (v) {
+          if (v == null || v.isEmpty) return 'Bắt buộc';
+          if (int.tryParse(v) == null) return 'Phải là số nguyên';
+          return null;
+        },
+      ),
+    );
+  }
+
+  Widget _buildDoubleField(TextEditingController c, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: c,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20, color: _DC.textSecondary),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+        validator: (v) {
+          if (v == null || v.isEmpty) return 'Bắt buộc';
+          if (double.tryParse(v) == null) return 'Phải là số';
+          return null;
+        },
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.ref.read(damageStatsRepositoryProvider).insertStat(
+        eventId: widget.eventId,
+        deaths: int.parse(_deathsC.text),
+        missing: int.parse(_missingC.text),
+        injured: int.parse(_injuredC.text),
+        damagedHouses: int.parse(_housesC.text),
+        propertyDamage: double.parse(_propertyC.text),
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Đã lưu thống kê thiệt hại thành công'),
+          backgroundColor: _DC.green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Lỗi: $e'),
+          backgroundColor: _DC.brandRed,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+}
+
+// =============================================================================
+// DAMAGE STATS HISTORY SHEET — Timeline toàn bộ lịch sử cập nhật
+// =============================================================================
+class _DamageStatsHistorySheet extends ConsumerWidget {
+  final String eventId;
+  const _DamageStatsHistorySheet({required this.eventId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(damageStatHistoryProvider(eventId));
+    final screenH = MediaQuery.of(context).size.height;
+
+    return Container(
+      height: screenH * 0.75,
+      decoration: const BoxDecoration(
+        color: _DC.cardBg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // ── Handle bar ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: _DC.textMuted.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          // ── Title ───────────────────────────────────────────────────────
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.timeline_rounded, color: _DC.brandRed, size: 22),
+                SizedBox(width: 8),
+                Text('Lịch sử cập nhật thiệt hại',
+                  style: TextStyle(
+                    color: _DC.textPrimary, fontSize: 16,
+                    fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _DC.border),
+          // ── List ────────────────────────────────────────────────────────
+          Expanded(
+            child: historyAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Lỗi: $e')),
+              data: (stats) => stats.isEmpty
+                  ? const Center(child: Text('Chưa có lịch sử',
+                      style: TextStyle(color: _DC.textMuted)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: stats.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 0),
+                      itemBuilder: (_, i) => _TimelineItem(
+                        stat: stats[i], isFirst: i == 0, isLast: i == stats.length - 1),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineItem extends StatelessWidget {
+  final EventDamageStat stat;
+  final bool isFirst;
+  final bool isLast;
+  const _TimelineItem({required this.stat, required this.isFirst, required this.isLast});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = DateFormat('HH:mm – dd/MM/yyyy').format(stat.reportedAt.toLocal());
+    final fmt = NumberFormat('#,##0', 'vi_VN');
+    final fmtD = NumberFormat('#,##0.0', 'vi_VN');
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Timeline line + dot ───────────────────────────────────────
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                if (!isFirst) Expanded(child: Container(width: 2, color: _DC.border)),
+                Container(
+                  width: 10, height: 10,
+                  decoration: BoxDecoration(
+                    color: isFirst ? _DC.brandRed : _DC.textMuted,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!isLast) Expanded(child: Container(width: 2, color: _DC.border)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // ── Content card ──────────────────────────────────────────────
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isFirst ? const Color(0xFFFFF5F5) : _DC.bg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isFirst ? const Color(0xFFFCA5A5) : _DC.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 14,
+                          color: isFirst ? _DC.brandRed : _DC.textMuted),
+                      const SizedBox(width: 4),
+                      Text(dateStr, style: TextStyle(
+                        color: isFirst ? _DC.brandRed : _DC.textSecondary,
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+                      if (isFirst) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: _DC.brandRedBg,
+                            borderRadius: BorderRadius.circular(4)),
+                          child: const Text('Mới nhất',
+                            style: TextStyle(color: _DC.brandRed,
+                                fontSize: 10, fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12, runSpacing: 4,
+                    children: [
+                      _inlineLabel('Tử vong', fmt.format(stat.deaths)),
+                      _inlineLabel('Mất tích', fmt.format(stat.missing)),
+                      _inlineLabel('Bị thương', fmt.format(stat.injured)),
+                      _inlineLabel('Nhà hư hại', fmt.format(stat.damagedHouses)),
+                      _inlineLabel('Tài sản (tỷ đ)', fmtD.format(stat.propertyDamage)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inlineLabel(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 12, fontFamily: 'Roboto'),
+        children: [
+          TextSpan(text: '$label: ',
+              style: const TextStyle(color: _DC.textSecondary)),
+          TextSpan(text: value,
+              style: const TextStyle(
+                  color: _DC.textPrimary, fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 }

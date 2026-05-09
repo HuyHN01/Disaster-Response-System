@@ -218,6 +218,38 @@ class FirebaseSyncService {
     return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
   }
 
+  Future<SyncResult> syncPendingEventDamageStats() async {
+    final isOnline = await _isConnected();
+    if (!isOnline) {
+      return const SyncResult(
+        errorMessage: 'Không có kết nối mạng — bỏ qua đồng bộ event_damage_stats.',
+      );
+    }
+
+    final pendingStats = await (_db.select(
+      _db.eventDamageStats,
+    )..where((s) => s.syncStatus.equals('pending'))).get();
+
+    if (pendingStats.isEmpty) {
+      return const SyncResult();
+    }
+
+    final failedIds = <String>[];
+    var syncedCount = 0;
+
+    for (final stat in pendingStats) {
+      try {
+        await _syncSingleEventDamageStat(stat);
+        syncedCount++;
+      } catch (e, st) {
+        _log('Lỗi đồng bộ damage_stat ${stat.id}: $e\n$st');
+        failedIds.add(stat.id);
+      }
+    }
+
+    return SyncResult(syncedCount: syncedCount, failedIds: failedIds);
+  }
+
   /// Opens a **realtime** Firestore listener on the `disaster_events`
   /// collection and writes any new/updated documents straight into the
   /// local Drift [DisasterEvents] table.
@@ -372,6 +404,7 @@ class FirebaseSyncService {
     final stationResult = await syncPendingRescueStations();
     final logResult = await syncPendingCheckInLogs();
     final communityResult = await syncPendingCommunityReports();
+    final damageStatResult = await syncPendingEventDamageStats();
 
     if (!stationResult.isSuccess || stationResult.hasPartialFailure) {
       _log('Rescue station sync result: $stationResult');
@@ -381,6 +414,9 @@ class FirebaseSyncService {
     }
     if (!communityResult.isSuccess || communityResult.hasPartialFailure) {
       _log('Community reports sync result: $communityResult');
+    }
+    if (!damageStatResult.isSuccess || damageStatResult.hasPartialFailure) {
+      _log('Event damage stat sync result: $damageStatResult');
     }
 
     return sosResult;
@@ -483,6 +519,19 @@ class FirebaseSyncService {
     );
   }
 
+  Future<void> _syncSingleEventDamageStat(EventDamageStat stat) async {
+    final ref = _firestore
+        .collection(_Collections.disasterEvents)
+        .doc(stat.eventId)
+        .collection('damage_stats')
+        .doc(stat.id);
+    await ref.set(_eventDamageStatsToFirestore(stat), SetOptions(merge: true));
+
+    await (_db.update(_db.eventDamageStats)
+          ..where((s) => s.id.equals(stat.id)))
+        .write(const EventDamageStatsCompanion(syncStatus: Value('synced')));
+  }
+
   // ---------------------------------------------------------------------------
   // PRIVATE — SOS sync helpers
   // ---------------------------------------------------------------------------
@@ -567,6 +616,8 @@ class FirebaseSyncService {
 
         // Upsert — insert or replace if the record already exists locally.
         await _db.into(_db.disasterEvents).insertOnConflictUpdate(companion);
+        
+        await _pullDamageStatsForEvent(change.doc.id);
 
         // Notify caller (e.g. to refresh a Riverpod provider).
         if (onNewEvent != null) {
@@ -578,6 +629,27 @@ class FirebaseSyncService {
       } catch (e, st) {
         _log('Lỗi xử lý disaster_event ${change.doc.id}: $e\n$st');
         // Skip this document and continue with the rest.
+      }
+    }
+  }
+
+  Future<void> _pullDamageStatsForEvent(String eventId) async {
+    final query = _firestore
+        .collection(_Collections.disasterEvents)
+        .doc(eventId)
+        .collection('damage_stats');
+    
+    final snapshot = await query.get();
+    for (final doc in snapshot.docs) {
+      try {
+        final companion = _firestoreToEventDamageStatsCompanion(
+          docId: doc.id,
+          eventId: eventId,
+          data: doc.data(),
+        );
+        await _db.into(_db.eventDamageStats).insertOnConflictUpdate(companion);
+      } catch (e, st) {
+        _log('Error processing damage_stats ${doc.id}: $e\n$st');
       }
     }
   }
@@ -964,6 +1036,40 @@ class FirebaseSyncService {
       userId: (data['userId'] as String?) ?? '',
       type: (data['type'] as String?) ?? 'in',
       timestamp: timestamp,
+      syncStatus: const Value('synced'),
+    );
+  }
+
+  Map<String, dynamic> _eventDamageStatsToFirestore(EventDamageStat stat) => {
+        'id': stat.id,
+        'eventId': stat.eventId,
+        'deaths': stat.deaths,
+        'missing': stat.missing,
+        'injured': stat.injured,
+        'damagedHouses': stat.damagedHouses,
+        'propertyDamage': stat.propertyDamage,
+        'reportedAt': Timestamp.fromDate(stat.reportedAt),
+        'reportedBy': stat.reportedBy,
+        'syncStatus': 'synced',
+      };
+
+  EventDamageStatsCompanion _firestoreToEventDamageStatsCompanion({
+    required String docId,
+    required String eventId,
+    required Map<String, dynamic> data,
+  }) {
+    final reportedAt = _asDateTime(data['reportedAt']) ?? DateTime.now();
+
+    return EventDamageStatsCompanion.insert(
+      id: docId,
+      eventId: eventId,
+      deaths: Value(_asInt(data['deaths'], 0)),
+      missing: Value(_asInt(data['missing'], 0)),
+      injured: Value(_asInt(data['injured'], 0)),
+      damagedHouses: Value(_asInt(data['damagedHouses'], 0)),
+      propertyDamage: Value((data['propertyDamage'] as num?)?.toDouble() ?? 0.0),
+      reportedAt: reportedAt,
+      reportedBy: (data['reportedBy'] as String?) ?? '',
       syncStatus: const Value('synced'),
     );
   }
