@@ -339,7 +339,7 @@ class _DamageStatsSection extends ConsumerWidget {
               _ActionButton(
                 icon: Icons.add_chart_rounded,
                 label: 'Cập nhật',
-                onTap: () => _showInputDialog(context, ref, event.id),
+                onTap: () => _showInputDialog(context, ref, event.id, statAsync.value),
               ),
             ],
           ),
@@ -368,10 +368,14 @@ class _DamageStatsSection extends ConsumerWidget {
     );
   }
 
-  void _showInputDialog(BuildContext context, WidgetRef ref, String eventId) {
+  void _showInputDialog(BuildContext context, WidgetRef ref, String eventId, EventDamageStat? latestStat) {
     showDialog(
       context: context,
-      builder: (_) => _DamageStatsInputDialog(eventId: eventId, ref: ref),
+      builder: (_) => _DamageStatsInputDialog(
+        eventId: eventId,
+        ref: ref,
+        initialStat: latestStat,
+      ),
     );
   }
 
@@ -473,7 +477,13 @@ class _MiniStat extends StatelessWidget {
 class _DamageStatsInputDialog extends StatefulWidget {
   final String eventId;
   final WidgetRef ref;
-  const _DamageStatsInputDialog({required this.eventId, required this.ref});
+  final EventDamageStat? initialStat;
+
+  const _DamageStatsInputDialog({
+    required this.eventId,
+    required this.ref,
+    this.initialStat,
+  });
 
   @override
   State<_DamageStatsInputDialog> createState() => _DamageStatsInputDialogState();
@@ -481,12 +491,23 @@ class _DamageStatsInputDialog extends StatefulWidget {
 
 class _DamageStatsInputDialogState extends State<_DamageStatsInputDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _deathsC = TextEditingController(text: '0');
-  final _missingC = TextEditingController(text: '0');
-  final _injuredC = TextEditingController(text: '0');
-  final _housesC = TextEditingController(text: '0');
-  final _propertyC = TextEditingController(text: '0');
+  late final TextEditingController _deathsC;
+  late final TextEditingController _missingC;
+  late final TextEditingController _injuredC;
+  late final TextEditingController _housesC;
+  late final TextEditingController _propertyC;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.initialStat;
+    _deathsC = TextEditingController(text: '${s?.deaths ?? 0}');
+    _missingC = TextEditingController(text: '${s?.missing ?? 0}');
+    _injuredC = TextEditingController(text: '${s?.injured ?? 0}');
+    _housesC = TextEditingController(text: '${s?.damagedHouses ?? 0}');
+    _propertyC = TextEditingController(text: '${s?.propertyDamage ?? 0.0}');
+  }
 
   @override
   void dispose() {
