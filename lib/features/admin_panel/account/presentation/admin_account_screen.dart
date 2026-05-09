@@ -457,19 +457,33 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
 
           const SizedBox(height: 24),
 
-          // ── Save button ───────────────────────────────────────────────
-          SizedBox(
-            height: 44,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: _saved
-                  ? _SuccessButton(key: const ValueKey('success'))
-                  : _SaveButton(
-                      key: const ValueKey('save'),
-                      onTap: _isSavingProfile ? null : _onSave,
-                      isLoading: _isSavingProfile,
-                    ),
-            ),
+          // ── Action Buttons: Save + Sign Out ──────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 145,
+                height: 44,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _saved
+                      ? _SuccessButton(key: const ValueKey('success'))
+                      : _SaveButton(
+                          key: const ValueKey('save'),
+                          onTap: _isSavingProfile ? null : _onSave,
+                          isLoading: _isSavingProfile,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 145,
+                height: 44,
+                child: _SignOutButton(
+                  onPressed: () {}, // Dummy callback for visual feedback
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1091,33 +1105,39 @@ class _SaveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onTap == null ? null : () => onTap!(),
-      icon: isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+    return Material(
+      color: AppColors.brandRed,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap == null ? null : () => onTap!(),
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox.expand(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              else
+                const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                isLoading ? 'Đang lưu...' : 'Lưu hồ sơ',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
-            )
-          : const Icon(Icons.save_rounded, size: 16, color: Colors.white),
-      label: Text(
-        isLoading ? 'Đang lưu...' : 'Lưu hồ sơ',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+            ],
+          ),
         ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.brandRed,
-        disabledBackgroundColor: AppColors.brandRed,
-        disabledForegroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
   }
@@ -1129,28 +1149,25 @@ class _SuccessButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: null,
-      icon: const Icon(
-        Icons.check_circle_rounded,
-        size: 16,
-        color: Colors.white,
-      ),
-      label: const Text(
-        'Đã lưu!',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+    return Material(
+      color: const Color(0xFF16A34A),
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox.expand(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.check_circle_rounded, size: 16, color: Colors.white),
+            SizedBox(width: 8),
+            Text(
+              'Đã lưu!',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF16A34A),
-        disabledBackgroundColor: const Color(0xFF16A34A),
-        disabledForegroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
   }
@@ -1918,6 +1935,53 @@ class _AvatarUploadDialogState extends ConsumerState<AvatarUploadDialog> {
           ),
         ],
       ],
+    );
+  }
+}
+
+// =============================================================================
+// SIGN OUT BUTTON
+// =============================================================================
+class _SignOutButton extends StatelessWidget {
+  const _SignOutButton({super.key, required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppColors.brandRed.withOpacity(0.4),
+              width: 1.5,
+            ),
+          ),
+          child: SizedBox.expand(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.logout_rounded, size: 16, color: AppColors.brandRed),
+                SizedBox(width: 8),
+                Text(
+                  'Đăng xuất',
+                  style: TextStyle(
+                    color: AppColors.brandRed,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
