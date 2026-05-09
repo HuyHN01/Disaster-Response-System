@@ -274,7 +274,12 @@ FROM users;
     await transaction(() async {
       await delete(attachments).go();
       await delete(locations).go();
+      await delete(checkInLogs).go();
+      await delete(communityReports).go();
+      await delete(eventDamageStats).go();
       await delete(posts).go();
+      await delete(rescueStations).go();
+      await delete(disasterEvents).go();
       await delete(users).go();
     });
   }

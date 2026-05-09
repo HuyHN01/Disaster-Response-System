@@ -480,13 +480,17 @@ class _MobileProfileScreenState extends ConsumerState<MobileProfileScreen> {
     _showSignOutLoadingDialog();
 
     try {
-      // Stop user stream sync first to avoid stale writes while logging out.
-      await ref.read(firebaseSyncServiceProvider).stopListeningToUsers();
+      // 1. Dừng tất cả background listeners để tránh lỗi Permission Denied.
+      await ref.read(firebaseSyncServiceProvider).dispose();
 
-      // Remove local user-scoped cache before ending the session.
+      // 2. Xóa dữ liệu local database.
       await ref.read(dbProvider).clearUserScopedData();
 
+      // 3. Đăng xuất khỏi Firebase.
       await ref.read(emailOtpAuthRepositoryProvider).signOut();
+
+      // 4. Reset provider sync để làm sạch trạng thái.
+      ref.invalidate(firebaseSyncServiceProvider);
 
       if (!mounted) return;
       context.go(RouteNames.profile);
