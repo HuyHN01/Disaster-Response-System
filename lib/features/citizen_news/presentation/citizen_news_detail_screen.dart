@@ -40,22 +40,18 @@ class CitizenNewsDetailScreen extends StatefulWidget {
   final CitizenNewsPost? post;
   final String? postId;
 
-  const CitizenNewsDetailScreen({
-    super.key,
-    this.post,
-    this.postId,
-  }) : assert(
-          post != null || postId != null,
-          'CitizenNewsDetailScreen requires either post or postId',
-        );
+  const CitizenNewsDetailScreen({super.key, this.post, this.postId})
+    : assert(
+        post != null || postId != null,
+        'CitizenNewsDetailScreen requires either post or postId',
+      );
 
   @override
   State<CitizenNewsDetailScreen> createState() =>
       _CitizenNewsDetailScreenState();
 }
 
-class _CitizenNewsDetailScreenState
-    extends State<CitizenNewsDetailScreen> {
+class _CitizenNewsDetailScreenState extends State<CitizenNewsDetailScreen> {
   QuillController? _quillCtrl;
   CitizenNewsPost? _loadedPost;
   bool _isLoadingPost = false;
@@ -134,7 +130,7 @@ class _CitizenNewsDetailScreenState
     setState(() => _isLaunching = true);
     try {
       final uri = Uri.parse(urlStr);
-      
+
       // Bỏ qua bước canLaunchUrl rườm rà. Ép hệ điều hành mở trình duyệt ngoài.
       // Nếu máy thực sự không có trình duyệt (rất hiếm), nó sẽ quăng Exception.
       final launched = await launchUrl(
@@ -154,7 +150,8 @@ class _CitizenNewsDetailScreenState
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -172,9 +169,7 @@ class _CitizenNewsDetailScreenState
     if (_isLoadingPost) {
       return const Scaffold(
         backgroundColor: _DC.bg,
-        body: Center(
-          child: CircularProgressIndicator(color: _DC.brandRed),
-        ),
+        body: Center(child: CircularProgressIndicator(color: _DC.brandRed)),
       );
     }
 
@@ -229,10 +224,7 @@ class _CitizenNewsDetailScreenState
       body: CustomScrollView(
         slivers: [
           // ── App Bar ───────────────────────────────────────────────────
-          _DetailAppBar(
-            isDirective: isDirective,
-            accentColor: accentColor,
-          ),
+          _DetailAppBar(isDirective: isDirective, accentColor: accentColor),
 
           // ── Content ───────────────────────────────────────────────────
           SliverToBoxAdapter(
@@ -276,13 +268,11 @@ class _DetailAppBar extends StatelessWidget {
   final bool isDirective;
   final Color accentColor;
 
-  const _DetailAppBar(
-      {required this.isDirective, required this.accentColor});
+  const _DetailAppBar({required this.isDirective, required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
-    final topColor =
-        isDirective ? _DC.directive : const Color(0xFF0284C7);
+    final topColor = isDirective ? _DC.directive : const Color(0xFF0284C7);
 
     return SliverAppBar(
       expandedHeight: 80,
@@ -296,8 +286,11 @@ class _DetailAppBar extends StatelessWidget {
             color: Colors.white.withOpacity(0.2),
             shape: BoxShape.circle,
           ),
-          child:
-              const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 18),
+          child: const Icon(
+            Icons.arrow_back_rounded,
+            color: Colors.white,
+            size: 18,
+          ),
         ),
         onPressed: () => Navigator.of(context).maybePop(),
       ),
@@ -307,10 +300,7 @@ class _DetailAppBar extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                topColor,
-                topColor.withOpacity(0.85),
-              ],
+              colors: [topColor, topColor.withOpacity(0.85)],
             ),
           ),
         ),
@@ -354,17 +344,14 @@ class _MetaCard extends StatelessWidget {
           if (isDirective)
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               decoration: const BoxDecoration(
                 color: _DC.directive,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(15)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
               ),
               child: Row(
-                children: const [
-                  Icon(Icons.campaign_rounded,
-                      color: Colors.white, size: 16),
+                children: [
+                  Icon(Icons.campaign_rounded, color: Colors.white, size: 16),
                   SizedBox(width: 8),
                   Text(
                     'CÔNG ĐIỆN KHẨN',
@@ -375,13 +362,17 @@ class _MetaCard extends StatelessWidget {
                       letterSpacing: 0.8,
                     ),
                   ),
+                  if (post.issuingLevel != null) ...[
+                    const SizedBox(width: 8),
+                    _LevelBadge(level: post.issuingLevel!, isOnDark: true),
+                  ],
                 ],
               ),
             )
           else
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: _NewsBadge(),
+              child: _NewsBadge(post: post),
             ),
 
           Padding(
@@ -393,9 +384,7 @@ class _MetaCard extends StatelessWidget {
                 Text(
                   post.title,
                   style: TextStyle(
-                    color: isDirective
-                        ? _DC.directive
-                        : _DC.textPrimary,
+                    color: isDirective ? _DC.directive : _DC.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     height: 1.3,
@@ -407,7 +396,9 @@ class _MetaCard extends StatelessWidget {
                 // Date + divider
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF9FAFB),
                     borderRadius: BorderRadius.circular(8),
@@ -416,8 +407,11 @@ class _MetaCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.access_time_rounded,
-                          size: 13, color: accentColor),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 13,
+                        color: accentColor,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         _dateFmt.format(post.createdAt.toLocal()),
@@ -544,8 +538,7 @@ class _AttachmentCard extends StatelessWidget {
       'pdf' => Icons.picture_as_pdf_rounded,
       'doc' || 'docx' => Icons.description_rounded,
       'xls' || 'xlsx' => Icons.table_chart_rounded,
-      'png' || 'jpg' || 'jpeg' || 'webp' =>
-        Icons.image_rounded,
+      'png' || 'jpg' || 'jpeg' || 'webp' => Icons.image_rounded,
       _ => Icons.insert_drive_file_rounded,
     };
   }
@@ -635,10 +628,7 @@ class _AttachmentCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       const Text(
                         'Nhấn để xem hoặc tải xuống',
-                        style: TextStyle(
-                          color: _DC.textMuted,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: _DC.textMuted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -659,14 +649,17 @@ class _AttachmentCard extends StatelessWidget {
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : const Icon(Icons.open_in_new_rounded,
-                      size: 16, color: Colors.white),
+                  : const Icon(
+                      Icons.open_in_new_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
               label: Text(
-                isLoading
-                    ? 'Đang mở...'
-                    : 'Tải xuống / Xem tài liệu',
+                isLoading ? 'Đang mở...' : 'Tải xuống / Xem tài liệu',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -679,7 +672,8 @@ class _AttachmentCard extends StatelessWidget {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -693,6 +687,8 @@ class _AttachmentCard extends StatelessWidget {
 // SHARED SMALL WIDGETS
 // =============================================================================
 class _NewsBadge extends StatelessWidget {
+  final CitizenNewsPost post;
+  const _NewsBadge({required this.post});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -701,7 +697,7 @@ class _NewsBadge extends StatelessWidget {
         color: _DC.newsBg,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.article_rounded, size: 12, color: _DC.news),
@@ -715,7 +711,55 @@ class _NewsBadge extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
+          if (post.issuingLevel != null) ...[
+            const SizedBox(width: 8),
+            _LevelBadge(level: post.issuingLevel!, isOnDark: false),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _LevelBadge extends StatelessWidget {
+  final String level;
+  final bool isOnDark;
+
+  const _LevelBadge({required this.level, this.isOnDark = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (level) {
+      'central' => 'TRUNG ƯƠNG',
+      'province' => 'CẤP TỈNH',
+      'district' => 'CẤP QUẬN',
+      'ward' => 'CẤP XÃ',
+      _ => level.toUpperCase(),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        // Nếu ở nền tối thì dùng màu trắng trong suốt, nền sáng dùng màu xanh đậm hơn một chút cho đồng bộ
+        color: isOnDark
+            ? Colors.white.withOpacity(0.2)
+            : const Color(0xFF0284C7).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isOnDark
+              ? Colors.white.withOpacity(0.4)
+              : const Color(0xFF0284C7).withOpacity(0.3),
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          // Chữ trắng trên nền tối, hoặc màu xanh đậm trên nền sáng
+          color: isOnDark ? Colors.white : const Color(0xFF0369A1),
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
