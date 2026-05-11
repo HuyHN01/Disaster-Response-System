@@ -20,6 +20,7 @@ class Users extends Table {
   TextColumn get createdBy => text().nullable()();
   DateTimeColumn get lastLoginAt => dateTime().nullable()();
   BoolColumn get mfaEnabled => boolean().withDefault(const Constant(false))();
+  TextColumn get medicalProfileJson => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -51,6 +52,7 @@ class Posts extends Table {
   BoolColumn get isVerified => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
   TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
+  TextColumn get issuingLevel => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -262,6 +264,8 @@ FROM users;
       
       if (from < 7) {
         await m.createTable(eventDamageStats);
+        await m.addColumn(posts, posts.issuingLevel);
+        await m.addColumn(users, users.medicalProfileJson);
       }
     },
   );
