@@ -788,20 +788,31 @@ class FirebaseSyncService {
 
         await _db.into(_db.posts).insertOnConflictUpdate(incomingPost);
 
-        // also need to fetch location? 
-        // since we are fetching from 'posts', it doesn't include location directly.
-        // so we need to fetch location doc explicitly.
-        final locDoc = await _firestore.collection(_Collections.locations)
-            .where('postId', isEqualTo: change.doc.id)
-            .limit(1)
-            .get();
-
         Location? insertedLoc;
-        if (locDoc.docs.isNotEmpty) {
-          final locData = locDoc.docs.first.data();
-          final incomingLoc = _firestoreToLocationCompanion(locDoc.docs.first.id, locData, change.doc.id);
+        final rawLat = data['latitude'];
+        final rawLng = data['longitude'];
+
+        if (rawLat != null && rawLng != null) {
+          final incomingLoc = LocationsCompanion.insert(
+            id: 'loc_${change.doc.id}',
+            postId: change.doc.id,
+            latitude: (rawLat as num).toDouble(),
+            longitude: (rawLng as num).toDouble(),
+          );
           await _db.into(_db.locations).insertOnConflictUpdate(incomingLoc);
-          insertedLoc = await (_db.select(_db.locations)..where((l) => l.id.equals(locDoc.docs.first.id))).getSingleOrNull();
+          insertedLoc = await (_db.select(_db.locations)..where((l) => l.postId.equals(change.doc.id))).getSingleOrNull();
+        } else {
+          final locDoc = await _firestore.collection(_Collections.locations)
+              .where('postId', isEqualTo: change.doc.id)
+              .limit(1)
+              .get();
+
+          if (locDoc.docs.isNotEmpty) {
+            final locData = locDoc.docs.first.data();
+            final incomingLoc = _firestoreToLocationCompanion(locDoc.docs.first.id, locData, change.doc.id);
+            await _db.into(_db.locations).insertOnConflictUpdate(incomingLoc);
+            insertedLoc = await (_db.select(_db.locations)..where((l) => l.id.equals(locDoc.docs.first.id))).getSingleOrNull();
+          }
         }
 
         if (onUpsert != null) {

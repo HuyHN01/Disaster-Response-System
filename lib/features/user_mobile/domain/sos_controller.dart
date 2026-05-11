@@ -28,28 +28,37 @@ class SOSReport {
   });
 }
 
-/// Provider để watch danh sách SOS Reports từ local database
+/// Provider để watch danh sách SOS Reports trực tiếp từ Firestore.
+/// Đọc thẳng từ Firestore thay vì qua local DB để đảm bảo real-time
+/// giữa các thiết bị và tránh lỗi FK khi insert remote posts vào Drift.
 final sosReportsProvider = StreamProvider<List<SOSReport>>((ref) {
-  final db = ref.watch(dbProvider);
+  return FirebaseFirestore.instance
+      .collection('posts')
+      .where('postType', isEqualTo: 'sos')
+      .snapshots()
+      .map((snapshot) {
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          return data['latitude'] != null && data['longitude'] != null;
+        })
+        .map((doc) {
+          final data = doc.data();
+          final rawCreatedAt = data['createdAt'];
+          final createdAt = rawCreatedAt is Timestamp
+              ? rawCreatedAt.toDate()
+              : DateTime.now();
 
-  final query = db.select(db.posts).join([
-    innerJoin(db.locations, db.locations.postId.equalsExp(db.posts.id)),
-  ])..where(db.posts.postType.equals('sos'));
-
-  return query.watch().map((rows) {
-    return rows.map((row) {
-      final post = row.readTable(db.posts);
-      final location = row.readTable(db.locations);
-
-      return SOSReport(
-        postId: post.id,
-        userId: post.userId,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        description: post.content,
-        createdAt: post.createdAt,
-      );
-    }).toList();
+          return SOSReport(
+            postId: doc.id,
+            userId: (data['userId'] as String?) ?? '',
+            latitude: (data['latitude'] as num).toDouble(),
+            longitude: (data['longitude'] as num).toDouble(),
+            description: (data['content'] as String?) ?? '',
+            createdAt: createdAt,
+          );
+        })
+        .toList();
   });
 });
 

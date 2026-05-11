@@ -1135,45 +1135,6 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       _latestReports,
       _latestSosReports,
     );
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final isCurrentUser =
-        (currentUser != null && sos.userId == currentUser.uid) ||
-        (deviceId != null && sos.userId == deviceId);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: _SosDetailsCard(
-            sos: sos,
-            isCurrentUser: isCurrentUser,
-            onNavigate: () {
-              Navigator.of(context).pop();
-              _computeRouteFromProps(
-                widget.userLocation,
-                _latestStations,
-                _latestReports,
-                _latestSosReports,
-              );
-            },
-            onClose: () {
-              Navigator.of(context).pop();
-              setState(() => _selectedSosId = null);
-              _computeRouteFromProps(
-                widget.userLocation,
-                _latestStations,
-                _latestReports,
-                _latestSosReports,
-              );
-            },
-          ),
-        ),
-      ),
-    );
   }
 
   SOSReport? _findSosById(List<SOSReport> sosReports, String id) {
