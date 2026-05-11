@@ -22,9 +22,14 @@ import 'package:image_picker/image_picker.dart';
 // ─── Borrow AppColors from the existing dashboard file ───────────────────────
 // If AppColors is already in a shared file (e.g. core/theme/app_colors.dart),
 // replace this import with the correct path.
+import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/firebase_avatar_storage_service.dart';
+import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_models.dart';
 import 'package:disaster_response_app/features/admin_panel/auth/domain/admin_auth_repository.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/user_management/domain/user_management_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart'
     show AppColors;
 
@@ -148,6 +153,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
   late final TextEditingController _emailCtrl;
   bool _isEditingDisplayName = false;
   bool _isSavingProfile = false;
+  bool _isSigningOut = false;
   bool _saved = false;
 
   @override
@@ -263,6 +269,73 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
         _isEditingDisplayName = true;
       }
     });
+  }
+
+  Future<void> _onSignOut() async {
+    if (_isSigningOut) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Đăng xuất',
+          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống quản trị?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Đăng xuất',
+              style: TextStyle(color: AppColors.brandRed, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isSigningOut = true);
+
+    try {
+      // 1. Dừng tất cả background listeners ngay lập tức để tránh lỗi Permission Denied
+      // khi token Auth bị thu hồi.
+      await ref.read(firebaseSyncServiceProvider).dispose();
+
+      // 2. Xóa dữ liệu local database
+      await ref.read(dbProvider).clearUserScopedData();
+
+      // 3. Đăng xuất khỏi Firebase (Router sẽ tự động chuyển hướng)
+      await ref.read(adminAuthRepositoryProvider).signOut();
+
+      // 4. Reset trạng thái của các provider quan trọng để đảm bảo phiên làm việc sau sạch sẽ.
+      // Việc invalidate sẽ buộc các notifier này khởi tạo lại (build) khi được truy cập lần sau.
+      ref.invalidate(firebaseSyncServiceProvider);
+      ref.invalidate(userManagementControllerProvider);
+      ref.invalidate(eventControllerProvider);
+      ref.invalidate(rescueStationControllerProvider);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSigningOut = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đăng xuất thất bại. Vui lòng thử lại.'),
+          backgroundColor: AppColors.brandRed,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -457,19 +530,34 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
 
           const SizedBox(height: 24),
 
-          // ── Save button ───────────────────────────────────────────────
-          SizedBox(
-            height: 44,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: _saved
-                  ? _SuccessButton(key: const ValueKey('success'))
-                  : _SaveButton(
-                      key: const ValueKey('save'),
-                      onTap: _isSavingProfile ? null : _onSave,
-                      isLoading: _isSavingProfile,
-                    ),
-            ),
+          // ── Action Buttons: Save + Sign Out ──────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 175,
+                height: 44,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _saved
+                      ? _SuccessButton(key: const ValueKey('success'))
+                      : _SaveButton(
+                          key: const ValueKey('save'),
+                          onTap: _isSavingProfile ? null : _onSave,
+                          isLoading: _isSavingProfile,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 175,
+                height: 44,
+                child: _SignOutButton(
+                  onPressed: _isSigningOut ? null : _onSignOut,
+                  isLoading: _isSigningOut,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1091,33 +1179,39 @@ class _SaveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onTap == null ? null : () => onTap!(),
-      icon: isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
+    return Material(
+      color: AppColors.brandRed,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap == null ? null : () => onTap!(),
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox.expand(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              else
+                const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                isLoading ? 'Đang lưu...' : 'Lưu hồ sơ',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
-            )
-          : const Icon(Icons.save_rounded, size: 16, color: Colors.white),
-      label: Text(
-        isLoading ? 'Đang lưu...' : 'Lưu hồ sơ',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+            ],
+          ),
         ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.brandRed,
-        disabledBackgroundColor: AppColors.brandRed,
-        disabledForegroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
   }
@@ -1129,28 +1223,25 @@ class _SuccessButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: null,
-      icon: const Icon(
-        Icons.check_circle_rounded,
-        size: 16,
-        color: Colors.white,
-      ),
-      label: const Text(
-        'Đã lưu!',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+    return Material(
+      color: const Color(0xFF16A34A),
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox.expand(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.check_circle_rounded, size: 16, color: Colors.white),
+            SizedBox(width: 8),
+            Text(
+              'Đã lưu!',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF16A34A),
-        disabledBackgroundColor: const Color(0xFF16A34A),
-        disabledForegroundColor: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
       ),
     );
   }
@@ -1918,6 +2009,76 @@ class _AvatarUploadDialogState extends ConsumerState<AvatarUploadDialog> {
           ),
         ],
       ],
+    );
+  }
+}
+
+// =============================================================================
+// SIGN OUT BUTTON
+// =============================================================================
+class _SignOutButton extends StatelessWidget {
+  const _SignOutButton({
+    super.key,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: AppColors.brandRed.withOpacity(0.4),
+              width: 1.5,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isLoading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.brandRed,
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.logout_rounded,
+                      size: 16,
+                      color: AppColors.brandRed,
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isLoading ? 'Đang đăng xuất...' : 'Đăng xuất',
+                    style: const TextStyle(
+                      color: AppColors.brandRed,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

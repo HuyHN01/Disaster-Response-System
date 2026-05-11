@@ -5,8 +5,72 @@ import 'package:uuid/uuid.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/sms_fallback_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:drift/drift.dart';
+
+/// Dữ liệu một SOS Report dùng cho Map
+class SOSReport {
+  final String postId;
+  final String userId;
+  final double latitude;
+  final double longitude;
+  final String description;
+  final DateTime createdAt;
+
+  SOSReport({
+    required this.postId,
+    required this.userId,
+    required this.latitude,
+    required this.longitude,
+    required this.description,
+    required this.createdAt,
+  });
+}
+
+/// Provider để watch danh sách SOS Reports trực tiếp từ Firestore.
+/// Đọc thẳng từ Firestore thay vì qua local DB để đảm bảo real-time
+/// giữa các thiết bị và tránh lỗi FK khi insert remote posts vào Drift.
+final sosReportsProvider = StreamProvider<List<SOSReport>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('posts')
+      .where('postType', isEqualTo: 'sos')
+      .snapshots()
+      .map((snapshot) {
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          return data['latitude'] != null && data['longitude'] != null;
+        })
+        .map((doc) {
+          final data = doc.data();
+          final rawCreatedAt = data['createdAt'];
+          final createdAt = rawCreatedAt is Timestamp
+              ? rawCreatedAt.toDate()
+              : DateTime.now();
+
+          return SOSReport(
+            postId: doc.id,
+            userId: (data['userId'] as String?) ?? '',
+            latitude: (data['latitude'] as num).toDouble(),
+            longitude: (data['longitude'] as num).toDouble(),
+            description: (data['content'] as String?) ?? '',
+            createdAt: createdAt,
+          );
+        })
+        .toList();
+  });
+});
+
+final deviceIdProvider = FutureProvider<String>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  String? deviceId = prefs.getString('guest_device_id');
+  if (deviceId == null) {
+    deviceId = const Uuid().v4();
+    await prefs.setString('guest_device_id', deviceId);
+  }
+  return deviceId;
+});
 
 /// Trạng thái của SOS request
 enum SOSStatus {
@@ -67,10 +131,12 @@ class SOSController extends StateNotifier<SOSState> {
     required DateTime createdAt,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final deviceId = await _getDeviceId();
+    final finalUserId = uid.isNotEmpty ? uid : deviceId;
     final post = PostsCompanion(
       id: Value(postId),
       eventId: const Value('sos'),
-      userId: Value(uid),
+      userId: Value(finalUserId),
       postType: const Value('sos'),
       title: const Value('SOS khẩn cấp'),
       content: Value(description),
@@ -115,9 +181,10 @@ class SOSController extends StateNotifier<SOSState> {
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final deviceId = await _getDeviceId();
+    final finalUserId = uid.isNotEmpty ? uid : deviceId;
 
     final postData = {
-      'userId': uid,
+      'userId': finalUserId,
       'deviceId': deviceId,
       'eventId': 'sos',
       'postType': 'sos',

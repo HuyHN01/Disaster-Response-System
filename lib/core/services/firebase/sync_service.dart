@@ -60,6 +60,8 @@ class FirebaseSyncService {
   _rescueStationsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _communityReportsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _sosReportsSubscription;
   StreamSubscription<dynamic>? _usersSubscription;
 
   FirebaseSyncService({
@@ -333,6 +335,32 @@ class FirebaseSyncService {
     _communityReportsSubscription = null;
   }
 
+  /// Opens a realtime Firestore listener on `posts` where postType == 'sos'.
+  void listenToSOSReports({
+    void Function(Post post, Location? location)? onUpsert,
+    void Function(Object error)? onError,
+  }) {
+    _sosReportsSubscription?.cancel();
+
+    final query = _firestore
+        .collection(_Collections.posts)
+        .where('postType', isEqualTo: 'sos');
+
+    _sosReportsSubscription = query.snapshots().listen(
+      (snapshot) => _handleSOSReportSnapshot(snapshot, onUpsert: onUpsert),
+      onError: (Object error, StackTrace st) {
+        _log('Lỗi lắng nghe SOS reports: $error\n$st');
+        onError?.call(error);
+      },
+      cancelOnError: false,
+    );
+  }
+
+  Future<void> stopListeningToSOSReports() async {
+    await _sosReportsSubscription?.cancel();
+    _sosReportsSubscription = null;
+  }
+
   /// Opens a realtime Firestore listener on `users`.
   ///
   /// This keeps local account metadata aligned for offline reads.
@@ -398,6 +426,7 @@ class FirebaseSyncService {
     listenToAdminEvents();
     listenToRescueStations();
     listenToCommunityReports();
+    listenToSOSReports();
     listenToUsers();
 
     final sosResult = await syncPendingSOS();
@@ -731,6 +760,69 @@ class FirebaseSyncService {
         }
       } catch (e, st) {
         _log('Lỗi xử lý community_report ${change.doc.id}: $e\n$st');
+      }
+    }
+  }
+
+  Future<void> _handleSOSReportSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    void Function(Post post, Location? location)? onUpsert,
+  }) async {
+    for (final change in snapshot.docChanges) {
+      try {
+        if (change.type == DocumentChangeType.removed) {
+          await _db.transaction(() async {
+            await (_db.delete(_db.posts)..where((p) => p.id.equals(change.doc.id))).go();
+            await (_db.delete(_db.locations)..where((l) => l.postId.equals(change.doc.id))).go();
+          });
+          continue;
+        }
+
+        final data = change.doc.data();
+        if (data == null) continue;
+
+        final incomingPost = _firestoreToPostCompanion(
+          change.doc.id,
+          data,
+        );
+
+        await _db.into(_db.posts).insertOnConflictUpdate(incomingPost);
+
+        Location? insertedLoc;
+        final rawLat = data['latitude'];
+        final rawLng = data['longitude'];
+
+        if (rawLat != null && rawLng != null) {
+          final incomingLoc = LocationsCompanion.insert(
+            id: 'loc_${change.doc.id}',
+            postId: change.doc.id,
+            latitude: (rawLat as num).toDouble(),
+            longitude: (rawLng as num).toDouble(),
+          );
+          await _db.into(_db.locations).insertOnConflictUpdate(incomingLoc);
+          insertedLoc = await (_db.select(_db.locations)..where((l) => l.postId.equals(change.doc.id))).getSingleOrNull();
+        } else {
+          final locDoc = await _firestore.collection(_Collections.locations)
+              .where('postId', isEqualTo: change.doc.id)
+              .limit(1)
+              .get();
+
+          if (locDoc.docs.isNotEmpty) {
+            final locData = locDoc.docs.first.data();
+            final incomingLoc = _firestoreToLocationCompanion(locDoc.docs.first.id, locData, change.doc.id);
+            await _db.into(_db.locations).insertOnConflictUpdate(incomingLoc);
+            insertedLoc = await (_db.select(_db.locations)..where((l) => l.id.equals(locDoc.docs.first.id))).getSingleOrNull();
+          }
+        }
+
+        if (onUpsert != null) {
+          final insertedPost = await (_db.select(
+            _db.posts,
+          )..where((p) => p.id.equals(change.doc.id))).getSingleOrNull();
+          if (insertedPost != null) onUpsert(insertedPost, insertedLoc);
+        }
+      } catch (e, st) {
+        _log('Lỗi xử lý sos_report ${change.doc.id}: $e\n$st');
       }
     }
   }

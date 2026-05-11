@@ -203,6 +203,8 @@ class _RightPanelState extends ConsumerState<_RightPanel> {
   }
 
   Future<void> _submitLogin() async {
+    if (_isSubmitting) return;
+
     final repo = ref.read(adminAuthRepositoryProvider);
 
     setState(() {
@@ -275,6 +277,7 @@ class _RightPanelState extends ConsumerState<_RightPanel> {
                   controller: _emailController,
                   hintText: 'admin@omnidisaster.org',
                   keyboardType: TextInputType.emailAddress,
+                  onSubmitted: (_) => _submitLogin(),
                 ),
                 const SizedBox(height: 20),
                 _CustomTextField(
@@ -282,6 +285,7 @@ class _RightPanelState extends ConsumerState<_RightPanel> {
                   controller: _passwordController,
                   hintText: '••••••••••••',
                   obscureText: _obscurePassword,
+                  onSubmitted: (_) => _submitLogin(),
                   suffixIcon: GestureDetector(
                     onTap: () {
                       setState(() => _obscurePassword = !_obscurePassword);
@@ -476,6 +480,7 @@ class _CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.keyboardType,
     this.suffixIcon,
+    this.onSubmitted,
   });
 
   final String label;
@@ -484,6 +489,7 @@ class _CustomTextField extends StatelessWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final Widget? suffixIcon;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -503,6 +509,7 @@ class _CustomTextField extends StatelessWidget {
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          onSubmitted: onSubmitted,
           style: const TextStyle(
             color: Color(0xFF111827),
             fontSize: 15,
