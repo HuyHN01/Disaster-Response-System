@@ -113,6 +113,10 @@ service cloud.firestore {
     // Keep current app behavior for existing non-auth features.
     match /disaster_events/{docId} {
       allow read, write: if true;
+
+      match /damage_stats/{statId} {
+        allow read, write: if true;
+      }
     }
 
     match /posts/{docId} {
