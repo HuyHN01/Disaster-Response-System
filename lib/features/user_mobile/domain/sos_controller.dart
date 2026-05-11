@@ -5,8 +5,63 @@ import 'package:uuid/uuid.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/sms_fallback_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:drift/drift.dart';
+
+/// Dữ liệu một SOS Report dùng cho Map
+class SOSReport {
+  final String postId;
+  final String userId;
+  final double latitude;
+  final double longitude;
+  final String description;
+  final DateTime createdAt;
+
+  SOSReport({
+    required this.postId,
+    required this.userId,
+    required this.latitude,
+    required this.longitude,
+    required this.description,
+    required this.createdAt,
+  });
+}
+
+/// Provider để watch danh sách SOS Reports từ local database
+final sosReportsProvider = StreamProvider<List<SOSReport>>((ref) {
+  final db = ref.watch(dbProvider);
+
+  final query = db.select(db.posts).join([
+    innerJoin(db.locations, db.locations.postId.equalsExp(db.posts.id)),
+  ])..where(db.posts.postType.equals('sos'));
+
+  return query.watch().map((rows) {
+    return rows.map((row) {
+      final post = row.readTable(db.posts);
+      final location = row.readTable(db.locations);
+
+      return SOSReport(
+        postId: post.id,
+        userId: post.userId,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        description: post.content,
+        createdAt: post.createdAt,
+      );
+    }).toList();
+  });
+});
+
+final deviceIdProvider = FutureProvider<String>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  String? deviceId = prefs.getString('guest_device_id');
+  if (deviceId == null) {
+    deviceId = const Uuid().v4();
+    await prefs.setString('guest_device_id', deviceId);
+  }
+  return deviceId;
+});
 
 /// Trạng thái của SOS request
 enum SOSStatus {
@@ -67,10 +122,12 @@ class SOSController extends StateNotifier<SOSState> {
     required DateTime createdAt,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final deviceId = await _getDeviceId();
+    final finalUserId = uid.isNotEmpty ? uid : deviceId;
     final post = PostsCompanion(
       id: Value(postId),
       eventId: const Value('sos'),
-      userId: Value(uid),
+      userId: Value(finalUserId),
       postType: const Value('sos'),
       title: const Value('SOS khẩn cấp'),
       content: Value(description),
@@ -115,9 +172,10 @@ class SOSController extends StateNotifier<SOSState> {
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final deviceId = await _getDeviceId();
+    final finalUserId = uid.isNotEmpty ? uid : deviceId;
 
     final postData = {
-      'userId': uid,
+      'userId': finalUserId,
       'deviceId': deviceId,
       'eventId': 'sos',
       'postType': 'sos',

@@ -4,15 +4,12 @@ import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
-import 'package:disaster_response_app/core/database/db_provider.dart';
-import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
 import 'package:disaster_response_app/features/user_mobile/domain/sos_controller.dart';
-import 'package:drift/drift.dart' as drift;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +30,7 @@ class _MapColors {
   static const Color userDot = Color(0xFF2563EB);
   static const Color userDotRing = Color(0x442563EB);
   static const Color sosRed = Color(0xFFDC2626);
+  static const Color sosUserPurple = Color(0xFF9333EA);
   static const Color rescueGreen = Color(0xFF16A34A);
   static const Color cardBg = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF111827);
@@ -154,14 +152,14 @@ class LocationException implements Exception {
 // =============================================================================
 // MAIN SCREEN
 // =============================================================================
-class EventMapScreen extends StatefulWidget {
+class EventMapScreen extends ConsumerStatefulWidget {
   const EventMapScreen({super.key});
 
   @override
-  State<EventMapScreen> createState() => _EventMapScreenState();
+  ConsumerState<EventMapScreen> createState() => _EventMapScreenState();
 }
 
-class _EventMapScreenState extends State<EventMapScreen>
+class _EventMapScreenState extends ConsumerState<EventMapScreen>
     with TickerProviderStateMixin {
   late final MapController _mapController;
   late final AnimationController _pulseCtrl;
@@ -178,6 +176,7 @@ class _EventMapScreenState extends State<EventMapScreen>
   // ── Routing state (for external Google Maps directions) ──────────────────
   LatLng? _routeDestination;
   RescueStation? _targetStation;
+  SOSReport? _targetSos;
 
   @override
   void initState() {
@@ -316,15 +315,22 @@ class _EventMapScreenState extends State<EventMapScreen>
     );
   }
 
-  void _onRouteDestinationChanged(LatLng? destination, RescueStation? station) {
+  void _onRouteDestinationChanged(
+    LatLng? destination,
+    RescueStation? station,
+    SOSReport? sosReport,
+  ) {
     if (_isSameLatLng(_routeDestination, destination) &&
-        _targetStation?.id == station?.id)
+        _targetStation?.id == station?.id &&
+        _targetSos?.postId == sosReport?.postId) {
       return;
+    }
     if (!mounted) return;
 
     setState(() {
       _routeDestination = destination;
       _targetStation = station;
+      _targetSos = sosReport;
     });
   }
 
@@ -364,7 +370,7 @@ class _EventMapScreenState extends State<EventMapScreen>
   Future<void> _openGoogleMapsDirections() async {
     final destination = _routeDestination;
     if (destination == null) {
-      _showDirectionError('Không có trạm cứu trợ để chỉ đường.');
+      _showDirectionError('Không có đích đến để chỉ đường.');
       return;
     }
 
@@ -465,7 +471,30 @@ class _EventMapScreenState extends State<EventMapScreen>
                   ),
                 ),
               ),
-              label: 'Vị trí phát tín hiệu SOS',
+              label: 'SOS của cộng đồng',
+            ),
+            const SizedBox(height: 12),
+            _legendDialogItem(
+              color: _MapColors.sosUserPurple,
+              customWidget: Container(
+                width: 20,
+                height: 20,
+                decoration: const BoxDecoration(
+                  color: _MapColors.sosUserPurple,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text(
+                    '!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              label: 'SOS của bạn',
             ),
           ],
         ),
@@ -577,7 +606,9 @@ class _EventMapScreenState extends State<EventMapScreen>
             // ── Locate-me button ─────────────────────────────────────────
             Positioned(
               right: 14,
-              bottom: _targetStation != null ? 350 : 100,
+              bottom: (_targetStation != null || _targetSos != null)
+                  ? 350
+                  : 100,
               child: _LocateMeButton(onTap: _locateMe),
             ),
 
@@ -593,6 +624,26 @@ class _EventMapScreenState extends State<EventMapScreen>
                   station: _targetStation!,
                   onNavigate: _openGoogleMapsDirections,
                   onClose: () => setState(() => _targetStation = null),
+                ),
+              ),
+
+            // ── Selected SOS Details ────────────────────────────────────
+            if (_targetSos != null)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 110,
+                child: _SosDetailsCard(
+                  sos: _targetSos!,
+                  isCurrentUser:
+                      _targetSos!.userId ==
+                          FirebaseAuth.instance.currentUser?.uid ||
+                      _targetSos!.userId ==
+                          ref
+                              .watch(deviceIdProvider)
+                              .maybeWhen(data: (v) => v, orElse: () => null),
+                  onNavigate: _openGoogleMapsDirections,
+                  onClose: () => setState(() => _targetSos = null),
                 ),
               ),
 
@@ -738,7 +789,7 @@ class _MapLayer extends ConsumerStatefulWidget {
   final MapController mapController;
   final Animation<double> pulseAnim;
   final LatLng userLocation;
-  final void Function(LatLng?, RescueStation?) onRouteTargetChanged;
+  final void Function(LatLng?, RescueStation?, SOSReport?) onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
@@ -767,6 +818,9 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   /// Trạm do user chủ động chọn bằng cách tap marker.
   String? _selectedStationId;
 
+  /// SOS do user chủ động chọn.
+  String? _selectedSosId;
+
   /// Snapshot trạm mới nhất dùng cho retry/fallback mà không cần rebuild.
   List<RescueStation> _latestStations = const [];
 
@@ -781,6 +835,9 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   List<CommunityReport> _latestReports = const [];
   String _reportsFingerprint = '';
 
+  List<SOSReport> _latestSosReports = const [];
+  String _sosReportsFingerprint = '';
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -791,7 +848,12 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     initial.whenData((stations) {
       _latestStations = stations;
       _stationsFingerprint = _fingerprintStations(stations);
-      _computeRouteFromProps(widget.userLocation, stations, _latestReports);
+      _computeRouteFromProps(
+        widget.userLocation,
+        stations,
+        _latestReports,
+        _latestSosReports,
+      );
     });
 
     _initCheckInState();
@@ -822,7 +884,12 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         20; // mét
 
     if (locationChanged) {
-      _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
+      _computeRouteFromProps(
+        widget.userLocation,
+        _latestStations,
+        _latestReports,
+        _latestSosReports,
+      );
     }
   }
 
@@ -837,57 +904,76 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     LatLng userLoc,
     List<RescueStation> stations,
     List<CommunityReport> reports,
+    List<SOSReport> sosReports,
   ) async {
-    // ── Bước 1: Chọn trạm đích (ưu tiên trạm user chọn, fallback gần nhất) ──
-    final destination = _resolveTargetStation(userLoc, stations);
-    if (destination == null) {
+    LatLng? destinationPoint;
+    RescueStation? destStation;
+    SOSReport? destSos;
+
+    if (_selectedSosId != null) {
+      destSos = _findSosById(sosReports, _selectedSosId!);
+      if (destSos != null) {
+        destinationPoint = LatLng(destSos.latitude, destSos.longitude);
+      } else {
+        _selectedSosId = null;
+      }
+    }
+
+    if (destinationPoint == null) {
+      destStation = _resolveTargetStation(userLoc, stations);
+      if (destStation != null) {
+        destinationPoint = LatLng(destStation.latitude, destStation.longitude);
+        _routeStationId = destStation.id;
+      } else {
+        _routeStationId = null;
+      }
+    } else {
+      _routeStationId = null;
+    }
+
+    if (destinationPoint == null) {
       if (!mounted) return;
       setState(() {
-        _routeStationId = null;
-        _selectedStationId = null;
         _routePoints = const [];
         _routeLoading = false;
         _isFallback = false;
       });
-      widget.onRouteTargetChanged(null, null);
+      widget.onRouteTargetChanged(null, null, null);
       return;
     }
 
-    final destinationPoint = LatLng(
-      destination.latitude,
-      destination.longitude,
-    );
-
-    // Tối ưu hóa: Nếu trạm đích và vị trí bắt đầu/kết thúc không thay đổi đáng kể,
-    // ta chỉ cập nhật đối tượng station cho UI mà không cần fetch lại route.
-    final bool isSameStation = destination.id == _routeStationId;
+    // Tối ưu hóa: Nếu đích không đổi đáng kể, chỉ cập nhật UI, không fetch lại
+    final bool isSameStation =
+        destStation?.id == _routeStationId && destStation != null;
+    final bool isSameSos = destSos?.postId == _selectedSosId && destSos != null;
     final bool hasExistingRoute = _routePoints.isNotEmpty;
+
     final bool startValid =
         hasExistingRoute &&
         Geolocator.distanceBetween(
-          userLoc.latitude,
-          userLoc.longitude,
-          _routePoints.first.latitude,
-          _routePoints.first.longitude,
-        ) <
-        20;
+              userLoc.latitude,
+              userLoc.longitude,
+              _routePoints.first.latitude,
+              _routePoints.first.longitude,
+            ) <
+            20;
+
     final bool endValid =
         hasExistingRoute &&
         Geolocator.distanceBetween(
-          destinationPoint.latitude,
-          destinationPoint.longitude,
-          _routePoints.last.latitude,
-          _routePoints.last.longitude,
-        ) <
-        5;
+              destinationPoint.latitude,
+              destinationPoint.longitude,
+              _routePoints.last.latitude,
+              _routePoints.last.longitude,
+            ) <
+            5;
 
-    if (isSameStation && startValid && endValid) {
-      widget.onRouteTargetChanged(destinationPoint, destination);
+    if ((isSameStation || isSameSos) && startValid && endValid) {
+      widget.onRouteTargetChanged(destinationPoint, destStation, destSos);
       return;
     }
 
-    _routeStationId = destination.id;
-    widget.onRouteTargetChanged(destinationPoint, destination);
+    widget.onRouteTargetChanged(destinationPoint, destStation, destSos);
 
     // ── Bước 2: Bắt đầu fetch API ──────────────────────────────────────────
     if (!mounted) return;
@@ -901,7 +987,9 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       final points = await OpenRouteService.instance.getRoute(
         userLoc,
         destinationPoint,
-        avoidPoints: reports.map((r) => LatLng(r.latitude, r.longitude)).toList(),
+        avoidPoints: reports
+            .map((r) => LatLng(r.latitude, r.longitude))
+            .toList(),
       );
 
       if (!mounted) return;
@@ -930,7 +1018,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
 
     final checkedInId = ref.read(currentCheckedInStationProvider);
     final selectedId = _selectedStationId ?? checkedInId;
-    
+
     if (selectedId != null) {
       final selected = _findStationById(stations, selectedId);
       if (selected != null) return selected;
@@ -1007,20 +1095,98 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
     return keys.join('|');
   }
 
-  void _onStationTapped(RescueStation station) {
-    setState(() {
-      _selectedStationId = station.id;
-    });
-
-    _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
-  }
-
   String _fingerprintReports(List<CommunityReport> reports) {
-    final keys = reports.map((r) => '${r.id}:${r.latitude}:${r.longitude}').toList()..sort();
+    final keys =
+        reports.map((r) => '${r.id}:${r.latitude}:${r.longitude}').toList()
+          ..sort();
     return keys.join('|');
   }
 
-  void _showCommunityReportDialog(LatLng location, {CommunityReport? existingReport}) {
+  String _fingerprintSos(List<SOSReport> reports) {
+    final keys =
+        reports.map((r) => '${r.postId}:${r.latitude}:${r.longitude}').toList()
+          ..sort();
+    return keys.join('|');
+  }
+
+  void _onStationTapped(RescueStation station) {
+    setState(() {
+      _selectedStationId = station.id;
+      _selectedSosId = null; // Clear selected SOS if station selected
+    });
+
+    _computeRouteFromProps(
+      widget.userLocation,
+      _latestStations,
+      _latestReports,
+      _latestSosReports,
+    );
+  }
+
+  void _onSosMarkerTapped(SOSReport sos, {String? deviceId}) {
+    setState(() {
+      _selectedSosId = sos.postId;
+      _selectedStationId = null; // Clear selected station if SOS selected
+    });
+
+    _computeRouteFromProps(
+      widget.userLocation,
+      _latestStations,
+      _latestReports,
+      _latestSosReports,
+    );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isCurrentUser =
+        (currentUser != null && sos.userId == currentUser.uid) ||
+        (deviceId != null && sos.userId == deviceId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: _SosDetailsCard(
+            sos: sos,
+            isCurrentUser: isCurrentUser,
+            onNavigate: () {
+              Navigator.of(context).pop();
+              _computeRouteFromProps(
+                widget.userLocation,
+                _latestStations,
+                _latestReports,
+                _latestSosReports,
+              );
+            },
+            onClose: () {
+              Navigator.of(context).pop();
+              setState(() => _selectedSosId = null);
+              _computeRouteFromProps(
+                widget.userLocation,
+                _latestStations,
+                _latestReports,
+                _latestSosReports,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  SOSReport? _findSosById(List<SOSReport> sosReports, String id) {
+    for (final sos in sosReports) {
+      if (sos.postId == id) return sos;
+    }
+    return null;
+  }
+
+  void _showCommunityReportDialog(
+    LatLng location, {
+    CommunityReport? existingReport,
+  }) {
     showDialog(
       context: context,
       builder: (_) => _CommunityReportDialog(
@@ -1061,18 +1227,50 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
 
         _stationsFingerprint = nextFingerprint;
         _latestStations = stations;
-        _computeRouteFromProps(widget.userLocation, stations, _latestReports);
+        _computeRouteFromProps(
+          widget.userLocation,
+          stations,
+          _latestReports,
+          _latestSosReports,
+        );
       });
     });
 
-    ref.listen<AsyncValue<List<CommunityReport>>>(communityReportsProvider, (previous, next) {
+    ref.listen<AsyncValue<List<CommunityReport>>>(communityReportsProvider, (
+      previous,
+      next,
+    ) {
       next.whenData((reports) {
         final nextFingerprint = _fingerprintReports(reports);
         if (nextFingerprint == _reportsFingerprint) return;
 
         _reportsFingerprint = nextFingerprint;
         _latestReports = reports;
-        _computeRouteFromProps(widget.userLocation, _latestStations, reports);
+        _computeRouteFromProps(
+          widget.userLocation,
+          _latestStations,
+          reports,
+          _latestSosReports,
+        );
+      });
+    });
+
+    ref.listen<AsyncValue<List<SOSReport>>>(sosReportsProvider, (
+      previous,
+      next,
+    ) {
+      next.whenData((reports) {
+        final nextFingerprint = _fingerprintSos(reports);
+        if (nextFingerprint == _sosReportsFingerprint) return;
+
+        _sosReportsFingerprint = nextFingerprint;
+        _latestSosReports = reports;
+        _computeRouteFromProps(
+          widget.userLocation,
+          _latestStations,
+          _latestReports,
+          reports,
+        );
       });
     });
 
@@ -1080,8 +1278,14 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       if (previous != next) {
         if (next != null) {
           _selectedStationId = next;
+          _selectedSosId = null;
         }
-        _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
+        _computeRouteFromProps(
+          widget.userLocation,
+          _latestStations,
+          _latestReports,
+          _latestSosReports,
+        );
       }
     });
 
@@ -1103,6 +1307,22 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       orElse: () => _latestReports,
     );
 
+    final sosReportsAsync = ref.watch(sosReportsProvider);
+    final sosReports = sosReportsAsync.maybeWhen(
+      data: (reports) {
+        _latestSosReports = reports;
+        return reports;
+      },
+      orElse: () => _latestSosReports,
+    );
+
+    final deviceIdAsync = ref.watch(deviceIdProvider);
+    final deviceId = deviceIdAsync.maybeWhen(
+      data: (v) => v,
+      orElse: () => null,
+    );
+
+    final currentUser = FirebaseAuth.instance.currentUser;
     final hasRoute = _routePoints.length >= 2;
 
     return Stack(
@@ -1118,7 +1338,8 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
             ),
-            onLongPress: (tapPosition, point) => _showCommunityReportDialog(point),
+            onLongPress: (tapPosition, point) =>
+                _showCommunityReportDialog(point),
           ),
           children: [
             // ── 1. Tile layer — OpenStreetMap ──────────────────────────
@@ -1175,6 +1396,24 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
                     ),
                   ),
 
+                // ── SOS Reports ────────────────────────────────────────────────
+                for (final sos in sosReports)
+                  Marker(
+                    point: LatLng(sos.latitude, sos.longitude),
+                    width: 50,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () => _onSosMarkerTapped(sos, deviceId: deviceId),
+                      child: _SosMarker(
+                        isCurrentUser:
+                            (currentUser != null &&
+                                sos.userId == currentUser.uid) ||
+                            (deviceId != null && sos.userId == deviceId),
+                        isSelected: sos.postId == _selectedSosId,
+                      ),
+                    ),
+                  ),
+
                 // ── User location (on top) ─────────────────────────────
                 Marker(
                   point: widget.userLocation,
@@ -1203,8 +1442,12 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
             top: 12,
             right: 12,
             child: _RouteFallbackChip(
-              onRetry: () =>
-                  _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports),
+              onRetry: () => _computeRouteFromProps(
+                widget.userLocation,
+                _latestStations,
+                _latestReports,
+                _latestSosReports,
+              ),
             ),
           ),
       ],
@@ -1348,21 +1591,28 @@ class _UserLocationMarker extends StatelessWidget {
 
 // ── SOS: Red pin with exclamation ─────────────────────────────────────────────
 class _SosMarker extends StatelessWidget {
+  final bool isCurrentUser;
+  final bool isSelected;
+
+  const _SosMarker({this.isCurrentUser = false, this.isSelected = false});
+
   @override
   Widget build(BuildContext context) {
+    final color = isCurrentUser ? _MapColors.sosUserPurple : _MapColors.sosRed;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: isSelected ? 42 : 38,
+          height: isSelected ? 42 : 38,
           decoration: BoxDecoration(
-            color: _MapColors.sosRed,
+            color: color,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: _MapColors.sosRed.withOpacity(0.45),
-                blurRadius: 10,
+                color: color.withOpacity(isSelected ? 0.55 : 0.45),
+                blurRadius: isSelected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -1381,7 +1631,7 @@ class _SosMarker extends StatelessWidget {
         ),
         CustomPaint(
           size: const Size(10, 6),
-          painter: _PinTailPainter(color: _MapColors.sosRed),
+          painter: _PinTailPainter(color: color),
         ),
       ],
     );
@@ -1410,9 +1660,7 @@ class _RescueMarker extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(
-                  selected ? 0.55 : 0.4,
-                ),
+                color: color.withOpacity(selected ? 0.55 : 0.4),
                 blurRadius: selected ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
@@ -1953,7 +2201,9 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
     Navigator.of(dialogContext).pop();
 
     // ── 3. Delegate to SOSController ─────────────────────────────────────
-    await ref.read(sosControllerProvider.notifier).sendSOS(
+    await ref
+        .read(sosControllerProvider.notifier)
+        .sendSOS(
           userName: userName,
           phoneNumber: phoneNumber,
           description: description,
@@ -1971,7 +2221,8 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
     IconData snackIcon;
 
     if (isSuccess) {
-      snackText = 'Đã gửi SOS! '
+      snackText =
+          'Đã gửi SOS! '
           '(${coords.latitude.toStringAsFixed(5)}, '
           '${coords.longitude.toStringAsFixed(5)})';
       snackColor = Colors.green.shade600;
@@ -2205,6 +2456,134 @@ class _StationDetailsCardState extends ConsumerState<_StationDetailsCard> {
 }
 
 // =============================================================================
+// SOS DETAILS CARD
+// =============================================================================
+class _SosDetailsCard extends StatelessWidget {
+  final SOSReport sos;
+  final bool isCurrentUser;
+  final VoidCallback onNavigate;
+  final VoidCallback onClose;
+
+  const _SosDetailsCard({
+    required this.sos,
+    required this.isCurrentUser,
+    required this.onNavigate,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: _MapColors.shadow,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isCurrentUser ? 'SOS của bạn' : 'Cộng đồng cần giúp đỡ',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _MapColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Chi tiết: ${sos.description.isNotEmpty ? sos.description : "Không có mô tả"}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _MapColors.textSecondary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isCurrentUser
+                      ? _MapColors.sosUserPurple.withOpacity(0.1)
+                      : _MapColors.sosRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'SOS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isCurrentUser
+                        ? _MapColors.sosUserPurple
+                        : _MapColors.sosRed,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onClose,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 20,
+                    color: _MapColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onNavigate,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isCurrentUser
+                    ? _MapColors.sosUserPurple
+                    : _MapColors.sosRed,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Chỉ đường tới đây',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
 // COMMUNITY REPORT MARKER
 // =============================================================================
 class _CommunityReportMarker extends StatelessWidget {
@@ -2246,11 +2625,7 @@ class _CommunityReportMarker extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: 18,
-          ),
+          child: Icon(icon, color: Colors.white, size: 18),
         ),
         CustomPaint(
           size: const Size(8, 5),
@@ -2318,13 +2693,17 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
 
     setState(() => _isLoading = true);
     try {
-      final controller = widget.parentRef.read(communityReportControllerProvider);
-      
+      final controller = widget.parentRef.read(
+        communityReportControllerProvider,
+      );
+
       if (widget.existingReport != null) {
         await controller.updateReport(
           reportId: widget.existingReport!.id,
           type: _selectedType,
-          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          customTypeName: _selectedType == 'other'
+              ? _customTypeController.text.trim()
+              : null,
           description: _descriptionController.text.trim(),
         );
       } else {
@@ -2332,16 +2711,22 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
           latitude: widget.location.latitude,
           longitude: widget.location.longitude,
           type: _selectedType,
-          customTypeName: _selectedType == 'other' ? _customTypeController.text.trim() : null,
+          customTypeName: _selectedType == 'other'
+              ? _customTypeController.text.trim()
+              : null,
           description: _descriptionController.text.trim(),
         );
       }
-      
+
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(widget.existingReport != null ? 'Cập nhật thành công!' : 'Cảm ơn bạn! Báo cáo sự cố đã được ghi nhận.'),
+          content: Text(
+            widget.existingReport != null
+                ? 'Cập nhật thành công!'
+                : 'Cảm ơn bạn! Báo cáo sự cố đã được ghi nhận.',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -2384,13 +2769,21 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
             DropdownButtonFormField<String>(
               value: _selectedType,
               decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               items: const [
                 DropdownMenuItem(value: 'fallen_tree', child: Text('Cây đổ')),
                 DropdownMenuItem(value: 'flood', child: Text('Ngập sâu')),
-                DropdownMenuItem(value: 'road_block', child: Text('Tắc đường / Sạt lở')),
+                DropdownMenuItem(
+                  value: 'road_block',
+                  child: Text('Tắc đường / Sạt lở'),
+                ),
                 DropdownMenuItem(value: 'other', child: Text('Khác...')),
               ],
               onChanged: (val) {
@@ -2404,8 +2797,13 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
                 decoration: InputDecoration(
                   labelText: 'Tên sự cố',
                   hintText: 'Vd: Sập cầu, Cháy nhà...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
               ),
             ],
@@ -2420,7 +2818,9 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
               maxLines: 3,
               decoration: InputDecoration(
                 hintText: 'Nhập thông tin chi tiết...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 contentPadding: const EdgeInsets.all(12),
               ),
             ),
@@ -2436,14 +2836,26 @@ class _CommunityReportDialogState extends State<_CommunityReportDialog> {
           onPressed: _isLoading ? null : _submitReport,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange.shade700,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           child: _isLoading
               ? const SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
                 )
-              : Text(widget.existingReport != null ? 'Cập nhật' : 'Báo cáo', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              : Text(
+                  widget.existingReport != null ? 'Cập nhật' : 'Báo cáo',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
       ],
     );
@@ -2465,10 +2877,12 @@ class _CommunityReportDetailsDialog extends StatefulWidget {
   });
 
   @override
-  State<_CommunityReportDetailsDialog> createState() => _CommunityReportDetailsDialogState();
+  State<_CommunityReportDetailsDialog> createState() =>
+      _CommunityReportDetailsDialogState();
 }
 
-class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDialog> {
+class _CommunityReportDetailsDialogState
+    extends State<_CommunityReportDetailsDialog> {
   bool _isDeleting = false;
 
   Future<void> _deleteReport() async {
@@ -2494,14 +2908,16 @@ class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDi
 
     setState(() => _isDeleting = true);
     try {
-      final controller = widget.parentRef.read(communityReportControllerProvider);
+      final controller = widget.parentRef.read(
+        communityReportControllerProvider,
+      );
       await controller.deleteReport(widget.report.id);
-      
+
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã xóa báo cáo.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Đã xóa báo cáo.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2515,7 +2931,8 @@ class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDi
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final isOwner = currentUser != null && widget.report.reportedBy == currentUser.uid;
+    final isOwner =
+        currentUser != null && widget.report.reportedBy == currentUser.uid;
 
     IconData icon;
     String typeLabel;
@@ -2566,7 +2983,10 @@ class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDi
             if (widget.report.description?.isNotEmpty == true) ...[
               const Text(
                 'Mô tả:',
-                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -2589,20 +3009,29 @@ class _CommunityReportDetailsDialogState extends State<_CommunityReportDetailsDi
           TextButton(
             onPressed: _isDeleting ? null : _deleteReport,
             child: _isDeleting
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Xóa', style: TextStyle(color: Colors.red)),
           ),
           TextButton(
-            onPressed: _isDeleting ? null : () {
-              Navigator.of(context).pop();
-              widget.onEdit();
-            },
+            onPressed: _isDeleting
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    widget.onEdit();
+                  },
             child: const Text('Sửa', style: TextStyle(color: Colors.blue)),
           ),
         ],
         TextButton(
           onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
-          child: Text(isOwner ? 'Đóng' : 'OK', style: const TextStyle(color: Colors.grey)),
+          child: Text(
+            isOwner ? 'Đóng' : 'OK',
+            style: const TextStyle(color: Colors.grey),
+          ),
         ),
       ],
     );
