@@ -21,8 +21,17 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // TODO: Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  WidgetsFlutterBinding.ensureInitialized();
 
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (e) {
+    debugPrint("Firebase đã tồn tại hoặc lỗi khởi tạo: $e");
+  }
   // Load environment variables
   await dotenv.load(fileName: ".env");
   final supabaseUrl = dotenv.get('SUPABASE_URL');

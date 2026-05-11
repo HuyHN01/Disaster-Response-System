@@ -72,8 +72,7 @@ class AdminPostEditorScreen extends ConsumerStatefulWidget {
       _AdminPostEditorScreenState();
 }
 
-class _AdminPostEditorScreenState
-    extends ConsumerState<AdminPostEditorScreen> {
+class _AdminPostEditorScreenState extends ConsumerState<AdminPostEditorScreen> {
   // ── Form state ─────────────────────────────────────────────────────────────
   late final TextEditingController _titleCtrl;
   late _PostType _selectedType;
@@ -85,7 +84,14 @@ class _AdminPostEditorScreenState
   // ── Attachment ─────────────────────────────────────────────────────────────
   String? _attachmentName;
   Uint8List? _attachmentBytes;
+  String? _selectedIssuingLevel;
 
+  final List<Map<String, String>> _issuingLevels = [
+    {'label': 'Cấp Trung ương', 'value': 'central'},
+    {'label': 'Cấp Tỉnh/Thành phố', 'value': 'province'},
+    {'label': 'Cấp Quận/Huyện/Thị xã', 'value': 'district'},
+    {'label': 'Cấp Phường/Xã/Thị trấn', 'value': 'ward'},
+  ];
   // ── UI ─────────────────────────────────────────────────────────────────────
   bool _publishing = false;
 
@@ -104,14 +110,12 @@ class _AdminPostEditorScreenState
 
     final post = widget.existingPost;
     _titleCtrl = TextEditingController(text: post?.title ?? '');
-    _selectedType =
-        _PostType.fromValue(post?.postType ?? _PostType.news.value);
+    _selectedType = _PostType.fromValue(post?.postType ?? _PostType.news.value);
 
     // Khởi tạo QuillController từ JSON đã lưu (nếu có)
     if (post != null) {
       try {
-        final json =
-            jsonDecode(post.contentJson) as Map<String, dynamic>;
+        final json = jsonDecode(post.contentJson) as Map<String, dynamic>;
         final delta = Delta.fromJson(json['ops'] as List<dynamic>);
         _quillCtrl = QuillController(
           document: Document.fromDelta(delta),
@@ -125,6 +129,7 @@ class _AdminPostEditorScreenState
     }
 
     _attachmentName = post?.attachmentName;
+    _selectedIssuingLevel = post?.issuingLevel;
   }
 
   @override
@@ -159,22 +164,27 @@ class _AdminPostEditorScreenState
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Row(children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-            ),
-            SizedBox(width: 12),
-            Text('Đang tải ảnh lên...'),
-          ]),
+          content: const Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Đang tải ảnh lên...'),
+            ],
+          ),
           backgroundColor: _EC.textSecondary,
           duration: const Duration(seconds: 30),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
 
@@ -207,7 +217,6 @@ class _AdminPostEditorScreenState
   Future<Uint8List?> _readImageBytesFromClipboard() =>
       readImageBytesFromClipboard();
 
-
   // ---------------------------------------------------------------------------
   // IMAGE UPLOAD CALLBACK (dùng bởi Quill image button)
   // ---------------------------------------------------------------------------
@@ -218,7 +227,9 @@ class _AdminPostEditorScreenState
   ///
   /// Trả về null nếu upload thất bại — Quill sẽ bỏ qua, không crash.
   Future<String?> _uploadImageToSupabase(
-      String fileName, Uint8List bytes) async {
+    String fileName,
+    Uint8List bytes,
+  ) async {
     try {
       // Đặt tên file duy nhất để tránh ghi đè nhau trên Supabase bucket
       final ext = fileName.split('.').last.toLowerCase();
@@ -309,7 +320,9 @@ class _AdminPostEditorScreenState
           postType: _selectedType.value,
           contentJson: contentJson,
           attachmentUrl: finalAttachmentUrl, // URL từ Supabase
-          attachmentName: _attachmentName ?? widget.existingPost?.attachmentName,
+          attachmentName:
+              _attachmentName ?? widget.existingPost?.attachmentName,
+          issuingLevel: _selectedIssuingLevel,
         );
       } else {
         await notifier.createPost(
@@ -318,6 +331,7 @@ class _AdminPostEditorScreenState
           contentJson: contentJson,
           attachmentUrl: finalAttachmentUrl, // URL từ Supabase
           attachmentName: _attachmentName,
+          issuingLevel: _selectedIssuingLevel,
         );
       }
 
@@ -348,16 +362,10 @@ class _AdminPostEditorScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Main editor area ────────────────────────────────────
-                Expanded(
-                  flex: 3,
-                  child: _buildEditorPanel(),
-                ),
+                Expanded(flex: 3, child: _buildEditorPanel()),
 
                 // ── Right sidebar: meta options ─────────────────────────
-                SizedBox(
-                  width: 280,
-                  child: _buildSidebar(),
-                ),
+                SizedBox(width: 280, child: _buildSidebar()),
               ],
             ),
           ),
@@ -383,8 +391,11 @@ class _AdminPostEditorScreenState
             borderRadius: BorderRadius.circular(8),
             child: Padding(
               padding: const EdgeInsets.all(6),
-              child: const Icon(Icons.arrow_back_rounded,
-                  size: 20, color: _EC.textSecondary),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                size: 20,
+                color: _EC.textSecondary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -396,8 +407,11 @@ class _AdminPostEditorScreenState
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
-            child: Icon(Icons.chevron_right_rounded,
-                size: 16, color: _EC.textMuted),
+            child: Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: _EC.textMuted,
+            ),
           ),
           Text(
             _isEditing ? 'Chỉnh sửa bài đăng' : 'Bài đăng mới',
@@ -415,10 +429,10 @@ class _AdminPostEditorScreenState
             onPressed: _publishing ? null : () {},
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: _EC.border),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text(
               'Lưu nháp',
@@ -439,16 +453,17 @@ class _AdminPostEditorScreenState
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
-                : const Icon(Icons.send_rounded,
-                    size: 16, color: Colors.white),
+                : const Icon(Icons.send_rounded, size: 16, color: Colors.white),
             label: Text(
               _publishing
                   ? 'Đang xuất bản...'
                   : _isEditing
-                      ? 'Cập nhật'
-                      : 'Xuất bản',
+                  ? 'Cập nhật'
+                  : 'Xuất bản',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -458,10 +473,10 @@ class _AdminPostEditorScreenState
             style: ElevatedButton.styleFrom(
               backgroundColor: _EC.brandRed,
               elevation: 0,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
@@ -521,8 +536,7 @@ class _AdminPostEditorScreenState
           Container(
             decoration: const BoxDecoration(
               color: _EC.toolbarBg,
-              border:
-                  Border(bottom: BorderSide(color: _EC.border)),
+              border: Border(bottom: BorderSide(color: _EC.border)),
             ),
             child: QuillSimpleToolbar(
               controller: _quillCtrl,
@@ -568,12 +582,11 @@ class _AdminPostEditorScreenState
                               color: _EC.textSecondary,
                             ),
                           )
-                        : const Icon(
-                            Icons.content_paste_rounded,
-                            size: 18,
-                          ),
+                        : const Icon(Icons.content_paste_rounded, size: 18),
                     tooltip: 'Dán ảnh từ Clipboard (Ctrl+V)',
-                    onPressed: _isPastingImage ? null : _pasteImageFromClipboard,
+                    onPressed: _isPastingImage
+                        ? null
+                        : _pasteImageFromClipboard,
                   ),
                 ],
 
@@ -678,7 +691,9 @@ class _AdminPostEditorScreenState
                     duration: const Duration(milliseconds: 150),
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected ? type.bg : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
@@ -701,9 +716,7 @@ class _AdminPostEditorScreenState
                         Text(
                           type.label,
                           style: TextStyle(
-                            color: isSelected
-                                ? type.color
-                                : _EC.textSecondary,
+                            color: isSelected ? type.color : _EC.textSecondary,
                             fontSize: 13,
                             fontWeight: isSelected
                                 ? FontWeight.w700
@@ -712,8 +725,11 @@ class _AdminPostEditorScreenState
                         ),
                         const Spacer(),
                         if (isSelected)
-                          Icon(Icons.check_circle_rounded,
-                              size: 16, color: type.color),
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 16,
+                            color: type.color,
+                          ),
                       ],
                     ),
                   ),
@@ -721,7 +737,8 @@ class _AdminPostEditorScreenState
               }).toList(),
             ),
           ),
-
+          const SizedBox(height: 14),
+          _buildIssuingLevelDropdown(),
           const SizedBox(height: 14),
 
           // ── Attachment ────────────────────────────────────────────────
@@ -741,8 +758,11 @@ class _AdminPostEditorScreenState
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.insert_drive_file_rounded,
-                            size: 18, color: Color(0xFF2563EB)),
+                        const Icon(
+                          Icons.insert_drive_file_rounded,
+                          size: 18,
+                          color: Color(0xFF2563EB),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -760,8 +780,11 @@ class _AdminPostEditorScreenState
                           borderRadius: BorderRadius.circular(4),
                           child: const Padding(
                             padding: EdgeInsets.all(2),
-                            child: Icon(Icons.close_rounded,
-                                size: 14, color: Color(0xFF6B7280)),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Color(0xFF6B7280),
+                            ),
                           ),
                         ),
                       ],
@@ -773,8 +796,11 @@ class _AdminPostEditorScreenState
                 // Pick file button
                 OutlinedButton.icon(
                   onPressed: _pickFile,
-                  icon: const Icon(Icons.attach_file_rounded,
-                      size: 16, color: _EC.textSecondary),
+                  icon: const Icon(
+                    Icons.attach_file_rounded,
+                    size: 16,
+                    color: _EC.textSecondary,
+                  ),
                   label: Text(
                     _attachmentName != null
                         ? 'Đổi tệp đính kèm'
@@ -788,9 +814,12 @@ class _AdminPostEditorScreenState
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: _EC.border),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -810,15 +839,9 @@ class _AdminPostEditorScreenState
             title: 'Thông tin xuất bản',
             child: Column(
               children: [
-                _InfoRow(
-                  label: 'Sự kiện',
-                  value: widget.event.title,
-                ),
+                _InfoRow(label: 'Sự kiện', value: widget.event.title),
                 const SizedBox(height: 10),
-                _InfoRow(
-                  label: 'Tác giả',
-                  value: 'Quản trị viên',
-                ),
+                _InfoRow(label: 'Tác giả', value: 'Quản trị viên'),
                 const SizedBox(height: 10),
                 _InfoRow(
                   label: 'Trạng thái',
@@ -836,37 +859,105 @@ class _AdminPostEditorScreenState
   // ---------------------------------------------------------------------------
   // SNACKBAR HELPERS
   // ---------------------------------------------------------------------------
+  Widget _buildIssuingLevelDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "CẤP BAN HÀNH*",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedIssuingLevel,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: Color(0xFFDC2626), width: 2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          hint: const Text("Chọn cấp độ ban hành"),
+          // Đây là chỗ cực kỳ quan trọng để hết lỗi "không có item"
+          items: _issuingLevels.map((level) {
+            return DropdownMenuItem<String>(
+              value: level['value'],
+              child: Text(level['label']!),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() => _selectedIssuingLevel = value);
+          },
+          validator: (value) =>
+              value == null ? 'Vui lòng chọn một cấp ban hành' : null,
+        ),
+      ],
+    );
+  }
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-            child: Text(msg,
-                style: const TextStyle(fontWeight: FontWeight.w600))),
-      ]),
-      backgroundColor: _EC.brandRed,
-      behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                msg,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: _EC.brandRed,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   void _showSuccess(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-        const SizedBox(width: 10),
-        Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ]),
-      backgroundColor: _EC.green,
-      behavior: SnackBarBehavior.floating,
-      margin: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        backgroundColor: _EC.green,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 }
 
@@ -912,10 +1003,7 @@ class _SideCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Divider(color: _EC.border, height: 1),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: child,
-          ),
+          Padding(padding: const EdgeInsets.all(16), child: child),
         ],
       ),
     );
