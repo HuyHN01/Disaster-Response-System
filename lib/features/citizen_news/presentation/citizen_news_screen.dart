@@ -20,9 +20,9 @@ class _NC {
   static const Color brandRed = Color(0xFFDC2626);
   static const Color brandRedBg = Color(0xFFFEE2E2);
   static const Color brandRedLight = Color(0xFFFF6B6B);
-  static const Color news = Color(0xFF0EA5E9);   // sky-500
+  static const Color news = Color(0xFF0EA5E9); // sky-500
   static const Color newsBg = Color(0xFFE0F2FE); // sky-100
-  static const Color directive = Color(0xFFEA580C);   // orange-600
+  static const Color directive = Color(0xFFEA580C); // orange-600
   static const Color directiveBg = Color(0xFFFFF7ED); // orange-50
   static const Color directiveBorder = Color(0xFFFED7AA); // orange-200
   static const Color shadow = Color(0x0D000000);
@@ -50,16 +50,13 @@ class CitizenNewsScreen extends ConsumerWidget {
 
             return RefreshIndicator(
               color: _NC.brandRed,
-              onRefresh: () async =>
-                  ref.refresh(citizenNewsProvider),
+              onRefresh: () async => ref.refresh(citizenNewsProvider),
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: posts.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: 10),
-                itemBuilder: (_, i) =>
-                    _NewsCard(post: posts[i]),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _NewsCard(post: posts[i]),
               ),
             );
           },
@@ -154,11 +151,9 @@ class _NewsCard extends StatelessWidget {
 
   const _NewsCard({required this.post});
 
-  static final _dateFmt =
-      DateFormat('HH:mm  •  dd/MM/yyyy');
+  static final _dateFmt = DateFormat('HH:mm  •  dd/MM/yyyy');
 
-  String get _dateStr =>
-      _dateFmt.format(post.createdAt.toLocal());
+  String get _dateStr => _dateFmt.format(post.createdAt.toLocal());
 
   @override
   Widget build(BuildContext context) {
@@ -175,14 +170,11 @@ class _NewsCard extends StatelessWidget {
           extra: post,
         ),
         borderRadius: BorderRadius.circular(16),
-        splashColor: (isDirective ? _NC.directive : _NC.news)
-            .withOpacity(0.06),
+        splashColor: (isDirective ? _NC.directive : _NC.news).withOpacity(0.06),
         child: Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: isDirective
-                  ? _NC.directiveBorder
-                  : _NC.border,
+              color: isDirective ? _NC.directiveBorder : _NC.border,
               width: isDirective ? 1.5 : 1,
             ),
             borderRadius: BorderRadius.circular(16),
@@ -191,10 +183,7 @@ class _NewsCard extends StatelessWidget {
                 ? const LinearGradient(
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
-                    colors: [
-                      Color(0xFFFFFBF5),
-                      Color(0xFFFFFFFF),
-                    ],
+                    colors: [Color(0xFFFFFBF5), Color(0xFFFFFFFF)],
                     stops: [0.0, 0.15],
                   )
                 : null,
@@ -207,17 +196,23 @@ class _NewsCard extends StatelessWidget {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                      vertical: 6, horizontal: 14),
+                    vertical: 6,
+                    horizontal: 14,
+                  ),
                   decoration: const BoxDecoration(
                     color: _NC.directive,
                     borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(15)),
+                      top: Radius.circular(15),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
-                      Icon(Icons.campaign_rounded,
-                          color: Colors.white, size: 14),
+                      Icon(
+                        Icons.campaign_rounded,
+                        color: Colors.white,
+                        size: 14,
+                      ),
                       SizedBox(width: 6),
                       Text(
                         'CÔNG ĐIỆN KHẨN',
@@ -245,11 +240,17 @@ class _NewsCard extends StatelessWidget {
                           _NewsBadge(),
                           const SizedBox(width: 8),
                         ],
-
+                        if (post.issuingLevel != null) ...[
+                          _LevelBadge(level: post.issuingLevel!),
+                          const SizedBox(width: 8),
+                        ],
                         // Attachment icon
                         if (post.attachmentUrl != null) ...[
-                          const Icon(Icons.attach_file_rounded,
-                              size: 14, color: _NC.textMuted),
+                          const Icon(
+                            Icons.attach_file_rounded,
+                            size: 14,
+                            color: _NC.textMuted,
+                          ),
                           const SizedBox(width: 4),
                         ],
 
@@ -258,8 +259,11 @@ class _NewsCard extends StatelessWidget {
                         // Date
                         Row(
                           children: [
-                            const Icon(Icons.access_time_rounded,
-                                size: 12, color: _NC.textMuted),
+                            const Icon(
+                              Icons.access_time_rounded,
+                              size: 12,
+                              color: _NC.textMuted,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               _dateStr,
@@ -279,9 +283,7 @@ class _NewsCard extends StatelessWidget {
                     Text(
                       post.title,
                       style: TextStyle(
-                        color: isDirective
-                            ? _NC.directive
-                            : _NC.textPrimary,
+                        color: isDirective ? _NC.directive : _NC.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         height: 1.35,
@@ -292,8 +294,7 @@ class _NewsCard extends StatelessWidget {
 
                     if (post.attachmentUrl != null) ...[
                       const SizedBox(height: 10),
-                      _AttachmentChip(
-                          name: post.attachmentName),
+                      _AttachmentChip(name: post.attachmentName),
                     ],
 
                     const SizedBox(height: 10),
@@ -304,9 +305,7 @@ class _NewsCard extends StatelessWidget {
                         Text(
                           'Đọc toàn bộ',
                           style: TextStyle(
-                            color: isDirective
-                                ? _NC.directive
-                                : _NC.news,
+                            color: isDirective ? _NC.directive : _NC.news,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -315,9 +314,7 @@ class _NewsCard extends StatelessWidget {
                         Icon(
                           Icons.arrow_forward_rounded,
                           size: 14,
-                          color: isDirective
-                              ? _NC.directive
-                              : _NC.news,
+                          color: isDirective ? _NC.directive : _NC.news,
                         ),
                       ],
                     ),
@@ -340,8 +337,7 @@ class _NewsBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: _NC.newsBg,
         borderRadius: BorderRadius.circular(6),
@@ -349,8 +345,7 @@ class _NewsBadge extends StatelessWidget {
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.article_rounded,
-              size: 11, color: _NC.news),
+          Icon(Icons.article_rounded, size: 11, color: _NC.news),
           SizedBox(width: 4),
           Text(
             'TIN TỨC',
@@ -374,8 +369,7 @@ class _AttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(8),
@@ -384,8 +378,11 @@ class _AttachmentChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.insert_drive_file_rounded,
-              size: 14, color: Color(0xFF2563EB)),
+          const Icon(
+            Icons.insert_drive_file_rounded,
+            size: 14,
+            color: Color(0xFF2563EB),
+          ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -438,10 +435,13 @@ class _ShimmerCardState extends State<_ShimmerCard>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1200));
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
     );
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
     _ctrl.repeat(reverse: true);
   }
 
@@ -486,10 +486,11 @@ class _Bone extends StatelessWidget {
   final double width;
   final double height;
   final double radius;
-  const _Bone(
-      {required this.width,
-      required this.height,
-      required this.radius});
+  const _Bone({
+    required this.width,
+    required this.height,
+    required this.radius,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -522,8 +523,7 @@ class _EmptyState extends StatelessWidget {
                 color: _NC.newsBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.feed_outlined,
-                  color: _NC.news, size: 38),
+              child: const Icon(Icons.feed_outlined, color: _NC.news, size: 38),
             ),
             const SizedBox(height: 20),
             const Text(
@@ -539,9 +539,10 @@ class _EmptyState extends StatelessWidget {
               'Chưa có bản tin hay cảnh báo nào.\nKéo xuống để làm mới.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: _NC.textSecondary,
-                  fontSize: 14,
-                  height: 1.5),
+                color: _NC.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+              ),
             ),
           ],
         ),
@@ -569,8 +570,11 @@ class _ErrorState extends StatelessWidget {
                 color: _NC.brandRedBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.wifi_off_rounded,
-                  color: _NC.brandRed, size: 32),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                color: _NC.brandRed,
+                size: 32,
+              ),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -585,12 +589,63 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: _NC.textMuted, fontSize: 12),
+              style: const TextStyle(color: _NC.textMuted, fontSize: 12),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LevelBadge extends StatelessWidget {
+  final String level;
+  const _LevelBadge({required this.level});
+
+  @override
+  Widget build(BuildContext context) {
+    // Logic lấy màu và nhãn dựa trên giá trị level
+    final Color color;
+    final String label;
+
+    switch (level) {
+      case 'central':
+        color = const Color(0xFF991B1B);
+        label = 'TRUNG ƯƠNG';
+        break;
+      case 'province':
+        color = const Color(0xFFDC2626);
+        label = 'CẤP TỈNH';
+        break;
+      case 'district':
+        color = const Color(0xFFD97706);
+        label = 'CẤP QUẬN';
+        break;
+      case 'ward':
+        color = const Color(0xFF059669);
+        label = 'CẤP XÃ';
+        break;
+      default:
+        color = _NC.textSecondary;
+        label = 'TIN TỨC';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3), width: 0.5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
         ),
       ),
     );

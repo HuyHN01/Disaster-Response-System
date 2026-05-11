@@ -50,6 +50,7 @@ class AdminPost {
   final String? attachmentName;
   final DateTime createdAt;
   final bool isVerified;
+  final String? issuingLevel; // 'national' | 'regional' | 'local'
 
   const AdminPost({
     required this.id,
@@ -61,6 +62,7 @@ class AdminPost {
     this.attachmentName,
     required this.createdAt,
     required this.isVerified,
+    this.issuingLevel,
   });
 
   factory AdminPost.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -76,10 +78,16 @@ class AdminPost {
       attachmentName: d['attachmentName'] as String?,
       createdAt: rawTs is Timestamp ? rawTs.toDate() : DateTime.now(),
       isVerified: (d['isVerified'] as bool?) ?? false,
+      issuingLevel: d['issuingLevel'] as String?,
     );
   }
 
-  AdminPost copyWith({String? title, String? contentJson, String? postType}) {
+  AdminPost copyWith({
+    String? title,
+    String? contentJson,
+    String? postType,
+    String? issuingLevel,
+  }) {
     return AdminPost(
       id: id,
       eventId: eventId,
@@ -90,6 +98,7 @@ class AdminPost {
       attachmentName: attachmentName,
       createdAt: createdAt,
       isVerified: isVerified,
+      issuingLevel: issuingLevel ?? this.issuingLevel,
     );
   }
 }
@@ -108,9 +117,7 @@ class EventSosStats {
 
   const EventSosStats({required this.totalSos, required this.unverifiedSos});
 
-  const EventSosStats.empty()
-      : totalSos = 0,
-        unverifiedSos = 0;
+  const EventSosStats.empty() : totalSos = 0, unverifiedSos = 0;
 }
 
 // =============================================================================
@@ -119,10 +126,12 @@ class EventSosStats {
 
 /// Stream realtime bài đăng (news/directive) theo eventId.
 /// Dùng .family để mỗi eventId có state riêng biệt.
-final adminPostsProvider = StreamNotifierProvider.family<
-    AdminPostsController, List<AdminPost>, String>(
-  AdminPostsController.new,
-);
+final adminPostsProvider =
+    StreamNotifierProvider.family<
+      AdminPostsController,
+      List<AdminPost>,
+      String
+    >(AdminPostsController.new);
 
 /// Stream realtime thống kê SOS theo eventId.
 ///
@@ -131,20 +140,22 @@ final adminPostsProvider = StreamNotifierProvider.family<
 ///   • `postType == 'sos'`
 ///
 /// Tự động tính lại `totalSos` / `unverifiedSos` mỗi khi Firestore thay đổi.
-final eventSosStatsProvider =
-    StreamProvider.family<EventSosStats, String>((ref, eventId) {
+final eventSosStatsProvider = StreamProvider.family<EventSosStats, String>((
+  ref,
+  eventId,
+) {
   return FirebaseFirestore.instance
       .collection('posts')
       .where('eventId', isEqualTo: eventId)
       .where('postType', isEqualTo: 'sos')
       .snapshots()
       .map((snap) {
-    final total = snap.docs.length;
-    final unverified = snap.docs
-        .where((d) => (d.data()['isVerified'] as bool?) != true)
-        .length;
-    return EventSosStats(totalSos: total, unverifiedSos: unverified);
-  });
+        final total = snap.docs.length;
+        final unverified = snap.docs
+            .where((d) => (d.data()['isVerified'] as bool?) != true)
+            .length;
+        return EventSosStats(totalSos: total, unverifiedSos: unverified);
+      });
 });
 
 // =============================================================================
@@ -174,6 +185,7 @@ class AdminPostsController extends StreamNotifier<List<AdminPost>> {
     required String contentJson,
     String? attachmentUrl,
     String? attachmentName,
+    String? issuingLevel,
   }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     await _db.collection('posts').doc(id).set({
@@ -188,6 +200,7 @@ class AdminPostsController extends StreamNotifier<List<AdminPost>> {
       'isVerified': true,
       'syncStatus': 'synced',
       'createdAt': FieldValue.serverTimestamp(),
+      'issuingLevel': issuingLevel,
     });
   }
 
@@ -199,6 +212,7 @@ class AdminPostsController extends StreamNotifier<List<AdminPost>> {
     required String contentJson,
     String? attachmentUrl,
     String? attachmentName,
+    String? issuingLevel,
   }) async {
     await _db.collection('posts').doc(postId).update({
       'title': title,
@@ -206,6 +220,7 @@ class AdminPostsController extends StreamNotifier<List<AdminPost>> {
       'content': contentJson,
       'attachmentUrl': attachmentUrl,
       'attachmentName': attachmentName,
+      'issuingLevel': issuingLevel,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -270,8 +285,7 @@ class AdminEventDetailScreen extends ConsumerWidget {
 
           Expanded(
             child: postsAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => _ErrorState(message: e.toString()),
               data: (posts) => posts.isEmpty
                   ? const _EmptyState()
@@ -1039,9 +1053,7 @@ class _PulsingStatCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: isPulsing
-                ? _DC.brandRed.withOpacity(0.08)
-                : _DC.shadow,
+            color: isPulsing ? _DC.brandRed.withOpacity(0.08) : _DC.shadow,
             blurRadius: isPulsing ? 10 : 6,
             offset: const Offset(0, 2),
           ),
@@ -1138,8 +1150,11 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: const Padding(
               padding: EdgeInsets.all(6),
-              child: Icon(Icons.arrow_back_rounded,
-                  size: 20, color: _DC.textSecondary),
+              child: Icon(
+                Icons.arrow_back_rounded,
+                size: 20,
+                color: _DC.textSecondary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1152,8 +1167,11 @@ class _Header extends StatelessWidget {
               color: _DC.brandRedBg,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.warning_amber_rounded,
-                color: _DC.brandRed, size: 22),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: _DC.brandRed,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
 
@@ -1176,7 +1194,9 @@ class _Header extends StatelessWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: _statusBg,
                         borderRadius: BorderRadius.circular(20),
@@ -1208,8 +1228,11 @@ class _Header extends StatelessWidget {
           if (event.status == 'active')
             OutlinedButton.icon(
               onPressed: () => _confirmCloseEvent(context, ref),
-              icon: const Icon(Icons.lock_outline_rounded,
-                  size: 16, color: _DC.textSecondary),
+              icon: const Icon(
+                Icons.lock_outline_rounded,
+                size: 16,
+                color: _DC.textSecondary,
+              ),
               label: const Text(
                 'Đóng sự kiện',
                 style: TextStyle(
@@ -1220,10 +1243,13 @@ class _Header extends StatelessWidget {
               ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: _DC.border),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
         ],
@@ -1235,10 +1261,11 @@ class _Header extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Đóng sự kiện?',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Đóng sự kiện?',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         content: Text(
           'Sự kiện "${event.title}" sẽ được chuyển sang trạng thái "Đã kết thúc". '
           'Hành động này không thể hoàn tác.',
@@ -1247,8 +1274,10 @@ class _Header extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Huỷ',
-                style: TextStyle(color: _DC.textSecondary)),
+            child: const Text(
+              'Huỷ',
+              style: TextStyle(color: _DC.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1275,10 +1304,13 @@ class _Header extends StatelessWidget {
               backgroundColor: _DC.brandRed,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Đóng sự kiện',
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Đóng sự kiện',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -1322,8 +1354,9 @@ class _PostCard extends ConsumerWidget {
     final badgeBg = isDirective ? _DC.amberBg : _DC.greenBg;
     final badgeLabel = isDirective ? 'Công điện' : 'Tin tức';
     final snippet = quillJsonToPlainText(post.contentJson);
-    final dateStr =
-        DateFormat('HH:mm – dd/MM/yyyy').format(post.createdAt.toLocal());
+    final dateStr = DateFormat(
+      'HH:mm – dd/MM/yyyy',
+    ).format(post.createdAt.toLocal());
 
     return Container(
       decoration: BoxDecoration(
@@ -1348,7 +1381,9 @@ class _PostCard extends ConsumerWidget {
                   // Type badge
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: badgeBg,
                       borderRadius: BorderRadius.circular(6),
@@ -1363,12 +1398,42 @@ class _PostCard extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  if (post.issuingLevel != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        // Dùng màu đỏ nhạt cho nổi bật
+                        color: _DC.brandRedBg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _DC.brandRed.withOpacity(0.3),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        // Hàm này Tú có thể viết helper hoặc map nhanh tại đây
+                        post.issuingLevel!.toUpperCase(),
+                        style: const TextStyle(
+                          color: _DC.brandRed,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 8),
 
                   // Attachment icon
                   if (post.attachmentUrl != null) ...[
-                    const Icon(Icons.attach_file_rounded,
-                        size: 15, color: _DC.textMuted),
+                    const Icon(
+                      Icons.attach_file_rounded,
+                      size: 15,
+                      color: _DC.textMuted,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       post.attachmentName ?? 'Tệp đính kèm',
@@ -1385,10 +1450,7 @@ class _PostCard extends ConsumerWidget {
                   // Date
                   Text(
                     dateStr,
-                    style: const TextStyle(
-                      color: _DC.textMuted,
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(color: _DC.textMuted, fontSize: 11),
                   ),
                   const SizedBox(width: 12),
 
@@ -1444,22 +1506,22 @@ class _PostCard extends ConsumerWidget {
   }
 
   void _openEditor(BuildContext ctx, WidgetRef ref, AdminPost post) {
-    Navigator.of(ctx).push(MaterialPageRoute(
-      builder: (_) => AdminPostEditorScreen(
-        event: event,
-        existingPost: post,
+    Navigator.of(ctx).push(
+      MaterialPageRoute(
+        builder: (_) => AdminPostEditorScreen(event: event, existingPost: post),
       ),
-    ));
+    );
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Xoá bài đăng?',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Xoá bài đăng?',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
         content: Text(
           'Bài đăng "${post.title}" sẽ bị xoá vĩnh viễn.',
           style: const TextStyle(color: _DC.textSecondary, height: 1.5),
@@ -1467,8 +1529,10 @@ class _PostCard extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Huỷ',
-                style: TextStyle(color: _DC.textSecondary)),
+            child: const Text(
+              'Huỷ',
+              style: TextStyle(color: _DC.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1479,10 +1543,12 @@ class _PostCard extends ConsumerWidget {
                     .deletePost(post.id);
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Lỗi xoá bài: $e'),
-                    backgroundColor: _DC.brandRed,
-                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Lỗi xoá bài: $e'),
+                      backgroundColor: _DC.brandRed,
+                    ),
+                  );
                 }
               }
             },
@@ -1490,7 +1556,8 @@ class _PostCard extends ConsumerWidget {
               backgroundColor: _DC.brandRed,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Xoá', style: TextStyle(color: Colors.white)),
           ),
@@ -1511,9 +1578,11 @@ class _WriteFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () {
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => AdminPostEditorScreen(event: event),
-        ));
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AdminPostEditorScreen(event: event),
+          ),
+        );
       },
       backgroundColor: _DC.brandRed,
       icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 22),
@@ -1600,8 +1669,11 @@ class _EmptyState extends StatelessWidget {
               color: _DC.brandRedBg,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.article_outlined,
-                color: _DC.brandRed, size: 36),
+            child: const Icon(
+              Icons.article_outlined,
+              color: _DC.brandRed,
+              size: 36,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -1630,8 +1702,10 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text('Lỗi: $message',
-          style: const TextStyle(color: _DC.brandRed, fontSize: 14)),
+      child: Text(
+        'Lỗi: $message',
+        style: const TextStyle(color: _DC.brandRed, fontSize: 14),
+      ),
     );
   }
 }

@@ -14,14 +14,15 @@ class Users extends Table {
   TextColumn get displayName => text()();
   TextColumn get photoUrl => text().nullable()();
   IntColumn get role => integer()(); // 0=superadmin, 1=admin, 2=staff, 3=user
-  IntColumn get status => integer()(); // 0=inactive, 1=active, 2=pending, 3=banned
+  IntColumn get status =>
+      integer()(); // 0=inactive, 1=active, 2=pending, 3=banned
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   TextColumn get createdBy => text().nullable()();
   DateTimeColumn get lastLoginAt => dateTime().nullable()();
   BoolColumn get mfaEnabled => boolean().withDefault(const Constant(false))();
   TextColumn get medicalProfileJson => text().nullable()();
-
+  
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -114,8 +115,7 @@ class CheckInLogs extends Table {
       text().references(Users, #id, onDelete: KeyAction.cascade)();
   TextColumn get type => text()(); // 'in' or 'out'
   DateTimeColumn get timestamp => dateTime()();
-  TextColumn get syncStatus =>
-      text().withDefault(const Constant('pending'))();
+  TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -125,12 +125,14 @@ class CheckInLogs extends Table {
 @DataClassName('CommunityReport')
 class CommunityReports extends Table {
   TextColumn get id => text()();
-  TextColumn get type => text()(); // 'fallen_tree', 'flood', 'road_block', 'other'
+  TextColumn get type =>
+      text()(); // 'fallen_tree', 'flood', 'road_block', 'other'
   TextColumn get customTypeName => text().nullable()(); // Name for 'other'
   RealColumn get latitude => real()();
   RealColumn get longitude => real()();
   TextColumn get description => text().nullable()();
-  TextColumn get reportedBy => text().references(Users, #id, onDelete: KeyAction.cascade)();
+  TextColumn get reportedBy =>
+      text().references(Users, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get createdAt => dateTime()();
   TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
 
@@ -207,7 +209,7 @@ CREATE TABLE users_new (
 );
 ''');
 
-  await customStatement('''
+        await customStatement('''
 INSERT INTO users_new (
   id,
   uid,
@@ -245,19 +247,19 @@ SELECT
 FROM users;
 ''');
 
-  await customStatement('DROP TABLE users;');
-  await customStatement('ALTER TABLE users_new RENAME TO users;');
-  await customStatement('PRAGMA foreign_keys = ON;');
+        await customStatement('DROP TABLE users;');
+        await customStatement('ALTER TABLE users_new RENAME TO users;');
+        await customStatement('PRAGMA foreign_keys = ON;');
       }
-      
+
       if (from < 4) {
         await m.addColumn(rescueStations, rescueStations.occupancy);
       }
-      
+
       if (from < 5) {
         await m.createTable(checkInLogs);
       }
-      
+
       if (from < 6) {
         await m.createTable(communityReports);
       }
