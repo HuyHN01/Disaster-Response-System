@@ -7,6 +7,7 @@ import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:disaster_response_app/core/services/firebase/sync_service.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
@@ -154,14 +155,14 @@ class LocationException implements Exception {
 // =============================================================================
 // MAIN SCREEN
 // =============================================================================
-class EventMapScreen extends StatefulWidget {
+class EventMapScreen extends ConsumerStatefulWidget {
   const EventMapScreen({super.key});
 
   @override
-  State<EventMapScreen> createState() => _EventMapScreenState();
+  ConsumerState<EventMapScreen> createState() => _EventMapScreenState();
 }
 
-class _EventMapScreenState extends State<EventMapScreen>
+class _EventMapScreenState extends ConsumerState<EventMapScreen>
     with TickerProviderStateMixin {
   late final MapController _mapController;
   late final AnimationController _pulseCtrl;
@@ -173,6 +174,7 @@ class _EventMapScreenState extends State<EventMapScreen>
   bool _locationLoading = true;
   String? _locationError;
   _LocErrCode? _locationErrCode;
+  String? _selectedEventId;
 
   // ── UI state ─────────────────────────────────────────────────────────────
   // ── Routing state (for external Google Maps directions) ──────────────────
@@ -297,6 +299,64 @@ class _EventMapScreenState extends State<EventMapScreen>
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 8),
+      ),
+    );
+  }
+
+  Widget _buildEventSelectionCard() {
+    final eventsAsync = ref.watch(eventControllerProvider);
+
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(16),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: eventsAsync.when(
+          data: (events) {
+            if (_selectedEventId == null && events.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() {
+                  _selectedEventId = events.first.id;
+                });
+              });
+            }
+
+            if (events.isEmpty) {
+              return const Text(
+                'Chưa có sự kiện thiên tai. Vui lòng tạo sự kiện để xem trạm cứu hộ liên quan.',
+                style: TextStyle(color: _MapColors.textPrimary, fontSize: 14),
+              );
+            }
+
+            return DropdownButtonFormField<String>(
+              value: _selectedEventId,
+              decoration: const InputDecoration(
+                labelText: 'Sự kiện thiên tai',
+                border: OutlineInputBorder(),
+              ),
+              items: events.map((event) {
+                return DropdownMenuItem(
+                  value: event.id,
+                  child: Text(event.title),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _selectedEventId = value);
+              },
+            );
+          },
+          loading: () => const SizedBox(
+            height: 56,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (error, _) => Text(
+            'Lỗi tải sự kiện: $error',
+            style: const TextStyle(color: _MapColors.textPrimary, fontSize: 14),
+          ),
+        ),
       ),
     );
   }
@@ -529,6 +589,7 @@ class _EventMapScreenState extends State<EventMapScreen>
                 mapController: _mapController,
                 pulseAnim: _pulseAnim,
                 userLocation: effectiveLocation,
+                eventId: _selectedEventId,
                 onRouteTargetChanged: _onRouteDestinationChanged,
               ),
             ),
@@ -572,6 +633,13 @@ class _EventMapScreenState extends State<EventMapScreen>
                   ),
                 ],
               ),
+            ),
+
+            Positioned(
+              top: topPadding + 70,
+              left: 14,
+              right: 14,
+              child: _buildEventSelectionCard(),
             ),
 
             // ── Locate-me button ─────────────────────────────────────────
@@ -738,12 +806,14 @@ class _MapLayer extends ConsumerStatefulWidget {
   final MapController mapController;
   final Animation<double> pulseAnim;
   final LatLng userLocation;
+  final String? eventId;
   final void Function(LatLng?, RescueStation?) onRouteTargetChanged;
 
   const _MapLayer({
     required this.mapController,
     required this.pulseAnim,
     required this.userLocation,
+    required this.eventId,
     required this.onRouteTargetChanged,
   });
 
@@ -787,7 +857,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
   void initState() {
     super.initState();
 
-    final initial = ref.read(rescueStationsProvider);
+    final initial = ref.read(rescueStationsByEventProvider(widget.eventId));
     initial.whenData((stations) {
       _latestStations = stations;
       _stationsFingerprint = _fingerprintStations(stations);
@@ -821,7 +891,8 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
         ) >
         20; // mét
 
-    if (locationChanged) {
+    final eventChanged = old.eventId != widget.eventId;
+    if (locationChanged || eventChanged) {
       _computeRouteFromProps(widget.userLocation, _latestStations, _latestReports);
     }
   }
@@ -1051,19 +1122,19 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<List<RescueStation>>>(rescueStationsProvider, (
-      previous,
-      next,
-    ) {
-      next.whenData((stations) {
-        final nextFingerprint = _fingerprintStations(stations);
-        if (nextFingerprint == _stationsFingerprint) return;
+    ref.listen<AsyncValue<List<RescueStation>>>(
+      rescueStationsByEventProvider(widget.eventId),
+      (previous, next) {
+        next.whenData((stations) {
+          final nextFingerprint = _fingerprintStations(stations);
+          if (nextFingerprint == _stationsFingerprint) return;
 
-        _stationsFingerprint = nextFingerprint;
-        _latestStations = stations;
-        _computeRouteFromProps(widget.userLocation, stations, _latestReports);
-      });
-    });
+          _stationsFingerprint = nextFingerprint;
+          _latestStations = stations;
+          _computeRouteFromProps(widget.userLocation, stations, _latestReports);
+        });
+      },
+    );
 
     ref.listen<AsyncValue<List<CommunityReport>>>(communityReportsProvider, (previous, next) {
       next.whenData((reports) {
@@ -1085,7 +1156,7 @@ class _MapLayerState extends ConsumerState<_MapLayer> {
       }
     });
 
-    final rescueStationsAsync = ref.watch(rescueStationsProvider);
+    final rescueStationsAsync = ref.watch(rescueStationsByEventProvider(widget.eventId));
     final rescueStations = rescueStationsAsync.maybeWhen(
       data: (stations) {
         _latestStations = stations;

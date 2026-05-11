@@ -902,7 +902,10 @@ class FirebaseSyncService {
         'Rescue station thiếu latitude/longitude hợp lệ.',
       );
     }
-
+    final eventId = (data['eventId'] as String?)?.trim();
+    if (eventId == null || eventId.isEmpty) {
+      throw Exception('Missing eventId from Firestore');
+    }
     final rawResources = data['resourcesJson'];
     String resourcesJson;
     if (rawResources == null) {
@@ -915,6 +918,7 @@ class FirebaseSyncService {
 
     return RescueStationsCompanion.insert(
       id: docId,
+      eventId: (data['eventId'] as String?) ?? '',
       name: ((data['name'] as String?)?.trim().isNotEmpty ?? false)
           ? (data['name'] as String).trim()
           : '(Chưa đặt tên trạm)',

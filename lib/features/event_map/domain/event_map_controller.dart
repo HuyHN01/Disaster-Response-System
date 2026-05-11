@@ -9,3 +9,14 @@ final rescueStationsProvider = StreamProvider<List<RescueStation>>((ref) {
   final repo = ref.watch(rescueStationRepositoryProvider);
   return repo.watchActiveStations();
 });
+
+/// Active rescue stations filtered to a specific disaster event.
+final rescueStationsByEventProvider = StreamProvider.family<
+    List<RescueStation>,
+    String?>((ref, eventId) {
+  if (eventId == null) {
+    return const Stream.empty();
+  }
+  final repo = ref.watch(rescueStationRepositoryProvider);
+  return repo.watchActiveStationsByEvent(eventId);
+});

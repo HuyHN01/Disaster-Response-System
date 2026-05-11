@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/admin_panel/presentation/event_dashboard_screen.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_autocomplete_field.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_picker_map_dialog.dart';
@@ -90,6 +91,7 @@ class AdminRescueStationsScreen extends ConsumerWidget {
             name: formData.name,
             latitude: formData.latitude,
             longitude: formData.longitude,
+            eventId: formData.eventId,
             address: formData.address,
             contactPhone: formData.contactPhone,
             capacity: formData.capacity,
@@ -132,6 +134,7 @@ class AdminRescueStationsScreen extends ConsumerWidget {
             name: formData.name,
             latitude: formData.latitude,
             longitude: formData.longitude,
+            eventId: formData.eventId,
             address: formData.address,
             contactPhone: formData.contactPhone,
             capacity: formData.capacity,
@@ -423,16 +426,16 @@ class _TableRow extends StatelessWidget {
   }
 }
 
-class RescueStationFormDialog extends StatefulWidget {
+class RescueStationFormDialog extends ConsumerStatefulWidget {
   final RescueStation? existing;
   const RescueStationFormDialog({this.existing});
 
   @override
-  State<RescueStationFormDialog> createState() =>
+  ConsumerState<RescueStationFormDialog> createState() =>
       RescueStationFormDialogState();
 }
 
-class RescueStationFormDialogState extends State<RescueStationFormDialog> {
+class RescueStationFormDialogState extends ConsumerState<RescueStationFormDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _latCtrl;
   late final TextEditingController _lngCtrl;
@@ -443,6 +446,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
   late final TextEditingController _resourcesCtrl;
 
   String _status = 'active';
+  String? _selectedEventId;
 
   @override
   void initState() {
@@ -459,6 +463,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
       text: station == null ? '' : station.longitude.toString(),
     );
     _addressCtrl = TextEditingController(text: station?.address ?? '');
+    _selectedEventId = station?.eventId;
     _searchCtrl = TextEditingController();
     _phoneCtrl = TextEditingController(text: station?.contactPhone ?? '');
     _capacityCtrl = TextEditingController(
@@ -573,6 +578,8 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
                 readOnly: true,
               ),
               const SizedBox(height: 10),
+              _buildEventDropdown(),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(child: _buildTextField(_phoneCtrl, 'Số liên hệ')),
@@ -647,6 +654,52 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
     );
   }
 
+  Widget _buildEventDropdown() {
+    final eventAsync = ref.watch(eventControllerProvider);
+
+    return eventAsync.when(
+      data: (events) {
+        if (_selectedEventId == null && events.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedEventId = events.first.id;
+            });
+          });
+        }
+
+        return DropdownButtonFormField<String>(
+          value: _selectedEventId,
+          decoration: const InputDecoration(
+            labelText: 'Sự kiện thiên tai',
+            border: OutlineInputBorder(),
+          ),
+          items: events.map((event) {
+            return DropdownMenuItem(
+              value: event.id,
+              child: Text(event.title),
+            );
+          }).toList(),
+          onChanged: events.isEmpty
+              ? null
+              : (value) {
+                  if (value == null) return;
+                  setState(() => _selectedEventId = value);
+                },
+          hint: const Text('Chọn sự kiện'),
+        );
+      },
+      loading: () => const SizedBox(
+        height: 60,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (err, _) => Text(
+        'Lỗi tải sự kiện: $err',
+        style: const TextStyle(color: AppColors.brandRed),
+      ),
+    );
+  }
+
   Future<void> _openMapPicker() async {
     final currentLat = double.tryParse(_latCtrl.text);
     final currentLng = double.tryParse(_lngCtrl.text);
@@ -689,6 +742,10 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
       _showValidation('Tên trạm không được để trống.');
       return;
     }
+    if (_selectedEventId == null) {
+      _showValidation('Vui lòng chọn sự kiện thiên tai cho trạm.');
+      return;
+    }
     if (lat == null || lat < -90 || lat > 90) {
       _showValidation('Vĩ độ không hợp lệ (-90 đến 90).');
       return;
@@ -707,6 +764,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
         name: name,
         latitude: lat,
         longitude: lng,
+        eventId: _selectedEventId!,
         address: address.isEmpty ? null : address,
         contactPhone: phone.isEmpty ? null : phone,
         capacity: capacity,
@@ -755,6 +813,7 @@ class RescueStationFormData {
   final String name;
   final double latitude;
   final double longitude;
+  final String eventId;
   final String? address;
   final String? contactPhone;
   final int? capacity;
@@ -765,6 +824,7 @@ class RescueStationFormData {
     required this.name,
     required this.latitude,
     required this.longitude,
+    required this.eventId,
     required this.address,
     required this.contactPhone,
     required this.capacity,

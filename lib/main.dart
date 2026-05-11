@@ -20,9 +20,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // TODO: Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (e) {
+    if (!e.toString().contains('duplicate-app')) {
+      debugPrint('[main] Lỗi khởi tạo Firebase: $e');
+    }
+  }
   // Load environment variables
   await dotenv.load(fileName: ".env");
   final supabaseUrl = dotenv.get('SUPABASE_URL');

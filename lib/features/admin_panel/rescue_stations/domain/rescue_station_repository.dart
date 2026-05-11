@@ -42,6 +42,18 @@ class RescueStationRepository {
         .watch();
   }
 
+  Stream<List<RescueStation>> watchActiveStationsByEvent(String eventId) {
+    return (_db.select(_db.rescueStations)
+          ..where(
+            (t) =>
+                t.deletedAt.isNull() &
+                (t.status.equals('active') | t.status.equals('full')) &
+                t.eventId.equals(eventId),
+          )
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .watch();
+  }
+
   Future<RescueStation?> getById(String id) {
     return (_db.select(
       _db.rescueStations,

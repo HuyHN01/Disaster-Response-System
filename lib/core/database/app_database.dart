@@ -83,6 +83,7 @@ class Attachments extends Table {
 // ============ BẢNG RESCUE STATIONS ============
 class RescueStations extends Table {
   TextColumn get id => text()();
+  TextColumn get eventId => text().named('event_id')();
   TextColumn get name => text()();
   RealColumn get latitude => real()();
   RealColumn get longitude => real()();
@@ -175,7 +176,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -183,6 +184,14 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(rescueStations);
+      }
+
+      if (from < 8) {
+        await m.addColumn(rescueStations, rescueStations.eventId);
+        // Set default value for existing rows
+        await customStatement(
+          "UPDATE rescue_stations SET event_id = 'unknown' WHERE event_id IS NULL",
+        );
       }
 
       if (from < 3) {

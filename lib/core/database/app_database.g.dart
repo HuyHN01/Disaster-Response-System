@@ -2545,6 +2545,17 @@ class $RescueStationsTable extends RescueStations
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _eventIdMeta = const VerificationMeta(
+    'eventId',
+  );
+  @override
+  late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
+    'event_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -2691,6 +2702,7 @@ class $RescueStationsTable extends RescueStations
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    eventId,
     name,
     latitude,
     longitude,
@@ -2721,6 +2733,14 @@ class $RescueStationsTable extends RescueStations
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('event_id')) {
+      context.handle(
+        _eventIdMeta,
+        eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_eventIdMeta);
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -2827,6 +2847,10 @@ class $RescueStationsTable extends RescueStations
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      eventId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event_id'],
+      )!,
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -2890,6 +2914,7 @@ class $RescueStationsTable extends RescueStations
 
 class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String id;
+  final String eventId;
   final String name;
   final double latitude;
   final double longitude;
@@ -2905,6 +2930,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String syncStatus;
   const RescueStation({
     required this.id,
+    required this.eventId,
     required this.name,
     required this.latitude,
     required this.longitude,
@@ -2923,6 +2949,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['event_id'] = Variable<String>(eventId);
     map['name'] = Variable<String>(name);
     map['latitude'] = Variable<double>(latitude);
     map['longitude'] = Variable<double>(longitude);
@@ -2952,6 +2979,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   RescueStationsCompanion toCompanion(bool nullToAbsent) {
     return RescueStationsCompanion(
       id: Value(id),
+      eventId: Value(eventId),
       name: Value(name),
       latitude: Value(latitude),
       longitude: Value(longitude),
@@ -2985,6 +3013,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return RescueStation(
       id: serializer.fromJson<String>(json['id']),
+      eventId: serializer.fromJson<String>(json['eventId']),
       name: serializer.fromJson<String>(json['name']),
       latitude: serializer.fromJson<double>(json['latitude']),
       longitude: serializer.fromJson<double>(json['longitude']),
@@ -3005,6 +3034,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'eventId': serializer.toJson<String>(eventId),
       'name': serializer.toJson<String>(name),
       'latitude': serializer.toJson<double>(latitude),
       'longitude': serializer.toJson<double>(longitude),
@@ -3023,6 +3053,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
 
   RescueStation copyWith({
     String? id,
+    String? eventId,
     String? name,
     double? latitude,
     double? longitude,
@@ -3038,6 +3069,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     String? syncStatus,
   }) => RescueStation(
     id: id ?? this.id,
+    eventId: eventId ?? this.eventId,
     name: name ?? this.name,
     latitude: latitude ?? this.latitude,
     longitude: longitude ?? this.longitude,
@@ -3055,6 +3087,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   RescueStation copyWithCompanion(RescueStationsCompanion data) {
     return RescueStation(
       id: data.id.present ? data.id.value : this.id,
+      eventId: data.eventId.present ? data.eventId.value : this.eventId,
       name: data.name.present ? data.name.value : this.name,
       latitude: data.latitude.present ? data.latitude.value : this.latitude,
       longitude: data.longitude.present ? data.longitude.value : this.longitude,
@@ -3081,6 +3114,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   String toString() {
     return (StringBuffer('RescueStation(')
           ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
           ..write('name: $name, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
@@ -3101,6 +3135,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   @override
   int get hashCode => Object.hash(
     id,
+    eventId,
     name,
     latitude,
     longitude,
@@ -3120,6 +3155,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       identical(this, other) ||
       (other is RescueStation &&
           other.id == this.id &&
+          other.eventId == this.eventId &&
           other.name == this.name &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
@@ -3137,6 +3173,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
 
 class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<String> id;
+  final Value<String> eventId;
   final Value<String> name;
   final Value<double> latitude;
   final Value<double> longitude;
@@ -3153,6 +3190,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<int> rowid;
   const RescueStationsCompanion({
     this.id = const Value.absent(),
+    this.eventId = const Value.absent(),
     this.name = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
@@ -3170,6 +3208,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   });
   RescueStationsCompanion.insert({
     required String id,
+    required String eventId,
     required String name,
     required double latitude,
     required double longitude,
@@ -3185,12 +3224,14 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
+       eventId = Value(eventId),
        name = Value(name),
        latitude = Value(latitude),
        longitude = Value(longitude),
        createdAt = Value(createdAt);
   static Insertable<RescueStation> custom({
     Expression<String>? id,
+    Expression<String>? eventId,
     Expression<String>? name,
     Expression<double>? latitude,
     Expression<double>? longitude,
@@ -3208,6 +3249,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (eventId != null) 'event_id': eventId,
       if (name != null) 'name': name,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
@@ -3227,6 +3269,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
 
   RescueStationsCompanion copyWith({
     Value<String>? id,
+    Value<String>? eventId,
     Value<String>? name,
     Value<double>? latitude,
     Value<double>? longitude,
@@ -3244,6 +3287,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   }) {
     return RescueStationsCompanion(
       id: id ?? this.id,
+      eventId: eventId ?? this.eventId,
       name: name ?? this.name,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -3266,6 +3310,9 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (eventId.present) {
+      map['event_id'] = Variable<String>(eventId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -3316,6 +3363,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   String toString() {
     return (StringBuffer('RescueStationsCompanion(')
           ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
           ..write('name: $name, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
@@ -7520,6 +7568,7 @@ typedef $$AttachmentsTableProcessedTableManager =
 typedef $$RescueStationsTableCreateCompanionBuilder =
     RescueStationsCompanion Function({
       required String id,
+      required String eventId,
       required String name,
       required double latitude,
       required double longitude,
@@ -7538,6 +7587,7 @@ typedef $$RescueStationsTableCreateCompanionBuilder =
 typedef $$RescueStationsTableUpdateCompanionBuilder =
     RescueStationsCompanion Function({
       Value<String> id,
+      Value<String> eventId,
       Value<String> name,
       Value<double> latitude,
       Value<double> longitude,
@@ -7595,6 +7645,11 @@ class $$RescueStationsTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get eventId => $composableBuilder(
+    column: $table.eventId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7703,6 +7758,11 @@ class $$RescueStationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get eventId => $composableBuilder(
+    column: $table.eventId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -7780,6 +7840,9 @@ class $$RescueStationsTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get eventId =>
+      $composableBuilder(column: $table.eventId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -7883,6 +7946,7 @@ class $$RescueStationsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> eventId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<double> latitude = const Value.absent(),
                 Value<double> longitude = const Value.absent(),
@@ -7899,6 +7963,7 @@ class $$RescueStationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => RescueStationsCompanion(
                 id: id,
+                eventId: eventId,
                 name: name,
                 latitude: latitude,
                 longitude: longitude,
@@ -7917,6 +7982,7 @@ class $$RescueStationsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                required String eventId,
                 required String name,
                 required double latitude,
                 required double longitude,
@@ -7933,6 +7999,7 @@ class $$RescueStationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => RescueStationsCompanion.insert(
                 id: id,
+                eventId: eventId,
                 name: name,
                 latitude: latitude,
                 longitude: longitude,
