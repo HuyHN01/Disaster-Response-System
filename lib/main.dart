@@ -30,6 +30,7 @@ void main() async {
     if (!e.toString().contains('duplicate-app')) {
       debugPrint('[main] Lỗi khởi tạo Firebase: $e');
     }
+
   }
   // Load environment variables
   await dotenv.load(fileName: ".env");

@@ -135,6 +135,17 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _medicalProfileJsonMeta =
+      const VerificationMeta('medicalProfileJson');
+  @override
+  late final GeneratedColumn<String> medicalProfileJson =
+      GeneratedColumn<String>(
+        'medical_profile_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -149,6 +160,7 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     createdBy,
     lastLoginAt,
     mfaEnabled,
+    medicalProfileJson,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -253,6 +265,15 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         mfaEnabled.isAcceptableOrUnknown(data['mfa_enabled']!, _mfaEnabledMeta),
       );
     }
+    if (data.containsKey('medical_profile_json')) {
+      context.handle(
+        _medicalProfileJsonMeta,
+        medicalProfileJson.isAcceptableOrUnknown(
+          data['medical_profile_json']!,
+          _medicalProfileJsonMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -310,6 +331,10 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.bool,
         data['${effectivePrefix}mfa_enabled'],
       )!,
+      medicalProfileJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}medical_profile_json'],
+      ),
     );
   }
 
@@ -332,6 +357,7 @@ class User extends DataClass implements Insertable<User> {
   final String? createdBy;
   final DateTime? lastLoginAt;
   final bool mfaEnabled;
+  final String? medicalProfileJson;
   const User({
     required this.id,
     required this.uid,
@@ -345,6 +371,7 @@ class User extends DataClass implements Insertable<User> {
     this.createdBy,
     this.lastLoginAt,
     required this.mfaEnabled,
+    this.medicalProfileJson,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -367,6 +394,9 @@ class User extends DataClass implements Insertable<User> {
       map['last_login_at'] = Variable<DateTime>(lastLoginAt);
     }
     map['mfa_enabled'] = Variable<bool>(mfaEnabled);
+    if (!nullToAbsent || medicalProfileJson != null) {
+      map['medical_profile_json'] = Variable<String>(medicalProfileJson);
+    }
     return map;
   }
 
@@ -390,6 +420,9 @@ class User extends DataClass implements Insertable<User> {
           ? const Value.absent()
           : Value(lastLoginAt),
       mfaEnabled: Value(mfaEnabled),
+      medicalProfileJson: medicalProfileJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(medicalProfileJson),
     );
   }
 
@@ -411,6 +444,9 @@ class User extends DataClass implements Insertable<User> {
       createdBy: serializer.fromJson<String?>(json['createdBy']),
       lastLoginAt: serializer.fromJson<DateTime?>(json['lastLoginAt']),
       mfaEnabled: serializer.fromJson<bool>(json['mfaEnabled']),
+      medicalProfileJson: serializer.fromJson<String?>(
+        json['medicalProfileJson'],
+      ),
     );
   }
   @override
@@ -429,6 +465,7 @@ class User extends DataClass implements Insertable<User> {
       'createdBy': serializer.toJson<String?>(createdBy),
       'lastLoginAt': serializer.toJson<DateTime?>(lastLoginAt),
       'mfaEnabled': serializer.toJson<bool>(mfaEnabled),
+      'medicalProfileJson': serializer.toJson<String?>(medicalProfileJson),
     };
   }
 
@@ -445,6 +482,7 @@ class User extends DataClass implements Insertable<User> {
     Value<String?> createdBy = const Value.absent(),
     Value<DateTime?> lastLoginAt = const Value.absent(),
     bool? mfaEnabled,
+    Value<String?> medicalProfileJson = const Value.absent(),
   }) => User(
     id: id ?? this.id,
     uid: uid ?? this.uid,
@@ -458,6 +496,9 @@ class User extends DataClass implements Insertable<User> {
     createdBy: createdBy.present ? createdBy.value : this.createdBy,
     lastLoginAt: lastLoginAt.present ? lastLoginAt.value : this.lastLoginAt,
     mfaEnabled: mfaEnabled ?? this.mfaEnabled,
+    medicalProfileJson: medicalProfileJson.present
+        ? medicalProfileJson.value
+        : this.medicalProfileJson,
   );
   User copyWithCompanion(UsersCompanion data) {
     return User(
@@ -479,6 +520,9 @@ class User extends DataClass implements Insertable<User> {
       mfaEnabled: data.mfaEnabled.present
           ? data.mfaEnabled.value
           : this.mfaEnabled,
+      medicalProfileJson: data.medicalProfileJson.present
+          ? data.medicalProfileJson.value
+          : this.medicalProfileJson,
     );
   }
 
@@ -496,7 +540,8 @@ class User extends DataClass implements Insertable<User> {
           ..write('updatedAt: $updatedAt, ')
           ..write('createdBy: $createdBy, ')
           ..write('lastLoginAt: $lastLoginAt, ')
-          ..write('mfaEnabled: $mfaEnabled')
+          ..write('mfaEnabled: $mfaEnabled, ')
+          ..write('medicalProfileJson: $medicalProfileJson')
           ..write(')'))
         .toString();
   }
@@ -515,6 +560,7 @@ class User extends DataClass implements Insertable<User> {
     createdBy,
     lastLoginAt,
     mfaEnabled,
+    medicalProfileJson,
   );
   @override
   bool operator ==(Object other) =>
@@ -531,7 +577,8 @@ class User extends DataClass implements Insertable<User> {
           other.updatedAt == this.updatedAt &&
           other.createdBy == this.createdBy &&
           other.lastLoginAt == this.lastLoginAt &&
-          other.mfaEnabled == this.mfaEnabled);
+          other.mfaEnabled == this.mfaEnabled &&
+          other.medicalProfileJson == this.medicalProfileJson);
 }
 
 class UsersCompanion extends UpdateCompanion<User> {
@@ -547,6 +594,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<String?> createdBy;
   final Value<DateTime?> lastLoginAt;
   final Value<bool> mfaEnabled;
+  final Value<String?> medicalProfileJson;
   final Value<int> rowid;
   const UsersCompanion({
     this.id = const Value.absent(),
@@ -561,6 +609,7 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.createdBy = const Value.absent(),
     this.lastLoginAt = const Value.absent(),
     this.mfaEnabled = const Value.absent(),
+    this.medicalProfileJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   UsersCompanion.insert({
@@ -576,6 +625,7 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.createdBy = const Value.absent(),
     this.lastLoginAt = const Value.absent(),
     this.mfaEnabled = const Value.absent(),
+    this.medicalProfileJson = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        uid = Value(uid),
@@ -598,6 +648,7 @@ class UsersCompanion extends UpdateCompanion<User> {
     Expression<String>? createdBy,
     Expression<DateTime>? lastLoginAt,
     Expression<bool>? mfaEnabled,
+    Expression<String>? medicalProfileJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -613,6 +664,8 @@ class UsersCompanion extends UpdateCompanion<User> {
       if (createdBy != null) 'created_by': createdBy,
       if (lastLoginAt != null) 'last_login_at': lastLoginAt,
       if (mfaEnabled != null) 'mfa_enabled': mfaEnabled,
+      if (medicalProfileJson != null)
+        'medical_profile_json': medicalProfileJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -630,6 +683,7 @@ class UsersCompanion extends UpdateCompanion<User> {
     Value<String?>? createdBy,
     Value<DateTime?>? lastLoginAt,
     Value<bool>? mfaEnabled,
+    Value<String?>? medicalProfileJson,
     Value<int>? rowid,
   }) {
     return UsersCompanion(
@@ -645,6 +699,7 @@ class UsersCompanion extends UpdateCompanion<User> {
       createdBy: createdBy ?? this.createdBy,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
       mfaEnabled: mfaEnabled ?? this.mfaEnabled,
+      medicalProfileJson: medicalProfileJson ?? this.medicalProfileJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -688,6 +743,9 @@ class UsersCompanion extends UpdateCompanion<User> {
     if (mfaEnabled.present) {
       map['mfa_enabled'] = Variable<bool>(mfaEnabled.value);
     }
+    if (medicalProfileJson.present) {
+      map['medical_profile_json'] = Variable<String>(medicalProfileJson.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -709,6 +767,7 @@ class UsersCompanion extends UpdateCompanion<User> {
           ..write('createdBy: $createdBy, ')
           ..write('lastLoginAt: $lastLoginAt, ')
           ..write('mfaEnabled: $mfaEnabled, ')
+          ..write('medicalProfileJson: $medicalProfileJson, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1252,6 +1311,17 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
     requiredDuringInsert: false,
     defaultValue: const Constant('pending'),
   );
+  static const VerificationMeta _issuingLevelMeta = const VerificationMeta(
+    'issuingLevel',
+  );
+  @override
+  late final GeneratedColumn<String> issuingLevel = GeneratedColumn<String>(
+    'issuing_level',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1265,6 +1335,7 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
     isVerified,
     createdAt,
     syncStatus,
+    issuingLevel,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1359,6 +1430,15 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
         syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
       );
     }
+    if (data.containsKey('issuing_level')) {
+      context.handle(
+        _issuingLevelMeta,
+        issuingLevel.isAcceptableOrUnknown(
+          data['issuing_level']!,
+          _issuingLevelMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1412,6 +1492,10 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
         DriftSqlType.string,
         data['${effectivePrefix}sync_status'],
       )!,
+      issuingLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}issuing_level'],
+      ),
     );
   }
 
@@ -1433,6 +1517,7 @@ class Post extends DataClass implements Insertable<Post> {
   final bool isVerified;
   final DateTime createdAt;
   final String syncStatus;
+  final String? issuingLevel;
   const Post({
     required this.id,
     required this.eventId,
@@ -1445,6 +1530,7 @@ class Post extends DataClass implements Insertable<Post> {
     required this.isVerified,
     required this.createdAt,
     required this.syncStatus,
+    this.issuingLevel,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1466,6 +1552,9 @@ class Post extends DataClass implements Insertable<Post> {
     map['is_verified'] = Variable<bool>(isVerified);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['sync_status'] = Variable<String>(syncStatus);
+    if (!nullToAbsent || issuingLevel != null) {
+      map['issuing_level'] = Variable<String>(issuingLevel);
+    }
     return map;
   }
 
@@ -1488,6 +1577,9 @@ class Post extends DataClass implements Insertable<Post> {
       isVerified: Value(isVerified),
       createdAt: Value(createdAt),
       syncStatus: Value(syncStatus),
+      issuingLevel: issuingLevel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(issuingLevel),
     );
   }
 
@@ -1508,6 +1600,7 @@ class Post extends DataClass implements Insertable<Post> {
       isVerified: serializer.fromJson<bool>(json['isVerified']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
+      issuingLevel: serializer.fromJson<String?>(json['issuingLevel']),
     );
   }
   @override
@@ -1525,6 +1618,7 @@ class Post extends DataClass implements Insertable<Post> {
       'isVerified': serializer.toJson<bool>(isVerified),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'syncStatus': serializer.toJson<String>(syncStatus),
+      'issuingLevel': serializer.toJson<String?>(issuingLevel),
     };
   }
 
@@ -1540,6 +1634,7 @@ class Post extends DataClass implements Insertable<Post> {
     bool? isVerified,
     DateTime? createdAt,
     String? syncStatus,
+    Value<String?> issuingLevel = const Value.absent(),
   }) => Post(
     id: id ?? this.id,
     eventId: eventId ?? this.eventId,
@@ -1556,6 +1651,7 @@ class Post extends DataClass implements Insertable<Post> {
     isVerified: isVerified ?? this.isVerified,
     createdAt: createdAt ?? this.createdAt,
     syncStatus: syncStatus ?? this.syncStatus,
+    issuingLevel: issuingLevel.present ? issuingLevel.value : this.issuingLevel,
   );
   Post copyWithCompanion(PostsCompanion data) {
     return Post(
@@ -1578,6 +1674,9 @@ class Post extends DataClass implements Insertable<Post> {
       syncStatus: data.syncStatus.present
           ? data.syncStatus.value
           : this.syncStatus,
+      issuingLevel: data.issuingLevel.present
+          ? data.issuingLevel.value
+          : this.issuingLevel,
     );
   }
 
@@ -1594,7 +1693,8 @@ class Post extends DataClass implements Insertable<Post> {
           ..write('content: $content, ')
           ..write('isVerified: $isVerified, ')
           ..write('createdAt: $createdAt, ')
-          ..write('syncStatus: $syncStatus')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('issuingLevel: $issuingLevel')
           ..write(')'))
         .toString();
   }
@@ -1612,6 +1712,7 @@ class Post extends DataClass implements Insertable<Post> {
     isVerified,
     createdAt,
     syncStatus,
+    issuingLevel,
   );
   @override
   bool operator ==(Object other) =>
@@ -1627,7 +1728,8 @@ class Post extends DataClass implements Insertable<Post> {
           other.content == this.content &&
           other.isVerified == this.isVerified &&
           other.createdAt == this.createdAt &&
-          other.syncStatus == this.syncStatus);
+          other.syncStatus == this.syncStatus &&
+          other.issuingLevel == this.issuingLevel);
 }
 
 class PostsCompanion extends UpdateCompanion<Post> {
@@ -1642,6 +1744,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
   final Value<bool> isVerified;
   final Value<DateTime> createdAt;
   final Value<String> syncStatus;
+  final Value<String?> issuingLevel;
   final Value<int> rowid;
   const PostsCompanion({
     this.id = const Value.absent(),
@@ -1655,6 +1758,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
     this.isVerified = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.syncStatus = const Value.absent(),
+    this.issuingLevel = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PostsCompanion.insert({
@@ -1669,6 +1773,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
     this.isVerified = const Value.absent(),
     required DateTime createdAt,
     this.syncStatus = const Value.absent(),
+    this.issuingLevel = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        eventId = Value(eventId),
@@ -1688,6 +1793,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
     Expression<bool>? isVerified,
     Expression<DateTime>? createdAt,
     Expression<String>? syncStatus,
+    Expression<String>? issuingLevel,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1702,6 +1808,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
       if (isVerified != null) 'is_verified': isVerified,
       if (createdAt != null) 'created_at': createdAt,
       if (syncStatus != null) 'sync_status': syncStatus,
+      if (issuingLevel != null) 'issuing_level': issuingLevel,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1718,6 +1825,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
     Value<bool>? isVerified,
     Value<DateTime>? createdAt,
     Value<String>? syncStatus,
+    Value<String?>? issuingLevel,
     Value<int>? rowid,
   }) {
     return PostsCompanion(
@@ -1732,6 +1840,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt ?? this.createdAt,
       syncStatus: syncStatus ?? this.syncStatus,
+      issuingLevel: issuingLevel ?? this.issuingLevel,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1772,6 +1881,9 @@ class PostsCompanion extends UpdateCompanion<Post> {
     if (syncStatus.present) {
       map['sync_status'] = Variable<String>(syncStatus.value);
     }
+    if (issuingLevel.present) {
+      map['issuing_level'] = Variable<String>(issuingLevel.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1792,6 +1904,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
           ..write('isVerified: $isVerified, ')
           ..write('createdAt: $createdAt, ')
           ..write('syncStatus: $syncStatus, ')
+          ..write('issuingLevel: $issuingLevel, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5066,6 +5179,7 @@ typedef $$UsersTableCreateCompanionBuilder =
       Value<String?> createdBy,
       Value<DateTime?> lastLoginAt,
       Value<bool> mfaEnabled,
+      Value<String?> medicalProfileJson,
       Value<int> rowid,
     });
 typedef $$UsersTableUpdateCompanionBuilder =
@@ -5082,6 +5196,7 @@ typedef $$UsersTableUpdateCompanionBuilder =
       Value<String?> createdBy,
       Value<DateTime?> lastLoginAt,
       Value<bool> mfaEnabled,
+      Value<String?> medicalProfileJson,
       Value<int> rowid,
     });
 
@@ -5238,6 +5353,11 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
 
   ColumnFilters<bool> get mfaEnabled => $composableBuilder(
     column: $table.mfaEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get medicalProfileJson => $composableBuilder(
+    column: $table.medicalProfileJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5410,6 +5530,11 @@ class $$UsersTableOrderingComposer
     column: $table.mfaEnabled,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get medicalProfileJson => $composableBuilder(
+    column: $table.medicalProfileJson,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$UsersTableAnnotationComposer
@@ -5460,6 +5585,11 @@ class $$UsersTableAnnotationComposer
 
   GeneratedColumn<bool> get mfaEnabled => $composableBuilder(
     column: $table.mfaEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get medicalProfileJson => $composableBuilder(
+    column: $table.medicalProfileJson,
     builder: (column) => column,
   );
 
@@ -5609,6 +5739,7 @@ class $$UsersTableTableManager
                 Value<String?> createdBy = const Value.absent(),
                 Value<DateTime?> lastLoginAt = const Value.absent(),
                 Value<bool> mfaEnabled = const Value.absent(),
+                Value<String?> medicalProfileJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion(
                 id: id,
@@ -5623,6 +5754,7 @@ class $$UsersTableTableManager
                 createdBy: createdBy,
                 lastLoginAt: lastLoginAt,
                 mfaEnabled: mfaEnabled,
+                medicalProfileJson: medicalProfileJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5639,6 +5771,7 @@ class $$UsersTableTableManager
                 Value<String?> createdBy = const Value.absent(),
                 Value<DateTime?> lastLoginAt = const Value.absent(),
                 Value<bool> mfaEnabled = const Value.absent(),
+                Value<String?> medicalProfileJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion.insert(
                 id: id,
@@ -5653,6 +5786,7 @@ class $$UsersTableTableManager
                 createdBy: createdBy,
                 lastLoginAt: lastLoginAt,
                 mfaEnabled: mfaEnabled,
+                medicalProfileJson: medicalProfileJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -6222,6 +6356,7 @@ typedef $$PostsTableCreateCompanionBuilder =
       Value<bool> isVerified,
       required DateTime createdAt,
       Value<String> syncStatus,
+      Value<String?> issuingLevel,
       Value<int> rowid,
     });
 typedef $$PostsTableUpdateCompanionBuilder =
@@ -6237,6 +6372,7 @@ typedef $$PostsTableUpdateCompanionBuilder =
       Value<bool> isVerified,
       Value<DateTime> createdAt,
       Value<String> syncStatus,
+      Value<String?> issuingLevel,
       Value<int> rowid,
     });
 
@@ -6367,6 +6503,11 @@ class $$PostsTableFilterComposer extends Composer<_$AppDatabase, $PostsTable> {
 
   ColumnFilters<String> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get issuingLevel => $composableBuilder(
+    column: $table.issuingLevel,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6521,6 +6662,11 @@ class $$PostsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get issuingLevel => $composableBuilder(
+    column: $table.issuingLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$DisasterEventsTableOrderingComposer get eventId {
     final $$DisasterEventsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -6609,6 +6755,11 @@ class $$PostsTableAnnotationComposer
 
   GeneratedColumn<String> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get issuingLevel => $composableBuilder(
+    column: $table.issuingLevel,
     builder: (column) => column,
   );
 
@@ -6753,6 +6904,7 @@ class $$PostsTableTableManager
                 Value<bool> isVerified = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String> syncStatus = const Value.absent(),
+                Value<String?> issuingLevel = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PostsCompanion(
                 id: id,
@@ -6766,6 +6918,7 @@ class $$PostsTableTableManager
                 isVerified: isVerified,
                 createdAt: createdAt,
                 syncStatus: syncStatus,
+                issuingLevel: issuingLevel,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6781,6 +6934,7 @@ class $$PostsTableTableManager
                 Value<bool> isVerified = const Value.absent(),
                 required DateTime createdAt,
                 Value<String> syncStatus = const Value.absent(),
+                Value<String?> issuingLevel = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PostsCompanion.insert(
                 id: id,
@@ -6794,6 +6948,7 @@ class $$PostsTableTableManager
                 isVerified: isVerified,
                 createdAt: createdAt,
                 syncStatus: syncStatus,
+                issuingLevel: issuingLevel,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
