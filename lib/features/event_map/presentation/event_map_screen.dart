@@ -575,6 +575,48 @@ class _EventMapScreenState extends ConsumerState<EventMapScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<SOSState>(sosControllerProvider, (previous, next) {
+      if (next.status == SOSStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(next.message ?? 'Đã gửi SOS thành công!', style: const TextStyle(fontWeight: FontWeight.w600))),
+              ],
+            ),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      } else if (next.status == SOSStatus.fallbackActivated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.sms_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(next.message ?? 'SMS khẩn cấp đã được gửi!', style: const TextStyle(fontWeight: FontWeight.w600))),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      } else if (next.status == SOSStatus.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage ?? 'Có lỗi xảy ra khi gửi SOS.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    });
     final topPadding = MediaQuery.of(context).padding.top;
     final effectiveLocation = _userLocation ?? _kFallbackLocation;
 
@@ -2020,17 +2062,24 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
         ? _descCtrl.text.trim()
         : 'Tôi đang cần cứu hộ khẩn cấp!';
 
-    // Close dialog before async work so UI feels snappy
-    Navigator.of(dialogContext).pop();
 
     // ── 3. Delegate to SOSController ─────────────────────────────────────
-    await ref.read(sosControllerProvider.notifier).sendSOS(
-          userName: userName,
-          phoneNumber: phoneNumber,
-          description: description,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        );
+    try {
+      await ref.read(sosControllerProvider.notifier).sendSOS(
+            userName: userName,
+            phoneNumber: phoneNumber,
+            description: description,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          );
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false); 
+        if (Navigator.canPop(dialogContext)) {
+          Navigator.pop(dialogContext);
+        }
+      }
+    }
 
     // ── 4. Show result snackbar ──────────────────────────────────────────
     final state = ref.read(sosControllerProvider);

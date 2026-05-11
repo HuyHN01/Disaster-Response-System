@@ -133,8 +133,14 @@ class _DashboardContent extends ConsumerWidget {
                   const SizedBox(width: 16),
 
                   // 2. Unverified SOS count (live from Firestore)
-                  Expanded(child: _SosStatCard(sosCountAsync: sosCountAsync)),
-                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _SosStatCard(
+                      sosCountAsync: sosCountAsync,
+                      onTap: () {
+                        print("Click xem SOS!"); 
+                      },
+                    ),
+                  ),
 
                   // 3. Shelters (live from Drift)
                   Expanded(
@@ -165,8 +171,8 @@ class _DashboardContent extends ConsumerWidget {
 // =============================================================================
 class _SosStatCard extends StatelessWidget {
   final AsyncValue<int> sosCountAsync;
-
-  const _SosStatCard({required this.sosCountAsync});
+  final VoidCallback onTap;
+  const _SosStatCard({required this.sosCountAsync, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -177,16 +183,21 @@ class _SosStatCard extends StatelessWidget {
       AsyncError() => ('!', false),
     };
 
-    return StatCard(
-      label: 'SOS chưa xử lý',
-      value: displayValue,
-      icon: Icons.crisis_alert_rounded,
-      iconBgColor: AppColors.statIconRedBg,
-      iconColor: AppColors.brandRed,
-      valueColor: AppColors.brandRed,
-      // Pass loading flag so StatCard can show a subtle shimmer if desired.
-      isLoading: isLoading,
-    );
+   return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap, // <-- Gọi hàm chuyển trang
+        child: StatCard(
+          label: 'SOS chưa xử lý',
+          value: displayValue,
+          icon: Icons.crisis_alert_rounded,
+          iconBgColor: AppColors.statIconRedBg,
+          iconColor: AppColors.brandRed,
+          valueColor: AppColors.brandRed,
+          isLoading: isLoading,),
+        ),
+      );
   }
 }
 

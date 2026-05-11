@@ -16,6 +16,7 @@ class EventRepository {
   /// Lấy toàn bộ sự kiện, mới nhất lên trước
   Future<List<DisasterEvent>> getAllEvents() async {
     return (_db.select(_db.disasterEvents)
+          ..where((t) => t.status.equals('active'))
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .get();
   }
