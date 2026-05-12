@@ -8,6 +8,7 @@ import 'package:disaster_response_app/features/admin_panel/presentation/event_da
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_autocomplete_field.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/presentation/widgets/location_picker_map_dialog.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
@@ -76,6 +77,30 @@ class AdminRescueStationsScreen extends ConsumerWidget {
   }
 
   Future<void> _onCreate(BuildContext context, WidgetRef ref) async {
+    // Check if there are any events before allowing creation
+    final eventsAsync = ref.read(eventControllerProvider);
+    final events = eventsAsync.value ?? [];
+
+    if (events.isEmpty) {
+      if (!context.mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Không có sự kiện'),
+          content: const Text(
+            'Bạn cần tạo ít nhất một sự kiện thiên tai trước khi tạo trạm cứu hộ.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final formData = await showDialog<RescueStationFormData>(
       context: context,
       builder: (_) => const RescueStationFormDialog(),
@@ -84,12 +109,11 @@ class AdminRescueStationsScreen extends ConsumerWidget {
     if (formData == null) return;
 
     try {
-      await ref
-          .read(rescueStationControllerProvider.notifier)
-          .createStation(
+      await ref.read(rescueStationControllerProvider.notifier).createStation(
             name: formData.name,
             latitude: formData.latitude,
             longitude: formData.longitude,
+            eventId: formData.eventId,
             address: formData.address,
             contactPhone: formData.contactPhone,
             capacity: formData.capacity,
@@ -125,13 +149,12 @@ class AdminRescueStationsScreen extends ConsumerWidget {
     if (formData == null) return;
 
     try {
-      await ref
-          .read(rescueStationControllerProvider.notifier)
-          .updateStation(
+      await ref.read(rescueStationControllerProvider.notifier).updateStation(
             id: station.id,
             name: formData.name,
             latitude: formData.latitude,
             longitude: formData.longitude,
+            eventId: formData.eventId,
             address: formData.address,
             contactPhone: formData.contactPhone,
             capacity: formData.capacity,
@@ -329,7 +352,6 @@ class _TableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = station.status == 'active' && station.deletedAt == null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -374,7 +396,7 @@ class _TableRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 color: station.status == 'active' && station.deletedAt == null
                     ? AppColors.resolvedGreenBg
-                    : station.status == 'full' && station.deletedAt == null
+                  : station.status == 'full' && station.deletedAt == null
                         ? Colors.orange.shade100
                         : AppColors.activeRedBg,
               ),
@@ -382,16 +404,16 @@ class _TableRow extends StatelessWidget {
                 station.deletedAt != null
                     ? 'Deleted'
                     : station.status == 'full'
-                        ? 'Full'
-                        : station.status == 'active'
-                            ? 'Active'
-                            : 'Inactive',
+                      ? 'Full'
+                      : station.status == 'active'
+                        ? 'Active'
+                        : 'Inactive',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: station.status == 'active' && station.deletedAt == null
+                    color: station.status == 'active' && station.deletedAt == null
                       ? AppColors.resolvedGreen
                       : station.status == 'full' && station.deletedAt == null
-                          ? Colors.orange.shade800
+                          ? Colors.orange.shade700
                           : AppColors.brandRed,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
@@ -423,16 +445,16 @@ class _TableRow extends StatelessWidget {
   }
 }
 
-class RescueStationFormDialog extends StatefulWidget {
+class RescueStationFormDialog extends ConsumerStatefulWidget {
   final RescueStation? existing;
-  const RescueStationFormDialog({this.existing});
+  const RescueStationFormDialog({super.key, this.existing});
 
   @override
-  State<RescueStationFormDialog> createState() =>
+  ConsumerState<RescueStationFormDialog> createState() =>
       RescueStationFormDialogState();
 }
 
-class RescueStationFormDialogState extends State<RescueStationFormDialog> {
+class RescueStationFormDialogState extends ConsumerState<RescueStationFormDialog> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _latCtrl;
   late final TextEditingController _lngCtrl;
@@ -443,6 +465,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
   late final TextEditingController _resourcesCtrl;
 
   String _status = 'active';
+  String? _selectedEventId;
 
   @override
   void initState() {
@@ -465,6 +488,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
       text: station?.capacity?.toString() ?? '',
     );
     _resourcesCtrl = TextEditingController(text: resources.join(', '));
+    _selectedEventId = station?.eventId;
     _status = station?.status ?? 'active';
   }
 
@@ -493,6 +517,30 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Consumer(
+                builder: (context, ref, child) {
+                  final eventsAsync = ref.watch(eventControllerProvider);
+                  return eventsAsync.when(
+                    data: (events) => DropdownButtonFormField<String>(
+                      value: _selectedEventId,
+                      decoration: const InputDecoration(
+                        labelText: 'Sự kiện liên kết',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: events.map((e) {
+                        return DropdownMenuItem(
+                          value: e.id,
+                          child: Text(e.title),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setState(() => _selectedEventId = val),
+                    ),
+                    loading: () => const LinearProgressIndicator(),
+                    error: (_, __) => const Text('Lỗi tải danh sách sự kiện'),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
               _buildTextField(_nameCtrl, 'Tên trạm'),
               const SizedBox(height: 10),
               Row(
@@ -516,8 +564,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
                               _latCtrl.text = result.latitude.toString();
                               _lngCtrl.text = result.longitude.toString();
                               _addressCtrl.text = result.address;
-                              _searchCtrl.text = result
-                                  .name; // Keep the name or address in the search box to indicate selection
+                              _searchCtrl.text = result.name;
                             });
                           },
                         ),
@@ -593,7 +640,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                initialValue: _status,
+                value: _status,
                 decoration: const InputDecoration(
                   labelText: 'Trạng thái',
                   border: OutlineInputBorder(),
@@ -689,6 +736,10 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
       _showValidation('Tên trạm không được để trống.');
       return;
     }
+    if (_selectedEventId == null) {
+      _showValidation('Vui lòng chọn một sự kiện.');
+      return;
+    }
     if (lat == null || lat < -90 || lat > 90) {
       _showValidation('Vĩ độ không hợp lệ (-90 đến 90).');
       return;
@@ -707,6 +758,7 @@ class RescueStationFormDialogState extends State<RescueStationFormDialog> {
         name: name,
         latitude: lat,
         longitude: lng,
+        eventId: _selectedEventId,
         address: address.isEmpty ? null : address,
         contactPhone: phone.isEmpty ? null : phone,
         capacity: capacity,
@@ -755,6 +807,7 @@ class RescueStationFormData {
   final String name;
   final double latitude;
   final double longitude;
+  final String? eventId;
   final String? address;
   final String? contactPhone;
   final int? capacity;
@@ -765,6 +818,7 @@ class RescueStationFormData {
     required this.name,
     required this.latitude,
     required this.longitude,
+    this.eventId,
     required this.address,
     required this.contactPhone,
     required this.capacity,

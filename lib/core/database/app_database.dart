@@ -86,6 +86,7 @@ class Attachments extends Table {
 // ============ BẢNG RESCUE STATIONS ============
 class RescueStations extends Table {
   TextColumn get id => text()();
+  TextColumn get eventId => text().nullable().references(DisasterEvents, #id)();
   TextColumn get name => text()();
   RealColumn get latitude => real()();
   RealColumn get longitude => real()();
@@ -179,7 +180,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -268,6 +269,10 @@ FROM users;
         await m.createTable(eventDamageStats);
         await m.addColumn(posts, posts.issuingLevel);
         await m.addColumn(users, users.medicalProfileJson);
+      }
+
+      if (from < 8) {
+        await m.addColumn(rescueStations, rescueStations.eventId);
       }
     },
   );
