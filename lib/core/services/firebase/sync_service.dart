@@ -905,7 +905,7 @@ class FirebaseSyncService {
 
   Map<String, dynamic> _postToFirestore(Post post) => {
     'id': post.id,
-    'eventId': post.eventId,
+    'eventId': _normalizeEventId(post.eventId),
     'userId': post.userId,
     'postType': post.postType,
     'content': post.content,
@@ -914,6 +914,14 @@ class FirebaseSyncService {
     'syncStatus': 'synced',
     'uploadedAt': FieldValue.serverTimestamp(),
   };
+
+  String? _normalizeEventId(String? eventId) {
+    final trimmed = eventId?.trim();
+    if (trimmed == null || trimmed.isEmpty || trimmed == 'sos') {
+      return null;
+    }
+    return trimmed;
+  }
 
   Map<String, dynamic> _locationToFirestore(Location loc) => {
     'id': loc.id,
