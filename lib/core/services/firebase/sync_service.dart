@@ -840,6 +840,7 @@ class FirebaseSyncService {
     }
   }
 
+  // ignore: unused_element
   Future<void> _handleUsersSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot, {
     void Function(User user)? onUpsert,
@@ -1113,10 +1114,11 @@ class FirebaseSyncService {
 
   PostsCompanion _firestoreToPostCompanion(String docId, Map<String, dynamic> data) {
     final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+    final rawEventId = (data['eventId'] as String?)?.trim();
 
     return PostsCompanion.insert(
       id: docId,
-      eventId: (data['eventId'] as String?) ?? '',
+      eventId: Value(rawEventId?.isNotEmpty == true ? rawEventId : null),
       userId: (data['userId'] as String?) ?? '',
       postType: (data['postType'] as String?) ?? 'sos',
       title: Value((data['title'] as String?)?.trim()),

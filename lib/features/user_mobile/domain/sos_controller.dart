@@ -112,8 +112,6 @@ class SOSController extends StateNotifier<SOSState> {
   final AppDatabase _db;
   final FirebaseFirestore _firestore;
 
-  static const String _kNoEventId = 'sos';
-
   SOSController(
     this._db, {
     SmsFallbackService? smsFallback,
@@ -136,9 +134,10 @@ class SOSController extends StateNotifier<SOSState> {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final deviceId = await _getDeviceId();
     final finalUserId = uid.isNotEmpty ? uid : deviceId;
+    final normalizedEventId = _normalizeEventId(eventId);
     final post = PostsCompanion(
       id: Value(postId),
-      eventId: Value(eventId ?? _kNoEventId),
+      eventId: Value(normalizedEventId),
       userId: Value(finalUserId),
       postType: const Value('sos'),
       title: const Value('SOS khẩn cấp'),
@@ -336,6 +335,7 @@ class SOSController extends StateNotifier<SOSState> {
         status: SOSStatus.error,
         errorMessage: 'Lỗi: $e',
       );
+      // ignore: avoid_print
       print('Error in sendSOS: $e');
     }
   }
@@ -347,7 +347,7 @@ class SOSController extends StateNotifier<SOSState> {
 
   String? _normalizeEventId(String? eventId) {
     final trimmed = eventId?.trim();
-    if (trimmed == null || trimmed.isEmpty || trimmed == _kNoEventId) {
+    if (trimmed == null || trimmed.isEmpty || trimmed == 'sos') {
       return null;
     }
     return trimmed;

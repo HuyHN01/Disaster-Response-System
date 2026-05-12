@@ -38,7 +38,7 @@ class EventNewsController {
         .insert(
           PostsCompanion.insert(
             id: postId,
-            eventId: eventId,
+            eventId: Value(eventId),
             userId: 'admin',
             postType: type, // 'news' hoặc 'directive'
             content: content,

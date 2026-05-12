@@ -1201,9 +1201,9 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
   late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
     'event_id',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES disaster_events (id)',
     ),
@@ -1359,8 +1359,6 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
         _eventIdMeta,
         eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta),
       );
-    } else if (isInserting) {
-      context.missing(_eventIdMeta);
     }
     if (data.containsKey('user_id')) {
       context.handle(
@@ -1455,7 +1453,7 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
       eventId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}event_id'],
-      )!,
+      ),
       userId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}user_id'],
@@ -1507,7 +1505,7 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
 
 class Post extends DataClass implements Insertable<Post> {
   final String id;
-  final String eventId;
+  final String? eventId;
   final String userId;
   final String postType;
   final String? title;
@@ -1520,7 +1518,7 @@ class Post extends DataClass implements Insertable<Post> {
   final String? issuingLevel;
   const Post({
     required this.id,
-    required this.eventId,
+    this.eventId,
     required this.userId,
     required this.postType,
     this.title,
@@ -1536,7 +1534,9 @@ class Post extends DataClass implements Insertable<Post> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['event_id'] = Variable<String>(eventId);
+    if (!nullToAbsent || eventId != null) {
+      map['event_id'] = Variable<String>(eventId);
+    }
     map['user_id'] = Variable<String>(userId);
     map['post_type'] = Variable<String>(postType);
     if (!nullToAbsent || title != null) {
@@ -1561,7 +1561,9 @@ class Post extends DataClass implements Insertable<Post> {
   PostsCompanion toCompanion(bool nullToAbsent) {
     return PostsCompanion(
       id: Value(id),
-      eventId: Value(eventId),
+      eventId: eventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(eventId),
       userId: Value(userId),
       postType: Value(postType),
       title: title == null && nullToAbsent
@@ -1590,7 +1592,7 @@ class Post extends DataClass implements Insertable<Post> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Post(
       id: serializer.fromJson<String>(json['id']),
-      eventId: serializer.fromJson<String>(json['eventId']),
+      eventId: serializer.fromJson<String?>(json['eventId']),
       userId: serializer.fromJson<String>(json['userId']),
       postType: serializer.fromJson<String>(json['postType']),
       title: serializer.fromJson<String?>(json['title']),
@@ -1608,7 +1610,7 @@ class Post extends DataClass implements Insertable<Post> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'eventId': serializer.toJson<String>(eventId),
+      'eventId': serializer.toJson<String?>(eventId),
       'userId': serializer.toJson<String>(userId),
       'postType': serializer.toJson<String>(postType),
       'title': serializer.toJson<String?>(title),
@@ -1624,7 +1626,7 @@ class Post extends DataClass implements Insertable<Post> {
 
   Post copyWith({
     String? id,
-    String? eventId,
+    Value<String?> eventId = const Value.absent(),
     String? userId,
     String? postType,
     Value<String?> title = const Value.absent(),
@@ -1637,7 +1639,7 @@ class Post extends DataClass implements Insertable<Post> {
     Value<String?> issuingLevel = const Value.absent(),
   }) => Post(
     id: id ?? this.id,
-    eventId: eventId ?? this.eventId,
+    eventId: eventId.present ? eventId.value : this.eventId,
     userId: userId ?? this.userId,
     postType: postType ?? this.postType,
     title: title.present ? title.value : this.title,
@@ -1734,7 +1736,7 @@ class Post extends DataClass implements Insertable<Post> {
 
 class PostsCompanion extends UpdateCompanion<Post> {
   final Value<String> id;
-  final Value<String> eventId;
+  final Value<String?> eventId;
   final Value<String> userId;
   final Value<String> postType;
   final Value<String?> title;
@@ -1763,7 +1765,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
   });
   PostsCompanion.insert({
     required String id,
-    required String eventId,
+    this.eventId = const Value.absent(),
     required String userId,
     required String postType,
     this.title = const Value.absent(),
@@ -1776,7 +1778,6 @@ class PostsCompanion extends UpdateCompanion<Post> {
     this.issuingLevel = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       eventId = Value(eventId),
        userId = Value(userId),
        postType = Value(postType),
        content = Value(content),
@@ -1815,7 +1816,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
 
   PostsCompanion copyWith({
     Value<String>? id,
-    Value<String>? eventId,
+    Value<String?>? eventId,
     Value<String>? userId,
     Value<String>? postType,
     Value<String?>? title,
@@ -6455,7 +6456,7 @@ typedef $$DisasterEventsTableProcessedTableManager =
 typedef $$PostsTableCreateCompanionBuilder =
     PostsCompanion Function({
       required String id,
-      required String eventId,
+      Value<String?> eventId,
       required String userId,
       required String postType,
       Value<String?> title,
@@ -6471,7 +6472,7 @@ typedef $$PostsTableCreateCompanionBuilder =
 typedef $$PostsTableUpdateCompanionBuilder =
     PostsCompanion Function({
       Value<String> id,
-      Value<String> eventId,
+      Value<String?> eventId,
       Value<String> userId,
       Value<String> postType,
       Value<String?> title,
@@ -6494,9 +6495,9 @@ final class $$PostsTableReferences
         $_aliasNameGenerator(db.posts.eventId, db.disasterEvents.id),
       );
 
-  $$DisasterEventsTableProcessedTableManager get eventId {
-    final $_column = $_itemColumn<String>('event_id')!;
-
+  $$DisasterEventsTableProcessedTableManager? get eventId {
+    final $_column = $_itemColumn<String>('event_id');
+    if ($_column == null) return null;
     final manager = $$DisasterEventsTableTableManager(
       $_db,
       $_db.disasterEvents,
@@ -7003,7 +7004,7 @@ class $$PostsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String> eventId = const Value.absent(),
+                Value<String?> eventId = const Value.absent(),
                 Value<String> userId = const Value.absent(),
                 Value<String> postType = const Value.absent(),
                 Value<String?> title = const Value.absent(),
@@ -7033,7 +7034,7 @@ class $$PostsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
-                required String eventId,
+                Value<String?> eventId = const Value.absent(),
                 required String userId,
                 required String postType,
                 Value<String?> title = const Value.absent(),
