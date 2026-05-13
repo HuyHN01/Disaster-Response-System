@@ -49,7 +49,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   debugPrint(
     '[FCM Background] id=${message.messageId} '
-    'title=${message.notification?.title}',
+    'title=${message.notification?.title} '
+    'data=${message.data} '
+    'postType=${message.data['postType']}',
   );
 
   // TODO: Nếu cần ghi Drift / SharedPreferences từ background,
@@ -146,32 +148,48 @@ class FCMService {
     if (_initialized) return;
     _initialized = true;
 
+    debugPrint('[FCMService] 🔍 [START] Khởi tạo FCM Service...');
+
     // ── 1. Đăng ký background handler ────────────────────────────────────────
     // Phải gọi TRƯỚC khi app xử lý bất kỳ message nào.
+    debugPrint('[FCMService] ① Đăng ký background handler...');
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    debugPrint('[FCMService] ① Background handler đã đăng ký ✓');
 
     // ── 2. Xin quyền thông báo ────────────────────────────────────────────────
+    debugPrint('[FCMService] ② Xin quyền thông báo (Android 13+/iOS)...');
     await _requestPermission();
 
     // ── 3. Cấu hình FlutterLocalNotifications ────────────────────────────────
+    debugPrint('[FCMService] ③ Cấu hình local notifications channel...');
     await _setupLocalNotifications();
+    debugPrint('[FCMService] ③ Local notifications đã cấu hình ✓');
 
     // ── 4. Lấy & log FCM token (debug) ───────────────────────────────────────
+    debugPrint('[FCMService] ④ Lấy FCM token từ Firebase Installations...');
     await _fetchToken();
+    debugPrint('[FCMService] ④ FCM token: $_fcmToken ${_fcmToken == null ? '❌ NULL' : '✓'}');
 
     // ── 5. Subscribe topic ────────────────────────────────────────────────────
+    debugPrint('[FCMService] ⑤ Subscribe topic disaster_alerts...');
     await _subscribeTopics();
 
     // ── 6. Lắng nghe foreground messages ─────────────────────────────────────
+    debugPrint('[FCMService] ⑥ Setup foreground message listener...');
     _listenForeground();
+    debugPrint('[FCMService] ⑥ Foreground listener đã setup ✓');
 
     // ── 7. Xử lý notification tap (app đang background → foreground) ─────────
+    debugPrint('[FCMService] ⑦ Setup notification tap listener (onMessageOpenedApp)...');
     _listenNotificationTap();
+    debugPrint('[FCMService] ⑦ Notification tap listener đã setup ✓');
 
     // ── 8. Xử lý initial message (app TERMINATED, user tap → mở app) ─────────
+    debugPrint('[FCMService] ⑧ Kiểm tra initial message (app từ terminated)...');
     await _handleInitialMessage();
+    debugPrint('[FCMService] ⑧ Initial message check hoàn tất ✓');
 
-    debugPrint('[FCMService] Khởi tạo hoàn tất. Token: $_fcmToken');
+    debugPrint('[FCMService] 🔍 [DONE] Khởi tạo hoàn tất. Token: $_fcmToken ${_fcmToken == null ? '⚠️ NULL - KHÔNG SUBSCRIBE ĐƯỢC TOPIC' : '✓'}');
   }
 
   // ==========================================================================
@@ -181,19 +199,24 @@ class FCMService {
   // ── 2. Request permission ─────────────────────────────────────────────────
 
   Future<void> _requestPermission() async {
-    final settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      // criticalAlert: true — chỉ dùng nếu được Apple cấp entitlement đặc biệt
-      provisional: false,  // false = hỏi user ngay, không dùng provisional
-      announcement: false,
-      carPlay: false,
-    );
+    debugPrint('[FCMService] _requestPermission() START');
+    try {
+      final settings = await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        // criticalAlert: true — chỉ dùng nếu được Apple cấp entitlement đặc biệt
+        provisional: false,  // false = hỏi user ngay, không dùng provisional
+        announcement: false,
+        carPlay: false,
+      );
 
-    debugPrint(
-      '[FCMService] Quyền thông báo: ${settings.authorizationStatus.name}',
-    );
+      debugPrint(
+        '[FCMService] ✓ Quyền thông báo: ${settings.authorizationStatus.name}',
+      );
+    } catch (e) {
+      debugPrint('[FCMService] ❌ Lỗi _requestPermission(): $e');
+    }
 
     // Trên Android, FCM tự xử lý quyền qua POST_NOTIFICATIONS (API 33+).
     // Trên iOS, nếu user từ chối → không nhận được alert/sound nhưng
@@ -233,48 +256,74 @@ class FCMService {
   // ── 4. Fetch token ────────────────────────────────────────────────────────
 
   Future<void> _fetchToken() async {
+    debugPrint('[FCMService] _fetchToken() START - gọi FirebaseMessaging.instance.getToken()...');
     try {
-      _fcmToken = await _messaging.getToken();
+      debugPrint('[FCMService] Chờ getToken() (này có thể bị timeout nếu FIS_AUTH_ERROR)...');
+      _fcmToken = await _messaging.getToken().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('[FCMService] ⏱️ getToken() TIMEOUT sau 10 giây');
+          return null;
+        },
+      );
+
+      if (_fcmToken == null) {
+        debugPrint('[FCMService] ⚠️ getToken() trả về NULL (có thể FIS_AUTH_ERROR hoặc timeout)');
+      } else {
+        debugPrint('[FCMService] ✓ getToken() thành công: $_fcmToken');
+      }
 
       // Lắng nghe token refresh (xảy ra khi reinstall, restore backup...)
       _messaging.onTokenRefresh.listen((newToken) {
         _fcmToken = newToken;
-        debugPrint('[FCMService] Token mới: $newToken');
+        debugPrint('[FCMService] 🔄 Token refresh listener: Token mới = $newToken');
         // TODO: Gửi token mới lên Firestore nếu dùng targeted notification
         // _saveTokenToFirestore(newToken);
+      }, onError: (e) {
+        debugPrint('[FCMService] ❌ Token refresh listener error: $e');
       });
-    } catch (e) {
-      debugPrint('[FCMService] Không lấy được token: $e');
+
+      debugPrint('[FCMService] ✓ Token refresh listener đã setup');
+    } catch (e, stackTrace) {
+      debugPrint('[FCMService] ❌ _fetchToken() ERROR: $e\nStacktrace: $stackTrace');
+      _fcmToken = null;
     }
   }
 
   // ── 5. Subscribe topics ───────────────────────────────────────────────────
 
   Future<void> _subscribeTopics() async {
+    debugPrint('[FCMService] _subscribeTopics() START - token=$_fcmToken');
+    if (_fcmToken == null) {
+      debugPrint('[FCMService] ⚠️ Token NULL → không thể subscribe (bỏ qua)');
+      return;
+    }
     try {
       // Topic chính: tất cả cảnh báo thiên tai
+      debugPrint('[FCMService] Gọi subscribeToTopic("disaster_alerts") với timeout 8s...');
       await _messaging
           .subscribeToTopic('disaster_alerts')
           .timeout(const Duration(seconds: 8));
-      debugPrint('[FCMService] Đã subscribe topic: disaster_alerts');
+      debugPrint('[FCMService] ✓ Đã subscribe topic: disaster_alerts');
 
       // Có thể subscribe thêm topic theo tỉnh/khu vực nếu cần:
       // await _messaging.subscribeToTopic('region_danang');
     } on TimeoutException {
       debugPrint(
-        '[FCMService] Subscribe topic timeout (bỏ qua để không chặn app)',
+        '[FCMService] ⏱️ Subscribe topic TIMEOUT sau 8 giây (bỏ qua để không chặn app)',
       );
-    } catch (e) {
-      debugPrint('[FCMService] Lỗi subscribe topic: $e');
+    } catch (e, stackTrace) {
+      debugPrint('[FCMService] ❌ Lỗi subscribe topic: $e\nStacktrace: $stackTrace');
     }
   }
 
   // ── 6. Foreground message listener ───────────────────────────────────────
 
   void _listenForeground() {
+    debugPrint('[FCMService] _listenForeground() - setup onMessage listener...');
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint(
-        '[FCMService] Foreground message: ${message.notification?.title}',
+        '[FCMService] 📬 Foreground message nhận được: title="${message.notification?.title}" body="${message.notification?.body}" data=${message.data}',
       );
 
       final notification = message.notification;
@@ -297,27 +346,38 @@ class FCMService {
   // ── 7. Background tap listener ────────────────────────────────────────────
 
   void _listenNotificationTap() {
+    debugPrint('[FCMService] _listenNotificationTap() - setup onMessageOpenedApp listener...');
     // onMessageOpenedApp: user tap notification khi app đang BACKGROUND
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint(
-        '[FCMService] User mở app từ notification: ${message.notification?.title}',
+        '[FCMService] 👆 User tap notification (app từ background): title="${message.notification?.title}" data=${message.data}',
       );
       _handleNavigationFromMessage(message);
+    }, onError: (e) {
+      debugPrint('[FCMService] ❌ onMessageOpenedApp listener error: $e');
     });
   }
 
   // ── 8. Initial message (app TERMINATED) ──────────────────────────────────
 
   Future<void> _handleInitialMessage() async {
+    debugPrint('[FCMService] _handleInitialMessage() - kiểm tra xem app có được mở từ notification (terminated state) không...');
     // getInitialMessage() trả về message nếu app vừa được mở từ notification
     // khi đang ở trạng thái TERMINATED (bị kill hoàn toàn).
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      debugPrint(
-        '[FCMService] App mở từ terminated state: '
-        '${initialMessage.notification?.title}',
-      );
-      _handleNavigationFromMessage(initialMessage);
+    try {
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        debugPrint(
+          '[FCMService] ✓ App mở từ terminated state (initial message found): title="${initialMessage.notification?.title}" data=${initialMessage.data}',
+        );
+        _handleNavigationFromMessage(initialMessage);
+      } else {
+        debugPrint(
+          '[FCMService] ℹ️ Không có initial message (app mở bình thường, không phải từ notification)',
+        );
+      }
+    } catch (e) {
+      debugPrint('[FCMService] ❌ Error getInitialMessage(): $e');
     }
   }
 
@@ -332,6 +392,7 @@ class FCMService {
     required String body,
     String? payload,
   }) async {
+    debugPrint('[FCMService] _showLocalNotification() START: id=$id title="$title" payload=$payload');
     final androidDetails = AndroidNotificationDetails(
       _kChannelId,
       _kChannelName,
@@ -361,37 +422,53 @@ class FCMService {
       iOS: iosDetails,
     );
 
-    await _localNotif.show(
-      id: id,
-      title: title,
-      body: body,
-      notificationDetails: details,
-      payload: payload,
-    );
+    try {
+      await _localNotif.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+        payload: payload,
+      );
+      debugPrint('[FCMService] ✓ Local notification đã show thành công');
+    } catch (e) {
+      debugPrint('[FCMService] ❌ Error _showLocalNotification(): $e');
+    }
   }
 
   /// Callback khi user tap vào local notification (app FOREGROUND).
   void _onLocalNotifTap(NotificationResponse response) {
     final payload = response.payload;
-    debugPrint('[FCMService] Local notification tapped. payload=$payload');
-    if (payload == null || payload.isEmpty) return;
+    debugPrint('[FCMService] _onLocalNotifTap() - Local notification tapped. id=${response.id} payload=$payload');
+    if (payload == null || payload.isEmpty) {
+      debugPrint('[FCMService] ⚠️ Payload rỗng, bỏ qua');
+      return;
+    }
 
     try {
       final decoded = jsonDecode(payload);
-      if (decoded is! Map<String, dynamic>) return;
+      debugPrint('[FCMService] ✓ Payload decoded: $decoded');
+      if (decoded is! Map<String, dynamic>) {
+        debugPrint('[FCMService] ❌ Payload không phải Map<String, dynamic>');
+        return;
+      }
 
       final screen = decoded[_kPayloadScreen] as String?;
       final postId = _extractPostId(decoded);
 
+      debugPrint('[FCMService] screen=$screen, postId=$postId');
+
       if (_isNewsScreen(screen) && postId != null && postId.isNotEmpty) {
+        debugPrint('[FCMService] 📄 Nắng dùng _navigateToNewsDetail($postId)');
         _navigateToNewsDetail(postId);
       } else {
         debugPrint(
-          '[FCMService] Thiếu postId hợp lệ trong local payload. '
-          'screen=$screen payload=$decoded',
+          '[FCMService] ❌ Thiếu postId hợp lệ hoặc screen không phải news. '
+          'screen=$screen postId=$postId payload=$decoded',
         );
       }
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('[FCMService] ❌ Error _onLocalNotifTap(): $e\nStacktrace: $stackTrace');
       // backward-compat: payload cũ có thể chỉ là screen string.
     }
   }
@@ -409,28 +486,29 @@ class FCMService {
     final screen = message.data[_kPayloadScreen] as String?;
     final postId = _extractPostId(message.data);
 
-    debugPrint('[FCMService] Navigate to: screen=$screen postId=$postId');
+    debugPrint('[FCMService] _handleNavigationFromMessage() - screen=$screen postId=$postId, data=${message.data}');
 
     if (_isNewsScreen(screen) && postId != null && postId.isNotEmpty) {
+      debugPrint('[FCMService] 🔗 Nắng dùng _navigateToNewsDetail($postId)');
       _navigateToNewsDetail(postId);
       return;
     }
 
-    debugPrint('[FCMService] Không có route phù hợp cho payload hiện tại');
+    debugPrint('[FCMService] ⚠️ Không có route phù hợp cho payload: screen=$screen postId=$postId');
   }
 
   String? _extractPostId(Map<String, dynamic> data) {
-    final candidates = <String?>[
-      data[_kPayloadPostId] as String?,
-      data[_kPayloadNewsId] as String?,
-      data[_kPayloadPostIdSnake] as String?,
-      data[_kPayloadId] as String?,
-    ];
+    debugPrint('[FCMService] _extractPostId() - tìm postId trong data=${data.keys.toList()}');
+    final candidates = <String?>[data[_kPayloadPostId] as String?, data[_kPayloadNewsId] as String?, data[_kPayloadPostIdSnake] as String?, data[_kPayloadId] as String?];
 
     for (final value in candidates) {
       final v = value?.trim();
-      if (v != null && v.isNotEmpty) return v;
+      if (v != null && v.isNotEmpty) {
+        debugPrint('[FCMService] ✓ PostId found: $v');
+        return v;
+      }
     }
+    debugPrint('[FCMService] ❌ PostId not found in candidates: $candidates');
     return null;
   }
 
@@ -443,23 +521,35 @@ class FCMService {
 
   void _navigateToNewsDetail(String postId) {
     final router = _router;
+    debugPrint('[FCMService] _navigateToNewsDetail($postId) - router=${router != null ? 'READY' : 'NOT_YET'} ');
     if (router == null) {
       _pendingNewsPostId = postId;
-      debugPrint('[FCMService] Router chưa sẵn sàng, queue postId=$postId');
+      debugPrint('[FCMService] ⚠️ Router chưa sẵn sàng, queue postId=$postId để điều hướng sau');
       return;
     }
 
-    router.pushNamed(
-      RouteNames.nameNewsDetail,
-      pathParameters: {RouteNames.paramPostId: postId},
-    );
+    try {
+      debugPrint('[FCMService] 🔗 pushNamed(${RouteNames.nameNewsDetail}, pathParameters={postId: $postId})');
+      router.pushNamed(
+        RouteNames.nameNewsDetail,
+        pathParameters: {RouteNames.paramPostId: postId},
+      );
+      debugPrint('[FCMService] ✓ Navigation thành công');
+    } catch (e) {
+      debugPrint('[FCMService] ❌ Error pushNamed: $e');
+    }
   }
 
   void _flushPendingNavigation() {
     final pending = _pendingNewsPostId;
-    if (pending == null) return;
+    debugPrint('[FCMService] _flushPendingNavigation() - pending postId=$pending');
+    if (pending == null) {
+      debugPrint('[FCMService] Không có pending navigation');
+      return;
+    }
 
     _pendingNewsPostId = null;
+    debugPrint('[FCMService] 🔗 Processing pending navigation: postId=$pending');
     _navigateToNewsDetail(pending);
   }
 
