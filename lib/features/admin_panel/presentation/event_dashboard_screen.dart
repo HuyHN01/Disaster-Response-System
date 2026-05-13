@@ -401,7 +401,7 @@ class EventTable extends StatelessWidget {
 // =============================================================================
 // TABLE ROW WIDGET
 // =============================================================================
-class _TableRow extends StatefulWidget {
+class _TableRow extends ConsumerStatefulWidget {
   final bool isHeader;
   final List<String> cells;
   final DisasterEvent? event;
@@ -413,11 +413,19 @@ class _TableRow extends StatefulWidget {
   });
 
   @override
-  State<_TableRow> createState() => _TableRowState();
+  ConsumerState<_TableRow> createState() => _TableRowState();
 }
 
-class _TableRowState extends State<_TableRow> {
+class _TableRowState extends ConsumerState<_TableRow> {
   bool _isHovered = false;
+
+  final _eventTypes = const [
+    {'value': 'typhoon', 'label': '🌀 Bão'},
+    {'value': 'flood', 'label': '🌊 Lũ lụt'},
+    {'value': 'storm', 'label': '⛈️ Dông bão'},
+    {'value': 'wildfire', 'label': '🔥 Cháy rừng'},
+    {'value': 'landslide', 'label': '⛰️ Sạt lở'},
+  ];
 
   String _localizeEventType(String type) {
     const map = {
@@ -448,6 +456,184 @@ class _TableRowState extends State<_TableRow> {
       'Th12',
     ];
     return '${dt.day} ${months[dt.month]}, ${dt.year}';
+  }
+
+  void _showEditEventDialog(DisasterEvent event) {
+    final titleController = TextEditingController(text: event.title);
+    String selectedType = event.eventType;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: AppColors.scaffoldBg,
+              title: const Text(
+                'Chỉnh sửa sự kiện',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tên sự kiện',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(
+                        hintText: 'VD: Bão số 3 Yagi...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Loại hình',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedType,
+                          isExpanded: true,
+                          items: _eventTypes.map((type) {
+                            return DropdownMenuItem<String>(
+                              value: type['value']!,
+                              child: Text(type['label']!),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => selectedType = value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Hủy',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final trimmed = titleController.text.trim();
+                    if (trimmed.isEmpty) return;
+
+                    try {
+                      await ref
+                          .read(eventControllerProvider.notifier)
+                          .updateEvent(
+                            eventId: event.id,
+                            title: trimmed,
+                            eventType: selectedType,
+                          );
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Lỗi: $e'),
+                            backgroundColor: AppColors.brandRed,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandRed,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Lưu thay đổi'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmSoftDelete(DisasterEvent event) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.scaffoldBg,
+          title: const Text(
+            'Xoá sự kiện?',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Text(
+            'Sự kiện "${event.title}" sẽ bị ẩn khỏi toàn bộ hệ thống. '
+            'Bạn có chắc chắn muốn xoá?',
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Hủy',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                try {
+                  await ref
+                      .read(eventControllerProvider.notifier)
+                      .softDeleteEvent(event.id);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Lỗi: $e'),
+                        backgroundColor: AppColors.brandRed,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Xoá'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -532,7 +718,13 @@ class _TableRowState extends State<_TableRow> {
                   _ActionButton(
                     icon: Icons.edit_outlined,
                     tooltip: 'Chỉnh sửa',
-                    onTap: () {},
+                    onTap: () => _showEditEventDialog(event),
+                  ),
+                  const SizedBox(width: 8),
+                  _ActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Xoá',
+                    onTap: () => _confirmSoftDelete(event),
                   ),
                 ],
               ),
