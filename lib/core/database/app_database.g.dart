@@ -1201,9 +1201,9 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
   late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
     'event_id',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES disaster_events (id)',
     ),
@@ -1359,8 +1359,6 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
         _eventIdMeta,
         eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta),
       );
-    } else if (isInserting) {
-      context.missing(_eventIdMeta);
     }
     if (data.containsKey('user_id')) {
       context.handle(
@@ -1455,7 +1453,7 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
       eventId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}event_id'],
-      )!,
+      ),
       userId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}user_id'],
@@ -1507,7 +1505,7 @@ class $PostsTable extends Posts with TableInfo<$PostsTable, Post> {
 
 class Post extends DataClass implements Insertable<Post> {
   final String id;
-  final String eventId;
+  final String? eventId;
   final String userId;
   final String postType;
   final String? title;
@@ -1520,7 +1518,7 @@ class Post extends DataClass implements Insertable<Post> {
   final String? issuingLevel;
   const Post({
     required this.id,
-    required this.eventId,
+    this.eventId,
     required this.userId,
     required this.postType,
     this.title,
@@ -1536,7 +1534,9 @@ class Post extends DataClass implements Insertable<Post> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['event_id'] = Variable<String>(eventId);
+    if (!nullToAbsent || eventId != null) {
+      map['event_id'] = Variable<String>(eventId);
+    }
     map['user_id'] = Variable<String>(userId);
     map['post_type'] = Variable<String>(postType);
     if (!nullToAbsent || title != null) {
@@ -1561,7 +1561,9 @@ class Post extends DataClass implements Insertable<Post> {
   PostsCompanion toCompanion(bool nullToAbsent) {
     return PostsCompanion(
       id: Value(id),
-      eventId: Value(eventId),
+      eventId: eventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(eventId),
       userId: Value(userId),
       postType: Value(postType),
       title: title == null && nullToAbsent
@@ -1590,7 +1592,7 @@ class Post extends DataClass implements Insertable<Post> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Post(
       id: serializer.fromJson<String>(json['id']),
-      eventId: serializer.fromJson<String>(json['eventId']),
+      eventId: serializer.fromJson<String?>(json['eventId']),
       userId: serializer.fromJson<String>(json['userId']),
       postType: serializer.fromJson<String>(json['postType']),
       title: serializer.fromJson<String?>(json['title']),
@@ -1608,7 +1610,7 @@ class Post extends DataClass implements Insertable<Post> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'eventId': serializer.toJson<String>(eventId),
+      'eventId': serializer.toJson<String?>(eventId),
       'userId': serializer.toJson<String>(userId),
       'postType': serializer.toJson<String>(postType),
       'title': serializer.toJson<String?>(title),
@@ -1624,7 +1626,7 @@ class Post extends DataClass implements Insertable<Post> {
 
   Post copyWith({
     String? id,
-    String? eventId,
+    Value<String?> eventId = const Value.absent(),
     String? userId,
     String? postType,
     Value<String?> title = const Value.absent(),
@@ -1637,7 +1639,7 @@ class Post extends DataClass implements Insertable<Post> {
     Value<String?> issuingLevel = const Value.absent(),
   }) => Post(
     id: id ?? this.id,
-    eventId: eventId ?? this.eventId,
+    eventId: eventId.present ? eventId.value : this.eventId,
     userId: userId ?? this.userId,
     postType: postType ?? this.postType,
     title: title.present ? title.value : this.title,
@@ -1734,7 +1736,7 @@ class Post extends DataClass implements Insertable<Post> {
 
 class PostsCompanion extends UpdateCompanion<Post> {
   final Value<String> id;
-  final Value<String> eventId;
+  final Value<String?> eventId;
   final Value<String> userId;
   final Value<String> postType;
   final Value<String?> title;
@@ -1763,7 +1765,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
   });
   PostsCompanion.insert({
     required String id,
-    required String eventId,
+    this.eventId = const Value.absent(),
     required String userId,
     required String postType,
     this.title = const Value.absent(),
@@ -1776,7 +1778,6 @@ class PostsCompanion extends UpdateCompanion<Post> {
     this.issuingLevel = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       eventId = Value(eventId),
        userId = Value(userId),
        postType = Value(postType),
        content = Value(content),
@@ -1815,7 +1816,7 @@ class PostsCompanion extends UpdateCompanion<Post> {
 
   PostsCompanion copyWith({
     Value<String>? id,
-    Value<String>? eventId,
+    Value<String?>? eventId,
     Value<String>? userId,
     Value<String>? postType,
     Value<String?>? title,
@@ -2658,6 +2659,20 @@ class $RescueStationsTable extends RescueStations
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _eventIdMeta = const VerificationMeta(
+    'eventId',
+  );
+  @override
+  late final GeneratedColumn<String> eventId = GeneratedColumn<String>(
+    'event_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES disaster_events (id)',
+    ),
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -2804,6 +2819,7 @@ class $RescueStationsTable extends RescueStations
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    eventId,
     name,
     latitude,
     longitude,
@@ -2834,6 +2850,12 @@ class $RescueStationsTable extends RescueStations
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('event_id')) {
+      context.handle(
+        _eventIdMeta,
+        eventId.isAcceptableOrUnknown(data['event_id']!, _eventIdMeta),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -2940,6 +2962,10 @@ class $RescueStationsTable extends RescueStations
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      eventId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}event_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -3003,6 +3029,7 @@ class $RescueStationsTable extends RescueStations
 
 class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String id;
+  final String? eventId;
   final String name;
   final double latitude;
   final double longitude;
@@ -3018,6 +3045,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   final String syncStatus;
   const RescueStation({
     required this.id,
+    this.eventId,
     required this.name,
     required this.latitude,
     required this.longitude,
@@ -3036,6 +3064,9 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    if (!nullToAbsent || eventId != null) {
+      map['event_id'] = Variable<String>(eventId);
+    }
     map['name'] = Variable<String>(name);
     map['latitude'] = Variable<double>(latitude);
     map['longitude'] = Variable<double>(longitude);
@@ -3065,6 +3096,9 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   RescueStationsCompanion toCompanion(bool nullToAbsent) {
     return RescueStationsCompanion(
       id: Value(id),
+      eventId: eventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(eventId),
       name: Value(name),
       latitude: Value(latitude),
       longitude: Value(longitude),
@@ -3098,6 +3132,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return RescueStation(
       id: serializer.fromJson<String>(json['id']),
+      eventId: serializer.fromJson<String?>(json['eventId']),
       name: serializer.fromJson<String>(json['name']),
       latitude: serializer.fromJson<double>(json['latitude']),
       longitude: serializer.fromJson<double>(json['longitude']),
@@ -3118,6 +3153,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'eventId': serializer.toJson<String?>(eventId),
       'name': serializer.toJson<String>(name),
       'latitude': serializer.toJson<double>(latitude),
       'longitude': serializer.toJson<double>(longitude),
@@ -3136,6 +3172,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
 
   RescueStation copyWith({
     String? id,
+    Value<String?> eventId = const Value.absent(),
     String? name,
     double? latitude,
     double? longitude,
@@ -3151,6 +3188,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
     String? syncStatus,
   }) => RescueStation(
     id: id ?? this.id,
+    eventId: eventId.present ? eventId.value : this.eventId,
     name: name ?? this.name,
     latitude: latitude ?? this.latitude,
     longitude: longitude ?? this.longitude,
@@ -3168,6 +3206,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   RescueStation copyWithCompanion(RescueStationsCompanion data) {
     return RescueStation(
       id: data.id.present ? data.id.value : this.id,
+      eventId: data.eventId.present ? data.eventId.value : this.eventId,
       name: data.name.present ? data.name.value : this.name,
       latitude: data.latitude.present ? data.latitude.value : this.latitude,
       longitude: data.longitude.present ? data.longitude.value : this.longitude,
@@ -3194,6 +3233,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   String toString() {
     return (StringBuffer('RescueStation(')
           ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
           ..write('name: $name, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
@@ -3214,6 +3254,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
   @override
   int get hashCode => Object.hash(
     id,
+    eventId,
     name,
     latitude,
     longitude,
@@ -3233,6 +3274,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
       identical(this, other) ||
       (other is RescueStation &&
           other.id == this.id &&
+          other.eventId == this.eventId &&
           other.name == this.name &&
           other.latitude == this.latitude &&
           other.longitude == this.longitude &&
@@ -3250,6 +3292,7 @@ class RescueStation extends DataClass implements Insertable<RescueStation> {
 
 class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<String> id;
+  final Value<String?> eventId;
   final Value<String> name;
   final Value<double> latitude;
   final Value<double> longitude;
@@ -3266,6 +3309,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   final Value<int> rowid;
   const RescueStationsCompanion({
     this.id = const Value.absent(),
+    this.eventId = const Value.absent(),
     this.name = const Value.absent(),
     this.latitude = const Value.absent(),
     this.longitude = const Value.absent(),
@@ -3283,6 +3327,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   });
   RescueStationsCompanion.insert({
     required String id,
+    this.eventId = const Value.absent(),
     required String name,
     required double latitude,
     required double longitude,
@@ -3304,6 +3349,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
        createdAt = Value(createdAt);
   static Insertable<RescueStation> custom({
     Expression<String>? id,
+    Expression<String>? eventId,
     Expression<String>? name,
     Expression<double>? latitude,
     Expression<double>? longitude,
@@ -3321,6 +3367,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (eventId != null) 'event_id': eventId,
       if (name != null) 'name': name,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
@@ -3340,6 +3387,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
 
   RescueStationsCompanion copyWith({
     Value<String>? id,
+    Value<String?>? eventId,
     Value<String>? name,
     Value<double>? latitude,
     Value<double>? longitude,
@@ -3357,6 +3405,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   }) {
     return RescueStationsCompanion(
       id: id ?? this.id,
+      eventId: eventId ?? this.eventId,
       name: name ?? this.name,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -3379,6 +3428,9 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (eventId.present) {
+      map['event_id'] = Variable<String>(eventId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -3429,6 +3481,7 @@ class RescueStationsCompanion extends UpdateCompanion<RescueStation> {
   String toString() {
     return (StringBuffer('RescueStationsCompanion(')
           ..write('id: $id, ')
+          ..write('eventId: $eventId, ')
           ..write('name: $name, ')
           ..write('latitude: $latitude, ')
           ..write('longitude: $longitude, ')
@@ -5916,6 +5969,27 @@ final class $$DisasterEventsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$RescueStationsTable, List<RescueStation>>
+  _rescueStationsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.rescueStations,
+    aliasName: $_aliasNameGenerator(
+      db.disasterEvents.id,
+      db.rescueStations.eventId,
+    ),
+  );
+
+  $$RescueStationsTableProcessedTableManager get rescueStationsRefs {
+    final manager = $$RescueStationsTableTableManager(
+      $_db,
+      $_db.rescueStations,
+    ).filter((f) => f.eventId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_rescueStationsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$EventDamageStatsTable, List<EventDamageStat>>
   _eventDamageStatsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.eventDamageStats,
@@ -5995,6 +6069,31 @@ class $$DisasterEventsTableFilterComposer
           }) => $$PostsTableFilterComposer(
             $db: $db,
             $table: $db.posts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> rescueStationsRefs(
+    Expression<bool> Function($$RescueStationsTableFilterComposer f) f,
+  ) {
+    final $$RescueStationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.eventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableFilterComposer(
+            $db: $db,
+            $table: $db.rescueStations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6122,6 +6221,31 @@ class $$DisasterEventsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> rescueStationsRefs<T extends Object>(
+    Expression<T> Function($$RescueStationsTableAnnotationComposer a) f,
+  ) {
+    final $$RescueStationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.rescueStations,
+      getReferencedColumn: (t) => t.eventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$RescueStationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.rescueStations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> eventDamageStatsRefs<T extends Object>(
     Expression<T> Function($$EventDamageStatsTableAnnotationComposer a) f,
   ) {
@@ -6161,7 +6285,11 @@ class $$DisasterEventsTableTableManager
           $$DisasterEventsTableUpdateCompanionBuilder,
           (DisasterEvent, $$DisasterEventsTableReferences),
           DisasterEvent,
-          PrefetchHooks Function({bool postsRefs, bool eventDamageStatsRefs})
+          PrefetchHooks Function({
+            bool postsRefs,
+            bool rescueStationsRefs,
+            bool eventDamageStatsRefs,
+          })
         > {
   $$DisasterEventsTableTableManager(
     _$AppDatabase db,
@@ -6221,11 +6349,16 @@ class $$DisasterEventsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({postsRefs = false, eventDamageStatsRefs = false}) {
+              ({
+                postsRefs = false,
+                rescueStationsRefs = false,
+                eventDamageStatsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (postsRefs) db.posts,
+                    if (rescueStationsRefs) db.rescueStations,
                     if (eventDamageStatsRefs) db.eventDamageStats,
                   ],
                   addJoins: null,
@@ -6246,6 +6379,27 @@ class $$DisasterEventsTableTableManager
                                 table,
                                 p0,
                               ).postsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.eventId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (rescueStationsRefs)
+                        await $_getPrefetchedData<
+                          DisasterEvent,
+                          $DisasterEventsTable,
+                          RescueStation
+                        >(
+                          currentTable: table,
+                          referencedTable: $$DisasterEventsTableReferences
+                              ._rescueStationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$DisasterEventsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).rescueStationsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.eventId == item.id,
@@ -6293,12 +6447,16 @@ typedef $$DisasterEventsTableProcessedTableManager =
       $$DisasterEventsTableUpdateCompanionBuilder,
       (DisasterEvent, $$DisasterEventsTableReferences),
       DisasterEvent,
-      PrefetchHooks Function({bool postsRefs, bool eventDamageStatsRefs})
+      PrefetchHooks Function({
+        bool postsRefs,
+        bool rescueStationsRefs,
+        bool eventDamageStatsRefs,
+      })
     >;
 typedef $$PostsTableCreateCompanionBuilder =
     PostsCompanion Function({
       required String id,
-      required String eventId,
+      Value<String?> eventId,
       required String userId,
       required String postType,
       Value<String?> title,
@@ -6314,7 +6472,7 @@ typedef $$PostsTableCreateCompanionBuilder =
 typedef $$PostsTableUpdateCompanionBuilder =
     PostsCompanion Function({
       Value<String> id,
-      Value<String> eventId,
+      Value<String?> eventId,
       Value<String> userId,
       Value<String> postType,
       Value<String?> title,
@@ -6337,9 +6495,9 @@ final class $$PostsTableReferences
         $_aliasNameGenerator(db.posts.eventId, db.disasterEvents.id),
       );
 
-  $$DisasterEventsTableProcessedTableManager get eventId {
-    final $_column = $_itemColumn<String>('event_id')!;
-
+  $$DisasterEventsTableProcessedTableManager? get eventId {
+    final $_column = $_itemColumn<String>('event_id');
+    if ($_column == null) return null;
     final manager = $$DisasterEventsTableTableManager(
       $_db,
       $_db.disasterEvents,
@@ -6846,7 +7004,7 @@ class $$PostsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String> eventId = const Value.absent(),
+                Value<String?> eventId = const Value.absent(),
                 Value<String> userId = const Value.absent(),
                 Value<String> postType = const Value.absent(),
                 Value<String?> title = const Value.absent(),
@@ -6876,7 +7034,7 @@ class $$PostsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
-                required String eventId,
+                Value<String?> eventId = const Value.absent(),
                 required String userId,
                 required String postType,
                 Value<String?> title = const Value.absent(),
@@ -7675,6 +7833,7 @@ typedef $$AttachmentsTableProcessedTableManager =
 typedef $$RescueStationsTableCreateCompanionBuilder =
     RescueStationsCompanion Function({
       required String id,
+      Value<String?> eventId,
       required String name,
       required double latitude,
       required double longitude,
@@ -7693,6 +7852,7 @@ typedef $$RescueStationsTableCreateCompanionBuilder =
 typedef $$RescueStationsTableUpdateCompanionBuilder =
     RescueStationsCompanion Function({
       Value<String> id,
+      Value<String?> eventId,
       Value<String> name,
       Value<double> latitude,
       Value<double> longitude,
@@ -7716,6 +7876,25 @@ final class $$RescueStationsTableReferences
     super.$_table,
     super.$_typedResult,
   );
+
+  static $DisasterEventsTable _eventIdTable(_$AppDatabase db) =>
+      db.disasterEvents.createAlias(
+        $_aliasNameGenerator(db.rescueStations.eventId, db.disasterEvents.id),
+      );
+
+  $$DisasterEventsTableProcessedTableManager? get eventId {
+    final $_column = $_itemColumn<String>('event_id');
+    if ($_column == null) return null;
+    final manager = $$DisasterEventsTableTableManager(
+      $_db,
+      $_db.disasterEvents,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_eventIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static MultiTypedResultKey<$CheckInLogsTable, List<CheckInLog>>
   _checkInLogsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -7817,6 +7996,29 @@ class $$RescueStationsTableFilterComposer
     column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$DisasterEventsTableFilterComposer get eventId {
+    final $$DisasterEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<bool> checkInLogsRefs(
     Expression<bool> Function($$CheckInLogsTableFilterComposer f) f,
@@ -7922,6 +8124,29 @@ class $$RescueStationsTableOrderingComposer
     column: $table.syncStatus,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$DisasterEventsTableOrderingComposer get eventId {
+    final $$DisasterEventsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableOrderingComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$RescueStationsTableAnnotationComposer
@@ -7981,6 +8206,29 @@ class $$RescueStationsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  $$DisasterEventsTableAnnotationComposer get eventId {
+    final $$DisasterEventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.eventId,
+      referencedTable: $db.disasterEvents,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$DisasterEventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.disasterEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> checkInLogsRefs<T extends Object>(
     Expression<T> Function($$CheckInLogsTableAnnotationComposer a) f,
   ) {
@@ -8020,7 +8268,7 @@ class $$RescueStationsTableTableManager
           $$RescueStationsTableUpdateCompanionBuilder,
           (RescueStation, $$RescueStationsTableReferences),
           RescueStation,
-          PrefetchHooks Function({bool checkInLogsRefs})
+          PrefetchHooks Function({bool eventId, bool checkInLogsRefs})
         > {
   $$RescueStationsTableTableManager(
     _$AppDatabase db,
@@ -8038,6 +8286,7 @@ class $$RescueStationsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String?> eventId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<double> latitude = const Value.absent(),
                 Value<double> longitude = const Value.absent(),
@@ -8054,6 +8303,7 @@ class $$RescueStationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => RescueStationsCompanion(
                 id: id,
+                eventId: eventId,
                 name: name,
                 latitude: latitude,
                 longitude: longitude,
@@ -8072,6 +8322,7 @@ class $$RescueStationsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String?> eventId = const Value.absent(),
                 required String name,
                 required double latitude,
                 required double longitude,
@@ -8088,6 +8339,7 @@ class $$RescueStationsTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => RescueStationsCompanion.insert(
                 id: id,
+                eventId: eventId,
                 name: name,
                 latitude: latitude,
                 longitude: longitude,
@@ -8111,11 +8363,43 @@ class $$RescueStationsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({checkInLogsRefs = false}) {
+          prefetchHooksCallback: ({eventId = false, checkInLogsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [if (checkInLogsRefs) db.checkInLogs],
-              addJoins: null,
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (eventId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.eventId,
+                                referencedTable: $$RescueStationsTableReferences
+                                    ._eventIdTable(db),
+                                referencedColumn:
+                                    $$RescueStationsTableReferences
+                                        ._eventIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (checkInLogsRefs)
@@ -8157,7 +8441,7 @@ typedef $$RescueStationsTableProcessedTableManager =
       $$RescueStationsTableUpdateCompanionBuilder,
       (RescueStation, $$RescueStationsTableReferences),
       RescueStation,
-      PrefetchHooks Function({bool checkInLogsRefs})
+      PrefetchHooks Function({bool eventId, bool checkInLogsRefs})
     >;
 typedef $$CheckInLogsTableCreateCompanionBuilder =
     CheckInLogsCompanion Function({

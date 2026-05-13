@@ -16,6 +16,11 @@ class EventRepository {
   /// Lấy toàn bộ sự kiện, mới nhất lên trước
   Future<List<DisasterEvent>> getAllEvents() async {
     return (_db.select(_db.disasterEvents)
+          ..where(
+            (t) =>
+                t.status.equals('inactive').not() &
+                t.status.equals('unactive').not(),
+          )
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .get();
   }
@@ -25,6 +30,32 @@ class EventRepository {
     await _db
         .into(_db.disasterEvents)
         .insertOnConflictUpdate(event);
+  }
+
+  Future<void> updateEventFields({
+    required String eventId,
+    required String title,
+    required String eventType,
+  }) async {
+    await (_db.update(_db.disasterEvents)..where((e) => e.id.equals(eventId)))
+        .write(
+      DisasterEventsCompanion(
+        title: Value(title),
+        eventType: Value(eventType),
+      ),
+    );
+  }
+
+  Future<void> updateEventStatus({
+    required String eventId,
+    required String status,
+  }) async {
+    await (_db.update(_db.disasterEvents)..where((e) => e.id.equals(eventId)))
+        .write(
+      DisasterEventsCompanion(
+        status: Value(status),
+      ),
+    );
   }
 }
 
@@ -39,6 +70,9 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
   // Lazy getter — tránh gọi ref.read bên ngoài lifecycle của notifier
   EventRepository get _repository => ref.read(eventRepositoryProvider);
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+
+  static const String _statusActive = 'active';
+  static const String _statusInactive = 'inactive';
 
   // ---------------------------------------------------------------------------
   // INIT
@@ -84,7 +118,7 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
         'id': newId,
         'title': title,
         'eventType': eventType,
-        'status': 'active',
+        'status': _statusActive,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': 'admin',
       });
@@ -100,7 +134,7 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
         id: newId,
         title: title,
         eventType: eventType,
-        status: 'active',
+        status: _statusActive,
         createdAt: now,
         createdBy: 'admin',
       ),
@@ -115,6 +149,46 @@ class EventController extends AsyncNotifier<List<DisasterEvent>> {
         'Đã lưu offline. Sẽ đồng bộ khi có kết nối.\n($firestoreError)',
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // UPDATE
+  // ---------------------------------------------------------------------------
+
+  Future<void> updateEvent({
+    required String eventId,
+    required String title,
+    required String eventType,
+  }) async {
+    await _firestore.collection('disaster_events').doc(eventId).update({
+      'title': title,
+      'eventType': eventType,
+    });
+
+    await _repository.updateEventFields(
+      eventId: eventId,
+      title: title,
+      eventType: eventType,
+    );
+
+    await loadEvents();
+  }
+
+  // ---------------------------------------------------------------------------
+  // SOFT DELETE
+  // ---------------------------------------------------------------------------
+
+  Future<void> softDeleteEvent(String eventId) async {
+    await _firestore.collection('disaster_events').doc(eventId).update({
+      'status': _statusInactive,
+    });
+
+    await _repository.updateEventStatus(
+      eventId: eventId,
+      status: _statusInactive,
+    );
+
+    await loadEvents();
   }
 
   // ignore: avoid_print

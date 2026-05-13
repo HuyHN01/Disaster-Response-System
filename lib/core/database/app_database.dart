@@ -43,7 +43,7 @@ class DisasterEvents extends Table {
 // ============ BẢNG POSTS ============
 class Posts extends Table {
   TextColumn get id => text()();
-  TextColumn get eventId => text().references(DisasterEvents, #id)();
+  TextColumn get eventId => text().nullable().references(DisasterEvents, #id)();
   TextColumn get userId => text().references(Users, #id)();
   TextColumn get postType => text()();
   TextColumn get title => text().nullable()();
@@ -86,6 +86,7 @@ class Attachments extends Table {
 // ============ BẢNG RESCUE STATIONS ============
 class RescueStations extends Table {
   TextColumn get id => text()();
+  TextColumn get eventId => text().nullable().references(DisasterEvents, #id)();
   TextColumn get name => text()();
   RealColumn get latitude => real()();
   RealColumn get longitude => real()();
@@ -179,7 +180,7 @@ class AppDatabase extends _$AppDatabase {
   factory AppDatabase.defaults() => AppDatabase(createConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -268,6 +269,66 @@ FROM users;
         await m.createTable(eventDamageStats);
         await m.addColumn(posts, posts.issuingLevel);
         await m.addColumn(users, users.medicalProfileJson);
+      }
+
+      if (from < 8) {
+        await m.addColumn(rescueStations, rescueStations.eventId);
+      }
+
+      if (from < 9) {
+        await customStatement('PRAGMA foreign_keys = OFF;');
+
+        await customStatement('''
+CREATE TABLE posts_new (
+  id TEXT NOT NULL PRIMARY KEY,
+  event_id TEXT NULL REFERENCES disaster_events (id),
+  user_id TEXT NOT NULL REFERENCES users (id),
+  post_type TEXT NOT NULL,
+  title TEXT NULL,
+  attachment_url TEXT NULL,
+  attachment_name TEXT NULL,
+  content TEXT NOT NULL,
+  is_verified INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  sync_status TEXT NOT NULL DEFAULT 'pending',
+  issuing_level TEXT NULL
+);
+''');
+
+        await customStatement('''
+INSERT INTO posts_new (
+  id,
+  event_id,
+  user_id,
+  post_type,
+  title,
+  attachment_url,
+  attachment_name,
+  content,
+  is_verified,
+  created_at,
+  sync_status,
+  issuing_level
+)
+SELECT
+  id,
+  event_id,
+  user_id,
+  post_type,
+  title,
+  attachment_url,
+  attachment_name,
+  content,
+  is_verified,
+  created_at,
+  sync_status,
+  issuing_level
+FROM posts;
+''');
+
+        await customStatement('DROP TABLE posts;');
+        await customStatement('ALTER TABLE posts_new RENAME TO posts;');
+        await customStatement('PRAGMA foreign_keys = ON;');
       }
     },
   );

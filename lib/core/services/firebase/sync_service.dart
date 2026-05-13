@@ -10,6 +10,8 @@ import 'package:disaster_response_app/core/database/db_provider.dart';
 import 'package:drift/drift.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 // =============================================================================
 // CONSTANTS — Firestore collection names
@@ -458,7 +460,8 @@ class FirebaseSyncService {
   Future<void> migrateAndSyncUserData(String realUid) async {
     _log('Migrating anonymous data to real Uid: $realUid');
     // Step 1: Local Ownership Transfer
-    final tempUids = const ['citizen_01', 'anonymous', 'null', ''];
+    final deviceId = await _getDeviceId();
+    final tempUids = ['citizen_01', 'anonymous', 'null', '', deviceId];
 
     // Update Posts - gỡ điều kiện pending, force lại thành pending để kích hoạt update lên Firebase
     await (_db.update(_db.posts)..where((t) => t.userId.isIn(tempUids)))
@@ -514,6 +517,16 @@ class FirebaseSyncService {
     await syncPendingCheckInLogs();
     
     _log('Migration complete for Uid: $realUid');
+  }
+
+  Future<String> _getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? deviceId = prefs.getString('guest_device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await prefs.setString('guest_device_id', deviceId);
+    }
+    return deviceId;
   }
 
   /// Tears everything down — call when the user signs out or app disposes.
@@ -827,6 +840,7 @@ class FirebaseSyncService {
     }
   }
 
+  // ignore: unused_element
   Future<void> _handleUsersSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot, {
     void Function(User user)? onUpsert,
@@ -905,7 +919,7 @@ class FirebaseSyncService {
 
   Map<String, dynamic> _postToFirestore(Post post) => {
     'id': post.id,
-    'eventId': post.eventId,
+    'eventId': _normalizeEventId(post.eventId),
     'userId': post.userId,
     'postType': post.postType,
     'content': post.content,
@@ -914,6 +928,14 @@ class FirebaseSyncService {
     'syncStatus': 'synced',
     'uploadedAt': FieldValue.serverTimestamp(),
   };
+
+  String? _normalizeEventId(String? eventId) {
+    final trimmed = eventId?.trim();
+    if (trimmed == null || trimmed.isEmpty || trimmed == 'sos') {
+      return null;
+    }
+    return trimmed;
+  }
 
   Map<String, dynamic> _locationToFirestore(Location loc) => {
     'id': loc.id,
@@ -928,6 +950,7 @@ class FirebaseSyncService {
     'name': s.name,
     'latitude': s.latitude,
     'longitude': s.longitude,
+    'eventId': s.eventId,
     'address': s.address,
     'contactPhone': s.contactPhone,
     'capacity': s.capacity,
@@ -1012,6 +1035,7 @@ class FirebaseSyncService {
           : '(Chưa đặt tên trạm)',
       latitude: rawLat.toDouble(),
       longitude: rawLng.toDouble(),
+      eventId: Value((data['eventId'] as String?)?.trim()),
       address: Value((data['address'] as String?)?.trim()),
       contactPhone: Value((data['contactPhone'] as String?)?.trim()),
       capacity: Value((data['capacity'] as num?)?.toInt()),
@@ -1090,10 +1114,11 @@ class FirebaseSyncService {
 
   PostsCompanion _firestoreToPostCompanion(String docId, Map<String, dynamic> data) {
     final createdAt = _asDateTime(data['createdAt']) ?? DateTime.now();
+    final rawEventId = (data['eventId'] as String?)?.trim();
 
     return PostsCompanion.insert(
       id: docId,
-      eventId: (data['eventId'] as String?) ?? '',
+      eventId: Value(rawEventId?.isNotEmpty == true ? rawEventId : null),
       userId: (data['userId'] as String?) ?? '',
       postType: (data['postType'] as String?) ?? 'sos',
       title: Value((data['title'] as String?)?.trim()),

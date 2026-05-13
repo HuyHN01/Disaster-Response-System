@@ -7,6 +7,7 @@ import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/services/routing/open_route_service.dart';
 import 'package:disaster_response_app/features/event_map/domain/event_map_controller.dart';
 import 'package:disaster_response_app/features/event_map/domain/community_report_controller.dart';
+import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_controller.dart';
 import 'package:disaster_response_app/features/admin_panel/rescue_stations/domain/rescue_station_repository.dart';
 import 'package:disaster_response_app/features/user_mobile/domain/sos_controller.dart';
@@ -1891,6 +1892,7 @@ class _SosConfirmDialog extends ConsumerStatefulWidget {
 class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
   bool _sending = false;
   bool _showDetails = false;
+  String? _selectedEventId;
 
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -1934,6 +1936,12 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
   Widget build(BuildContext context) {
     // Listen to SOSController state for loading feedback
     final sosState = ref.watch(sosControllerProvider);
+    final eventsAsync = ref.watch(eventControllerProvider);
+    final activeEvents = eventsAsync.maybeWhen(
+      data: (events) =>
+          events.where((e) => e.status == 'active').toList(),
+      orElse: () => const <DisasterEvent>[],
+    );
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -2018,6 +2026,71 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
               ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String?>(
+                value: _selectedEventId,
+                decoration: InputDecoration(
+                  labelText: 'Sự kiện (tuỳ chọn)',
+                  labelStyle: const TextStyle(
+                    fontSize: 13,
+                    color: _MapColors.textSecondary,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: _MapColors.sosRed, width: 1.5),
+                  ),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Không chọn sự kiện'),
+                  ),
+                  ...activeEvents.map(
+                    (event) => DropdownMenuItem<String?>(
+                      value: event.id,
+                      child: Text(event.title),
+                    ),
+                  ),
+                ],
+                onChanged: (val) => setState(() => _selectedEventId = val),
+              ),
+              if (eventsAsync.isLoading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Đang tải danh sách sự kiện...',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _MapColors.textSecondary,
+                    ),
+                  ),
+                ),
+              if (eventsAsync.hasError)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Không tải được danh sách sự kiện.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _MapColors.textSecondary,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 10),
               _buildField(
                 controller: _descCtrl,
@@ -2170,6 +2243,7 @@ class _SosConfirmDialogState extends ConsumerState<_SosConfirmDialog> {
           description: description,
           latitude: coords.latitude,
           longitude: coords.longitude,
+          eventId: _selectedEventId,
         );
 
     // ── 4. Show result snackbar ──────────────────────────────────────────

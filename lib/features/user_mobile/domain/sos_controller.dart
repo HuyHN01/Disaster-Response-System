@@ -129,13 +129,15 @@ class SOSController extends StateNotifier<SOSState> {
     required double latitude,
     required double longitude,
     required DateTime createdAt,
+    required String? eventId,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final deviceId = await _getDeviceId();
     final finalUserId = uid.isNotEmpty ? uid : deviceId;
+    final normalizedEventId = _normalizeEventId(eventId);
     final post = PostsCompanion(
       id: Value(postId),
-      eventId: const Value('sos'),
+      eventId: Value(normalizedEventId),
       userId: Value(finalUserId),
       postType: const Value('sos'),
       title: const Value('SOS khẩn cấp'),
@@ -178,15 +180,17 @@ class SOSController extends StateNotifier<SOSState> {
     required double latitude,
     required double longitude,
     required DateTime createdAt,
+    required String? eventId,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final deviceId = await _getDeviceId();
     final finalUserId = uid.isNotEmpty ? uid : deviceId;
 
+    final normalizedEventId = _normalizeEventId(eventId);
     final postData = {
       'userId': finalUserId,
       'deviceId': deviceId,
-      'eventId': 'sos',
+      'eventId': normalizedEventId,
       'postType': 'sos',
       'title': 'SOS khẩn cấp',
       'content': description,
@@ -231,6 +235,7 @@ class SOSController extends StateNotifier<SOSState> {
     required String description,
     double? latitude,
     double? longitude,
+    String? eventId,
   }) async {
     try {
       state = state.copyWith(status: SOSStatus.loading, message: 'Đang gửi SOS...');
@@ -277,6 +282,7 @@ class SOSController extends StateNotifier<SOSState> {
         latitude: lat,
         longitude: lng,
         createdAt: createdAt,
+        eventId: eventId,
       );
 
       final hasNetwork = await _smsFallback.hasNetworkConnection();
@@ -290,6 +296,7 @@ class SOSController extends StateNotifier<SOSState> {
           latitude: lat,
           longitude: lng,
           createdAt: createdAt,
+          eventId: eventId,
         );
 
         state = state.copyWith(
@@ -328,6 +335,7 @@ class SOSController extends StateNotifier<SOSState> {
         status: SOSStatus.error,
         errorMessage: 'Lỗi: $e',
       );
+      // ignore: avoid_print
       print('Error in sendSOS: $e');
     }
   }
@@ -335,6 +343,14 @@ class SOSController extends StateNotifier<SOSState> {
   /// Reset SOS state
   void reset() {
     state = SOSState();
+  }
+
+  String? _normalizeEventId(String? eventId) {
+    final trimmed = eventId?.trim();
+    if (trimmed == null || trimmed.isEmpty || trimmed == 'sos') {
+      return null;
+    }
+    return trimmed;
   }
 }
 

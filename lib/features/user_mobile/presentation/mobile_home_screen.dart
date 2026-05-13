@@ -1,5 +1,6 @@
 // lib/features/user_mobile/presentation/mobile_home_screen.dart
 
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:disaster_response_app/core/database/app_database.dart';
 import 'package:disaster_response_app/core/routes/route_names.dart';
 import 'package:disaster_response_app/features/admin_panel/domain/event_controller.dart';
@@ -339,9 +340,16 @@ class _CallButton extends StatelessWidget {
 // =============================================================================
 // EMERGENCY BANNER — listens to eventControllerProvider
 // =============================================================================
-class _EmergencyBanner extends ConsumerWidget {
+class _EmergencyBanner extends ConsumerStatefulWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_EmergencyBanner> createState() => _EmergencyBannerState();
+}
+
+class _EmergencyBannerState extends ConsumerState<_EmergencyBanner> {
+  int _activeIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventControllerProvider);
 
     return eventsAsync.when(
@@ -354,8 +362,75 @@ class _EmergencyBanner extends ConsumerWidget {
         if (activeEvent.isEmpty) {
           return const _SafeBannerCard();
         }
-        return _ActiveEventCard(event: activeEvent.first);
+        if (activeEvent.length == 1) {
+          return _ActiveEventCard(event: activeEvent.first);
+        }
+
+        final safeIndex = _activeIndex.clamp(0, activeEvent.length - 1);
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: CarouselSlider.builder(
+                key: ValueKey(activeEvent.length),
+                itemCount: activeEvent.length,
+                itemBuilder: (context, index, _) {
+                  return _ActiveEventCard(
+                    event: activeEvent[index],
+                    isInCarousel: true,
+                  );
+                },
+                options: CarouselOptions(
+                  height: null,
+                  viewportFraction: 1,
+                  enableInfiniteScroll: true,
+                  padEnds: false,
+                  onPageChanged: (index, _) {
+                    setState(() => _activeIndex = index);
+                  },
+                  initialPage: safeIndex,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _CarouselIndicator(
+              count: activeEvent.length,
+              activeIndex: safeIndex,
+            ),
+          ],
+        );
       },
+    );
+  }
+}
+
+class _CarouselIndicator extends StatelessWidget {
+  final int count;
+  final int activeIndex;
+
+  const _CarouselIndicator({required this.count, required this.activeIndex});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (index) {
+        final isActive = index == activeIndex;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          height: 6,
+          width: isActive ? 18 : 6,
+          decoration: BoxDecoration(
+            color: isActive
+                ? _MobileColors.emergencyStart
+                : _MobileColors.textMuted.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        );
+      }),
     );
   }
 }
@@ -363,8 +438,12 @@ class _EmergencyBanner extends ConsumerWidget {
 // ── Active event: Red/Orange card ──────────────────────────────────────────
 class _ActiveEventCard extends StatelessWidget {
   final DisasterEvent event;
+  final bool isInCarousel;
 
-  const _ActiveEventCard({required this.event});
+  const _ActiveEventCard({
+    required this.event,
+    this.isInCarousel = false,
+  });
 
   String _localizeType(String type) {
     const map = {
@@ -380,8 +459,10 @@ class _ActiveEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final padding = isInCarousel ? 16.0 : 20.0;
+    
     return Container(
-      margin: const EdgeInsets.only(top: 16),
+      margin: EdgeInsets.only(top: isInCarousel ? 0 : 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [_MobileColors.emergencyStart, _MobileColors.emergencyEnd],
@@ -427,10 +508,15 @@ class _ActiveEventCard extends StatelessWidget {
 
           // Content
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            padding: EdgeInsets.all(padding),
+            child: SingleChildScrollView(
+              physics: isInCarousel
+                  ? const NeverScrollableScrollPhysics()
+                  : const ScrollPhysics(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // Badge
                 Row(
                   children: [
@@ -534,18 +620,21 @@ class _ActiveEventCard extends StatelessWidget {
                       backgroundColor: Colors.white,
                       foregroundColor: _MobileColors.emergencyStart,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      padding: EdgeInsets.symmetric(
+                        vertical: isInCarousel ? 11 : 13,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      textStyle: const TextStyle(
-                        fontSize: 14,
+                      textStyle: TextStyle(
+                        fontSize: isInCarousel ? 13 : 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                 ),
               ],
+              ),
             ),
           ),
         ],

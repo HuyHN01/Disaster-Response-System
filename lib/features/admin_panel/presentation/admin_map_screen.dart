@@ -1737,6 +1737,7 @@ class _StationDetailSheet extends ConsumerWidget {
                           name: station.name,
                           latitude: station.latitude,
                           longitude: station.longitude,
+                          eventId: station.eventId,
                           address: station.address,
                           contactPhone: station.contactPhone,
                           capacity: station.capacity,
